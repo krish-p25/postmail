@@ -7,9 +7,23 @@
   <title>PostMail</title>
 </head>
 <body>
-  <div id="root">
-    <h1>PostMail</h1>
-    <p>Loading...</p>
+  <div class="popup-container">
+    <h1 class="popup-title">PostMail</h1>
+
+    <div class="tracking-toggle">
+      <span class="toggle-label">Tracking</span>
+      <label class="switch">
+        <input type="checkbox" id="trackingToggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="status" id="status">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Loading...</span>
+    </div>
+
+    <a href="#" id="dashboardLink" class="dashboard-link">Open Dashboard</a>
   </div>
   <script src="popup.js"></script>
 </body>
