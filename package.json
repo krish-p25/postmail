@@ -1,12 +1,24 @@
 {
   "name": "postmail",
   "version": "1.0.0",
-  "description": "",
+  "private": true,
+  "description": "Gmail email open tracking",
   "license": "ISC",
-  "author": "",
-  "type": "commonjs",
-  "main": "index.js",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build:shared": "cd packages/shared && npx tsc",
+    "build:extension": "cd apps/extension && npx webpack",
+    "build": "npm run build:shared && npm run build:extension",
+    "test": "npm run test --workspaces --if-present",
+    "test:extension": "cd apps/extension && npx jest",
+    "lint": "prettier --check .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.3.0",
+    "typescript": "^5.5.0"
   }
 }
