@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "PostMail - Email Open Tracking",
+  "version": "0.1.0",
+  "description": "Track when your Gmail emails are opened",
+  "permissions": ["storage"],
+  "host_permissions": ["https://mail.google.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "PostMail"
+  }
+}
