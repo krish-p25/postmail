@@ -5,6 +5,7 @@ import { config } from './config/env';
 import { sequelize } from './db/sequelize';
 import { runMigrations } from './db/migrate';
 import './db/models'; // Register all models and associations
+import { errorHandler } from './middleware/errors';
 
 const app = express();
 
@@ -29,6 +30,9 @@ app.get('/health', (_req, res) => {
 app.get('/api', (_req, res) => {
   res.json({ name: 'PostMail API', version: '0.1.0' });
 });
+
+// Error handler (must be last middleware)
+app.use(errorHandler);
 
 // Initialize database and start server
 async function start(): Promise<void> {
