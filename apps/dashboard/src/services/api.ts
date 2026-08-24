@@ -1,21 +1,21 @@
-import { supabase } from '../lib/supabase';
+import { auth } from './auth';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3005';
 
 /**
  * Authenticated API client.
- * Automatically attaches the Supabase JWT as a Bearer token.
+ * Attaches the stored JWT as a Bearer token.
  */
 async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const token = auth.getToken();
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...options.headers,
   };
 
-  if (session?.access_token) {
-    (headers as Record<string, string>)['Authorization'] = `Bearer ${session.access_token}`;
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
 
   return fetch(`${API_URL}${path}`, {

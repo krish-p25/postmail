@@ -4,10 +4,9 @@ import { useAuth } from '../contexts/AuthContext';
 /**
  * Protects routes that require authentication.
  * Redirects to /login if not authenticated.
- * Shows a loading spinner while checking auth state.
  */
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth();
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -17,7 +16,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!session) {
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
 

@@ -1,50 +1,47 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { auth, AuthUser } from '../services/auth';
 
 interface AuthContextType {
-  session: Session | null;
-  user: User | null;
+  user: AuthUser | null;
   loading: boolean;
-  signOut: () => Promise<void>;
+  setUser: (user: AuthUser | null) => void;
+  signOut: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    // Check for existing token and load user
+    const token = auth.getToken();
+    if (token) {
+      // Validate token by calling /api/me
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3005';
+      fetch(`${API_URL}/api/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error('Invalid token');
+          return res.json();
+        })
+        .then((data) => setUser({ id: data.id, email: data.email, displayName: data.displayName ?? null }))
+        .catch(() => auth.clearToken())
+        .finally(() => setLoading(false));
+    } else {
       setLoading(false);
-    });
-
-    // Listen for auth state changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    }
   }, []);
 
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
-    setSession(null);
+  const signOut = useCallback(() => {
+    auth.clearToken();
+    setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider
-      value={{
-        session,
-        user: session?.user ?? null,
-        loading,
-        signOut,
-      }}
-    >
+    <AuthContext.Provider value={{ user, loading, setUser, signOut }}>
       {children}
     </AuthContext.Provider>
   );
