@@ -3,19 +3,21 @@ import { sequelize } from '../sequelize';
 
 interface UserAttributes {
   id: string;
-  supabaseId: string;
   email: string;
+  passwordHash: string | null;
+  googleId: string | null;
   displayName: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'displayName' | 'createdAt' | 'updatedAt'> {}
+interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'passwordHash' | 'googleId' | 'displayName' | 'createdAt' | 'updatedAt'> {}
 
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   declare id: string;
-  declare supabaseId: string;
   declare email: string;
+  declare passwordHash: string | null;
+  declare googleId: string | null;
   declare displayName: string | null;
   declare createdAt: Date;
   declare updatedAt: Date;
@@ -28,15 +30,21 @@ User.init(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
-    supabaseId: {
-      type: DataTypes.UUID,
-      allowNull: false,
-      unique: true,
-      field: 'supabase_id',
-    },
     email: {
       type: DataTypes.STRING,
       allowNull: false,
+      unique: true,
+    },
+    passwordHash: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: 'password_hash',
+    },
+    googleId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      unique: true,
+      field: 'google_id',
     },
     displayName: {
       type: DataTypes.STRING,
