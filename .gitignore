@@ -6,4 +6,6 @@ dist/
 *.tsbuildinfo
 coverage/
 .claude
-docs/
+
+# Docker
+pgdata/
