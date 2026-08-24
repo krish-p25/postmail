@@ -1,13 +1,11 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { AuthGuard } from './components/AuthGuard';
+import DashboardLayout from './components/DashboardLayout';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-
-// Placeholder pages — will be implemented in later tasks
-function DashboardPlaceholder() {
-  return <div className="p-8 text-center text-gray-600">Dashboard (coming next)</div>;
-}
+import Emails from './pages/Emails';
+import Settings from './pages/Settings';
 
 function App() {
   return (
@@ -16,13 +14,17 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route
-          path="/dashboard/*"
+          path="/dashboard"
           element={
             <AuthGuard>
-              <DashboardPlaceholder />
+              <DashboardLayout />
             </AuthGuard>
           }
-        />
+        >
+          <Route index element={<Navigate to="emails" replace />} />
+          <Route path="emails" element={<Emails />} />
+          <Route path="settings" element={<Settings />} />
+        </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
