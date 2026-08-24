@@ -1,15 +1,15 @@
 import { useState, FormEvent } from 'react';
-import { Link, Navigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { auth } from '../services/auth';
 
 export default function Login() {
-  const { session, loading } = useAuth();
+  const { user, loading, setUser } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [resetSent, setResetSent] = useState(false);
 
   if (loading) {
     return (
@@ -19,7 +19,7 @@ export default function Login() {
     );
   }
 
-  if (session) {
+  if (user) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -29,8 +29,9 @@ export default function Login() {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      const data = await auth.login(email, password);
+      setUser(data.user);
+      navigate('/dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Sign in failed');
     } finally {
@@ -38,43 +39,8 @@ export default function Login() {
     }
   }
 
-  async function handleGoogleLogin() {
-    setError(null);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`,
-      },
-    });
-    if (error) setError(error.message);
-  }
-
-  // TODO: Add Microsoft/Azure provider
-  // async function handleMicrosoftLogin() {
-  //   const { error } = await supabase.auth.signInWithOAuth({
-  //     provider: 'azure',
-  //     options: {
-  //       redirectTo: `${window.location.origin}/dashboard`,
-  //       scopes: 'email profile',
-  //     },
-  //   });
-  //   if (error) setError(error.message);
-  // }
-
-  async function handleForgotPassword() {
-    if (!email) {
-      setError('Enter your email address first');
-      return;
-    }
-    setError(null);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/login`,
-    });
-    if (error) {
-      setError(error.message);
-    } else {
-      setResetSent(true);
-    }
+  function handleGoogleLogin() {
+    auth.redirectToGoogle();
   }
 
   return (
@@ -103,9 +69,6 @@ export default function Login() {
             </svg>
             Continue with Google
           </button>
-
-          {/* TODO: Microsoft login button */}
-          {/* <button onClick={handleMicrosoftLogin} className="...">Continue with Microsoft</button> */}
 
           {/* Divider */}
           <div className="my-6 flex items-center">
@@ -152,12 +115,6 @@ export default function Login() {
               </div>
             )}
 
-            {resetSent && (
-              <div className="rounded-lg bg-green-50 p-3 text-sm text-green-600">
-                Password reset email sent. Check your inbox.
-              </div>
-            )}
-
             <button
               type="submit"
               disabled={isSubmitting}
@@ -166,15 +123,6 @@ export default function Login() {
               {isSubmitting ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
-
-          {/* Forgot password */}
-          <button
-            type="button"
-            onClick={handleForgotPassword}
-            className="mt-4 block w-full text-center text-sm text-primary-600 hover:text-primary-700"
-          >
-            Forgot your password?
-          </button>
         </div>
 
         {/* Sign up link */}

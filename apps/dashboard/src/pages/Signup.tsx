@@ -1,15 +1,15 @@
 import { useState, FormEvent } from 'react';
-import { Link, Navigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { auth } from '../services/auth';
 
 export default function Signup() {
-  const { session, loading } = useAuth();
+  const { user, loading, setUser } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (loading) {
@@ -20,7 +20,7 @@ export default function Signup() {
     );
   }
 
-  if (session) {
+  if (user) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -41,15 +41,9 @@ export default function Signup() {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/dashboard`,
-        },
-      });
-      if (error) throw error;
-      setSuccess(true);
+      const data = await auth.register(email, password);
+      setUser(data.user);
+      navigate('/dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Sign up failed');
     } finally {
@@ -57,42 +51,8 @@ export default function Signup() {
     }
   }
 
-  async function handleGoogleLogin() {
-    setError(null);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`,
-      },
-    });
-    if (error) setError(error.message);
-  }
-
-  if (success) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-        <div className="w-full max-w-md text-center">
-          <div className="rounded-xl bg-white p-8 shadow-sm ring-1 ring-gray-200">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-              <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-              </svg>
-            </div>
-            <h2 className="text-lg font-semibold text-gray-900">Check your email</h2>
-            <p className="mt-2 text-sm text-gray-600">
-              We sent a confirmation link to <strong>{email}</strong>.
-              Click the link to activate your account.
-            </p>
-            <Link
-              to="/login"
-              className="mt-6 inline-block text-sm font-medium text-primary-600 hover:text-primary-700"
-            >
-              Back to sign in
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
+  function handleGoogleLogin() {
+    auth.redirectToGoogle();
   }
 
   return (
