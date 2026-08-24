@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: postmail-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postmail}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postmail_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-postmail}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postmail}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: postmail-api
+    ports:
+      - "${API_PORT:-3001}:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgres://${POSTGRES_USER:-postmail}:${POSTGRES_PASSWORD:-postmail_dev}@postgres:5432/${POSTGRES_DB:-postmail}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
+      DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:5173}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+      - ./packages/shared/src:/app/packages/shared/src
+    command: npx ts-node-dev --respawn --transpile-only src/index.ts
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    container_name: postmail-dashboard
+    ports:
+      - "${DASHBOARD_PORT:-5173}:5173"
+    environment:
+      VITE_SUPABASE_URL: ${SUPABASE_URL}
+      VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      VITE_API_URL: ${API_URL:-http://localhost:3001}
+    volumes:
+      - ./apps/dashboard/src:/app/apps/dashboard/src
+      - ./apps/dashboard/index.html:/app/apps/dashboard/index.html
+    command: npx vite --host 0.0.0.0
+
+volumes:
+  pgdata:
