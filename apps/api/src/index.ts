@@ -6,6 +6,10 @@ import { sequelize } from './db/sequelize';
 import { runMigrations } from './db/migrate';
 import './db/models'; // Register all models and associations
 import { errorHandler } from './middleware/errors';
+import { authMiddleware } from './middleware/auth';
+import meRoutes from './routes/me';
+import emailRoutes from './routes/emails';
+import settingsRoutes from './routes/settings';
 
 const app = express();
 
@@ -30,6 +34,11 @@ app.get('/health', (_req, res) => {
 app.get('/api', (_req, res) => {
   res.json({ name: 'PostMail API', version: '0.1.0' });
 });
+
+// Authenticated API routes
+app.use('/api/me', authMiddleware, meRoutes);
+app.use('/api/emails', authMiddleware, emailRoutes);
+app.use('/api/settings', authMiddleware, settingsRoutes);
 
 // Error handler (must be last middleware)
 app.use(errorHandler);
