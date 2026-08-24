@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { config } from './config/env';
+import { sequelize } from './db/sequelize';
+import { runMigrations } from './db/migrate';
+import './db/models'; // Register all models and associations
 
 const app = express();
 
@@ -27,10 +30,27 @@ app.get('/api', (_req, res) => {
   res.json({ name: 'PostMail API', version: '0.1.0' });
 });
 
-// Start server
-app.listen(config.port, () => {
-  console.log(`[PostMail API] Server running on port ${config.port}`);
-  console.log(`[PostMail API] Environment: ${config.nodeEnv}`);
-});
+// Initialize database and start server
+async function start(): Promise<void> {
+  try {
+    // Test database connection
+    await sequelize.authenticate();
+    console.log('[PostMail API] Database connected');
+
+    // Run pending migrations
+    await runMigrations();
+
+    // Start HTTP server
+    app.listen(config.port, () => {
+      console.log(`[PostMail API] Server running on port ${config.port}`);
+      console.log(`[PostMail API] Environment: ${config.nodeEnv}`);
+    });
+  } catch (error) {
+    console.error('[PostMail API] Failed to start:', error);
+    process.exit(1);
+  }
+}
+
+start();
 
 export default app;
