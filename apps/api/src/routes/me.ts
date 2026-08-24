@@ -11,7 +11,6 @@ router.get('/', async (req: Request, res: Response) => {
     res.json({
       id: req.user!.id,
       email: req.user!.email,
-      supabaseId: req.user!.supabaseId,
     });
   } catch (error) {
     console.error('[PostMail API] Error in GET /api/me:', error);

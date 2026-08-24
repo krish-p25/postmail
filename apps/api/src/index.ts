@@ -7,6 +7,7 @@ import { runMigrations } from './db/migrate';
 import './db/models'; // Register all models and associations
 import { errorHandler } from './middleware/errors';
 import { authMiddleware } from './middleware/auth';
+import authRoutes from './routes/auth';
 import meRoutes from './routes/me';
 import emailRoutes from './routes/emails';
 import settingsRoutes from './routes/settings';
@@ -34,6 +35,9 @@ app.get('/health', (_req, res) => {
 app.get('/api', (_req, res) => {
   res.json({ name: 'PostMail API', version: '0.1.0' });
 });
+
+// Public auth routes (no middleware)
+app.use('/api/auth', authRoutes);
 
 // Authenticated API routes
 app.use('/api/me', authMiddleware, meRoutes);
