@@ -22,15 +22,16 @@ services:
       dockerfile: apps/api/Dockerfile
     container_name: postmail-api
     ports:
-      - "${API_PORT:-3001}:3001"
+      - "${API_PORT:-3005}:3005"
     environment:
       NODE_ENV: development
-      PORT: 3001
+      PORT: 3005
       DATABASE_URL: postgres://${POSTGRES_USER:-postmail}:${POSTGRES_PASSWORD:-postmail_dev}@postgres:5432/${POSTGRES_DB:-postmail}
-      SUPABASE_URL: ${SUPABASE_URL}
-      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
-      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
-      DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:5173}
+      JWT_SECRET: ${JWT_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3006/oauth/callback}
+      DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3006}
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,11 +46,10 @@ services:
       dockerfile: apps/dashboard/Dockerfile
     container_name: postmail-dashboard
     ports:
-      - "${DASHBOARD_PORT:-5173}:5173"
+      - "${DASHBOARD_PORT:-3006}:3006"
     environment:
-      VITE_SUPABASE_URL: ${SUPABASE_URL}
-      VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
-      VITE_API_URL: ${API_URL:-http://localhost:3001}
+      VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      VITE_API_URL: ${API_URL:-http://localhost:3005}
     volumes:
       - ./apps/dashboard/src:/app/apps/dashboard/src
       - ./apps/dashboard/index.html:/app/apps/dashboard/index.html
