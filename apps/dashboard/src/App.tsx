@@ -7,6 +7,7 @@ import Signup from './pages/Signup';
 import Emails from './pages/Emails';
 import Settings from './pages/Settings';
 import OAuthCallback from './pages/OAuthCallback';
+import Home from './pages/Home';
 
 function App() {
   return (
@@ -27,8 +28,8 @@ function App() {
           <Route path="emails" element={<Emails />} />
           <Route path="settings" element={<Settings />} />
         </Route>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<Home />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>
   );
