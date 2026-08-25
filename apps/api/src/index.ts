@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { config } from './config/env';
 import { sequelize } from './db/sequelize';
 import { runMigrations } from './db/migrate';
+import { validateSchema } from './db/validate-schema';
 import './db/models'; // Register all models and associations
 import { errorHandler } from './middleware/errors';
 import { authMiddleware } from './middleware/auth';
@@ -56,6 +57,9 @@ async function start(): Promise<void> {
 
     // Run pending migrations
     await runMigrations();
+
+    // Validate database schema matches expected models
+    await validateSchema();
 
     // Start HTTP server
     app.listen(config.port, () => {
