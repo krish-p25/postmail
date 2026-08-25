@@ -58,6 +58,7 @@ interface MailEmail {
   recipients: string[];
   sentAt: string | null;
   tracked: boolean;
+  hasAttachments: boolean;
 }
 
 function formatDate(iso: string | null): string {
@@ -231,7 +232,14 @@ export default function Emails() {
                 className="block w-full rounded-xl bg-white p-4 text-left shadow-sm ring-1 ring-gray-200 transition active:bg-gray-50"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium text-gray-900 line-clamp-2">{email.subject}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-gray-900 line-clamp-2">{email.subject}</p>
+                    {email.hasAttachments && (
+                      <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
+                      </svg>
+                    )}
+                  </div>
                   <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600">
                     Untracked
                   </span>
@@ -260,12 +268,19 @@ export default function Emails() {
                 {emails.map((email) => (
                   <tr key={email.id} className="transition hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                      {email.subject}
+                      <div className="flex items-center gap-1.5">
+                        {email.subject}
+                        {email.hasAttachments && (
+                          <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
+                          </svg>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600" title={email.recipients.join(', ')}>
                       {formatRecipients(email.recipients)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
                       {formatDate(email.sentAt)}
                     </td>
                     <td className="px-4 py-3">

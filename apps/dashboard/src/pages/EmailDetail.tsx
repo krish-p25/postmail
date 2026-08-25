@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api, EmailMessage } from '../services/api';
+import { api, EmailMessage, EmailAttachment } from '../services/api';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -90,10 +90,44 @@ function parseEmailAddress(raw: string): { name: string; email: string } {
   return { name: raw.trim(), email: raw.trim() };
 }
 
+function AttachmentButton({ attachment, provider }: { attachment: EmailAttachment; provider: string | null }) {
+  function handleClick() {
+    const params = new URLSearchParams({
+      provider: provider || 'gmail',
+      messageId: attachment.messageId,
+      attachmentId: attachment.attachmentId,
+      filename: attachment.filename,
+      mime: attachment.mimeType || 'application/octet-stream',
+      size: String(attachment.size),
+    });
+    window.open(`/preview?${params.toString()}`, '_blank');
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-100"
+    >
+      <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
+      </svg>
+      <span className="max-w-[200px] truncate">{attachment.filename}</span>
+      <span className="shrink-0 text-xs text-gray-400">{formatFileSize(attachment.size)}</span>
+    </button>
+  );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function EmailDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [messages, setMessages] = useState<EmailMessage[]>([]);
+  const [provider, setProvider] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,6 +137,7 @@ export default function EmailDetail() {
     api
       .getSettings()
       .then((settings) => {
+        setProvider(settings.mailboxProvider || 'gmail');
         const fetchDetail =
           settings.mailboxProvider === 'outlook'
             ? api.getOutlookEmailDetail(id)
@@ -204,6 +239,19 @@ export default function EmailDetail() {
                       </p>
                     )}
                   </div>
+
+                  {msg.attachments && msg.attachments.length > 0 && (
+                    <div className="border-t border-gray-100 px-4 py-3 sm:px-5 sm:py-4">
+                      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                        Attachments ({msg.attachments.length})
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {msg.attachments.map((att) => (
+                          <AttachmentButton key={att.attachmentId} attachment={att} provider={provider} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

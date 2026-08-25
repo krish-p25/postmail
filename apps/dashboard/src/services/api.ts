@@ -2,6 +2,14 @@ import { auth } from './auth';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3005';
 
+export interface EmailAttachment {
+  attachmentId: string;
+  messageId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
 export interface EmailMessage {
   id: string;
   threadId: string;
@@ -12,6 +20,7 @@ export interface EmailMessage {
   date: string | null;
   body: string;
   snippet: string;
+  attachments: EmailAttachment[];
 }
 
 /**
@@ -95,6 +104,7 @@ export const api = {
         recipients: string[];
         sentAt: string | null;
         tracked: boolean;
+        hasAttachments: boolean;
       }>;
     }>;
   },
@@ -136,6 +146,7 @@ export const api = {
         recipients: string[];
         sentAt: string | null;
         tracked: boolean;
+        hasAttachments: boolean;
       }>;
     }>;
   },

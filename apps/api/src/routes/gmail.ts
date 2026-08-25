@@ -33,6 +33,46 @@ function stripGmailQuotes(html: string): string {
   return cleaned;
 }
 
+interface AttachmentInfo {
+  attachmentId: string;
+  messageId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function checkForAttachments(payload: any): boolean {
+  if (!payload) return false;
+  if (payload.filename && payload.body?.attachmentId) return true;
+  if (payload.parts) {
+    return payload.parts.some((p: typeof payload) => checkForAttachments(p));
+  }
+  return false;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractAttachments(payload: any, messageId: string): AttachmentInfo[] {
+  const attachments: AttachmentInfo[] = [];
+  function walk(part: typeof payload) {
+    if (!part) return;
+    if (part.filename && part.body?.attachmentId) {
+      attachments.push({
+        attachmentId: part.body.attachmentId,
+        messageId,
+        filename: part.filename,
+        mimeType: part.mimeType || 'application/octet-stream',
+        size: part.body.size || 0,
+      });
+    }
+    if (part.parts) {
+      for (const sub of part.parts) walk(sub);
+    }
+  }
+  walk(payload);
+  return attachments;
+}
+
 function createOAuth2Client(): OAuth2Client {
   return new OAuth2Client(
     config.gmailClientId,
@@ -181,12 +221,16 @@ router.get('/emails', async (req: Request, res: Response) => {
           .map((r) => r.trim())
           .filter(Boolean);
 
+        // Check for attachments in payload parts
+        const hasAttachments = checkForAttachments(detail.data.payload);
+
         return {
           id: msg.id,
           subject,
           recipients,
           sentAt: date ? new Date(date).toISOString() : null,
           tracked: false,
+          hasAttachments,
         };
       }),
     );
@@ -285,6 +329,9 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
         body = cleaned.join('\n').replace(/\n/g, '<br>');
       }
 
+      // Extract attachments
+      const attachments = extractAttachments(msg.payload, msg.id!);
+
       return {
         id: msg.id,
         threadId: msg.threadId,
@@ -295,6 +342,7 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
         date: getHeader('Date') ? new Date(getHeader('Date')).toISOString() : null,
         body,
         snippet: msg.snippet || '',
+        attachments,
       };
     });
 
@@ -302,6 +350,68 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[PostMail API] Gmail email detail error:', error);
     res.status(500).json({ error: 'Failed to fetch email details' });
+  }
+});
+
+/**
+ * GET /api/gmail/emails/:messageId/attachments/:attachmentId
+ * Downloads a specific attachment.
+ */
+router.get('/emails/:messageId/attachments/:attachmentId', async (req: Request, res: Response) => {
+  try {
+    const user = await User.findByPk(req.user!.id);
+
+    if (!user || !user.gmailRefreshToken) {
+      res.status(400).json({ error: 'Gmail not connected' });
+      return;
+    }
+
+    const client = createOAuth2Client();
+    client.setCredentials({
+      access_token: user.gmailAccessToken,
+      refresh_token: user.gmailRefreshToken,
+      expiry_date: user.gmailTokenExpiry ? user.gmailTokenExpiry.getTime() : undefined,
+    });
+
+    client.on('tokens', async (tokens) => {
+      const updates: Partial<{ gmailAccessToken: string; gmailTokenExpiry: Date }> = {};
+      if (tokens.access_token) updates.gmailAccessToken = tokens.access_token;
+      if (tokens.expiry_date) updates.gmailTokenExpiry = new Date(tokens.expiry_date);
+      if (Object.keys(updates).length > 0) {
+        await User.update(updates, { where: { id: user.id } });
+      }
+    });
+
+    const gmail = google.gmail({ version: 'v1', auth: client });
+
+    const attachment = await gmail.users.messages.attachments.get({
+      userId: 'me',
+      messageId: req.params.messageId,
+      id: req.params.attachmentId,
+    });
+
+    if (!attachment.data.data) {
+      res.status(404).json({ error: 'Attachment not found' });
+      return;
+    }
+
+    // Get filename from the message metadata
+    const msgDetail = await gmail.users.messages.get({
+      userId: 'me',
+      id: req.params.messageId,
+      format: 'metadata',
+    });
+    const attachments = extractAttachments(msgDetail.data.payload, req.params.messageId);
+    const meta = attachments.find((a) => a.attachmentId === req.params.attachmentId);
+
+    const buffer = Buffer.from(attachment.data.data, 'base64url');
+    res.setHeader('Content-Type', meta?.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${meta?.filename || 'download'}"`);
+    res.setHeader('Content-Length', buffer.length.toString());
+    res.send(buffer);
+  } catch (error) {
+    console.error('[PostMail API] Gmail attachment download error:', error);
+    res.status(500).json({ error: 'Failed to download attachment' });
   }
 });
 

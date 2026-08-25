@@ -165,7 +165,7 @@ router.get('/emails', async (req: Request, res: Response) => {
 
     // Fetch sent emails from Microsoft Graph
     const graphRes = await fetch(
-      `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=50&$select=id,subject,toRecipients,sentDateTime&$orderby=sentDateTime desc`,
+      `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=50&$select=id,subject,toRecipients,sentDateTime,hasAttachments&$orderby=sentDateTime desc`,
       {
         headers: { Authorization: `Bearer ${accessToken}` },
       },
@@ -180,7 +180,7 @@ router.get('/emails', async (req: Request, res: Response) => {
           return;
         }
         const retryRes = await fetch(
-          `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=50&$select=id,subject,toRecipients,sentDateTime&$orderby=sentDateTime desc`,
+          `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=50&$select=id,subject,toRecipients,sentDateTime,hasAttachments&$orderby=sentDateTime desc`,
           {
             headers: { Authorization: `Bearer ${accessToken}` },
           },
@@ -212,6 +212,7 @@ interface GraphMessage {
     emailAddress: { name?: string; address: string };
   }>;
   sentDateTime: string | null;
+  hasAttachments?: boolean;
 }
 
 function formatMessages(messages: GraphMessage[]) {
@@ -225,6 +226,7 @@ function formatMessages(messages: GraphMessage[]) {
     ),
     sentAt: msg.sentDateTime ? new Date(msg.sentDateTime).toISOString() : null,
     tracked: false,
+    hasAttachments: msg.hasAttachments || false,
   }));
 }
 
@@ -274,7 +276,7 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
 
     // Fetch all messages in the conversation
     const convRes = await fetch(
-      `${MS_GRAPH_URL}/me/messages?$filter=conversationId eq '${conversationId}'&$select=id,subject,from,toRecipients,ccRecipients,sentDateTime,body&$orderby=sentDateTime asc`,
+      `${MS_GRAPH_URL}/me/messages?$filter=conversationId eq '${conversationId}'&$select=id,subject,from,toRecipients,ccRecipients,sentDateTime,body,hasAttachments&$orderby=sentDateTime asc`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
 
@@ -284,7 +286,7 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
     }
 
     const convData = await convRes.json();
-    const messages = (convData.value || []).map((msg: {
+    const messages = await Promise.all((convData.value || []).map(async (msg: {
       id: string;
       subject: string | null;
       from: { emailAddress: { name?: string; address: string } };
@@ -292,6 +294,7 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
       ccRecipients: Array<{ emailAddress: { name?: string; address: string } }>;
       sentDateTime: string | null;
       body: { contentType: string; content: string };
+      hasAttachments?: boolean;
     }) => {
       let bodyContent = msg.body?.content || '';
 
@@ -310,6 +313,31 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
         // "From: ... Sent: ... To: ... Subject: ..." header block (plain-style quoting)
         bodyContent = bodyContent.replace(/<p[^>]*>\s*<b>From:<\/b>[\s\S]*$/i, '');
         bodyContent = bodyContent.replace(/<div[^>]*>\s*<b>From:<\/b>[\s\S]*$/i, '');
+      }
+
+      // Fetch attachments if present
+      let attachments: Array<{ attachmentId: string; messageId: string; filename: string; mimeType: string; size: number }> = [];
+      if (msg.hasAttachments) {
+        try {
+          const attRes = await fetch(
+            `${MS_GRAPH_URL}/me/messages/${msg.id}/attachments?$select=id,name,contentType,size`,
+            { headers: { Authorization: `Bearer ${accessToken}` } },
+          );
+          if (attRes.ok) {
+            const attData = await attRes.json();
+            attachments = (attData.value || [])
+              .filter((a: { '@odata.type': string }) => a['@odata.type'] === '#microsoft.graph.fileAttachment')
+              .map((a: { id: string; name: string; contentType: string; size: number }) => ({
+                attachmentId: a.id,
+                messageId: msg.id,
+                filename: a.name,
+                mimeType: a.contentType || 'application/octet-stream',
+                size: a.size || 0,
+              }));
+          }
+        } catch {
+          // Non-critical
+        }
       }
 
       return {
@@ -336,13 +364,58 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
         date: msg.sentDateTime ? new Date(msg.sentDateTime).toISOString() : null,
         body: bodyContent,
         snippet: '',
+        attachments,
       };
-    });
+    }));
 
     res.json({ messages });
   } catch (error) {
     console.error('[PostMail API] Outlook email detail error:', error);
     res.status(500).json({ error: 'Failed to fetch email details' });
+  }
+});
+
+/**
+ * GET /api/outlook/emails/:messageId/attachments/:attachmentId
+ * Downloads a specific attachment.
+ */
+router.get('/emails/:messageId/attachments/:attachmentId', async (req: Request, res: Response) => {
+  try {
+    const user = await User.findByPk(req.user!.id);
+
+    if (!user || !user.outlookRefreshToken) {
+      res.status(400).json({ error: 'Outlook not connected' });
+      return;
+    }
+
+    let accessToken = user.outlookAccessToken;
+    if (!accessToken || (user.outlookTokenExpiry && user.outlookTokenExpiry.getTime() < Date.now())) {
+      accessToken = await refreshAccessToken(user);
+      if (!accessToken) {
+        res.status(401).json({ error: 'Failed to refresh Outlook token.' });
+        return;
+      }
+    }
+
+    const attRes = await fetch(
+      `${MS_GRAPH_URL}/me/messages/${req.params.messageId}/attachments/${req.params.attachmentId}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+
+    if (!attRes.ok) {
+      res.status(404).json({ error: 'Attachment not found' });
+      return;
+    }
+
+    const attData = await attRes.json();
+    const buffer = Buffer.from(attData.contentBytes, 'base64');
+    res.setHeader('Content-Type', attData.contentType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${attData.name || 'download'}"`);
+    res.setHeader('Content-Length', buffer.length.toString());
+    res.send(buffer);
+  } catch (error) {
+    console.error('[PostMail API] Outlook attachment download error:', error);
+    res.status(500).json({ error: 'Failed to download attachment' });
   }
 });
 
