@@ -94,8 +94,9 @@ export const api = {
     return res.json();
   },
 
-  async getGmailEmails() {
-    const res = await authFetch('/api/gmail/emails');
+  async getGmailEmails(pageToken?: string) {
+    const params = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : '';
+    const res = await authFetch(`/api/gmail/emails${params}`);
     if (!res.ok) throw new Error('Failed to fetch Gmail emails');
     return res.json() as Promise<{
       emails: Array<{
@@ -106,6 +107,7 @@ export const api = {
         tracked: boolean;
         hasAttachments: boolean;
       }>;
+      nextPageToken: string | null;
     }>;
   },
 
@@ -136,8 +138,9 @@ export const api = {
     return res.json();
   },
 
-  async getOutlookEmails() {
-    const res = await authFetch('/api/outlook/emails');
+  async getOutlookEmails(page?: number) {
+    const params = page && page > 1 ? `?page=${page}` : '';
+    const res = await authFetch(`/api/outlook/emails${params}`);
     if (!res.ok) throw new Error('Failed to fetch Outlook emails');
     return res.json() as Promise<{
       emails: Array<{
@@ -148,6 +151,8 @@ export const api = {
         tracked: boolean;
         hasAttachments: boolean;
       }>;
+      page: number;
+      hasMore: boolean;
     }>;
   },
 

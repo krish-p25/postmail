@@ -186,17 +186,22 @@ router.get('/emails', async (req: Request, res: Response) => {
 
     const gmail = google.gmail({ version: 'v1', auth: client as any });
 
+    const pageSize = 20;
+    const pageToken = (req.query.pageToken as string) || undefined;
+
     // List sent messages
     const listRes = await gmail.users.messages.list({
       userId: 'me',
       labelIds: ['SENT'],
-      maxResults: 50,
+      maxResults: pageSize,
+      pageToken,
     });
 
     const messageIds = listRes.data.messages || [];
+    const nextPageToken = listRes.data.nextPageToken || null;
 
     if (messageIds.length === 0) {
-      res.json({ emails: [] });
+      res.json({ emails: [], nextPageToken: null });
       return;
     }
 
@@ -235,7 +240,7 @@ router.get('/emails', async (req: Request, res: Response) => {
       }),
     );
 
-    res.json({ emails });
+    res.json({ emails, nextPageToken });
   } catch (error) {
     console.error('[PostMail API] Gmail emails error:', error);
     res.status(500).json({ error: 'Failed to fetch Gmail emails' });

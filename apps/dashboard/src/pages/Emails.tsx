@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 
@@ -84,39 +84,158 @@ function formatRecipients(recipients: string[]): string {
 export default function Emails() {
   const navigate = useNavigate();
   const [mailboxConnected, setMailboxConnected] = useState<boolean | null>(null);
+  const [provider, setProvider] = useState<string | null>(null);
   const [emails, setEmails] = useState<MailEmail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  // Gmail cursor pagination: store token history for "previous" navigation
+  const [gmailNextToken, setGmailNextToken] = useState<string | null>(null);
+  const [gmailTokenHistory, setGmailTokenHistory] = useState<string[]>([]);
+
+  function fetchPage(prov: string, gmailPageToken?: string, outlookPage?: number) {
+    setLoading(true);
+    setError(null);
+
+    const promise =
+      prov === 'outlook'
+        ? api.getOutlookEmails(outlookPage).then((data) => {
+            setEmails(data.emails);
+            setHasMore(data.hasMore);
+          })
+        : api.getGmailEmails(gmailPageToken).then((data) => {
+            setEmails(data.emails);
+            setGmailNextToken(data.nextPageToken);
+            setHasMore(!!data.nextPageToken);
+          });
+
+    promise
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load emails'))
+      .finally(() => setLoading(false));
+  }
 
   useEffect(() => {
     api
       .getSettings()
       .then((settings) => {
         setMailboxConnected(settings.mailboxConnected ?? false);
+        const prov = settings.mailboxProvider || 'gmail';
+        setProvider(prov);
         if (settings.mailboxConnected) {
-          const fetchEmails =
-            settings.mailboxProvider === 'outlook'
-              ? api.getOutlookEmails()
-              : api.getGmailEmails();
-          return fetchEmails.then((data) => {
-            setEmails(data.emails);
-          });
+          fetchPage(prov);
+        } else {
+          setLoading(false);
         }
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : 'Failed to load emails');
-      })
-      .finally(() => setLoading(false));
+        setLoading(false);
+      });
   }, []);
+
+  function goNext() {
+    if (!provider) return;
+    const nextPage = page + 1;
+    setPage(nextPage);
+    if (provider === 'outlook') {
+      fetchPage(provider, undefined, nextPage);
+    } else {
+      if (gmailNextToken) {
+        setGmailTokenHistory((prev) => [...prev, gmailNextToken]);
+        fetchPage(provider, gmailNextToken);
+      }
+    }
+  }
+
+  function goPrev() {
+    if (!provider || page <= 1) return;
+    const prevPage = page - 1;
+    setPage(prevPage);
+    if (provider === 'outlook') {
+      fetchPage(provider, undefined, prevPage);
+    } else {
+      const history = [...gmailTokenHistory];
+      history.pop(); // remove current page's token
+      const prevToken = history.length > 0 ? history[history.length - 1] : undefined;
+      setGmailTokenHistory(history);
+      fetchPage(provider, prevToken);
+    }
+  }
+
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  function toggleSearch() {
+    if (searchOpen) {
+      setSearchOpen(false);
+      setSearchQuery('');
+    } else {
+      setSearchOpen(true);
+      setTimeout(() => searchInputRef.current?.focus(), 150);
+    }
+  }
+
+  const filteredEmails = searchQuery.trim()
+    ? emails.filter((email) => {
+        const q = searchQuery.toLowerCase();
+        return (
+          email.subject.toLowerCase().includes(q) ||
+          email.recipients.some((r) => r.toLowerCase().includes(q))
+        );
+      })
+    : emails;
 
   return (
     <div>
       <ExtensionBanner />
 
-      <h2 className="text-2xl font-bold text-gray-900">Tracked Emails</h2>
-      <p className="mt-1 text-sm text-gray-600">
-        View open-tracking activity for your sent emails.
-      </p>
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="text-2xl font-bold text-gray-900">Tracked Emails</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            View open-tracking activity for your sent emails.
+          </p>
+        </div>
+
+        <div className="relative flex shrink-0 items-center">
+          <div
+            className={`flex h-10 cursor-pointer items-center overflow-hidden rounded-full border border-gray-200 bg-white transition-all duration-300 ease-in-out ${
+              searchOpen ? 'w-64 cursor-text sm:w-80' : 'w-10'
+            }`}
+            onClick={() => { if (!searchOpen) toggleSearch(); }}
+          >
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search emails…"
+              className={`h-10 bg-transparent text-sm text-gray-900 outline-none transition-all duration-200 ${
+                searchOpen ? 'flex-1 pl-4 pr-10 opacity-100 placeholder-gray-400 delay-150' : 'pointer-events-none w-0 p-0 opacity-0 placeholder-transparent'
+              }`}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') toggleSearch();
+              }}
+            />
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleSearch(); }}
+              className="absolute right-0 flex h-10 w-10 shrink-0 items-center justify-center text-gray-500 transition hover:text-gray-700"
+              title={searchOpen ? 'Close search' : 'Search'}
+            >
+              <svg className={`absolute h-4 w-4 transition-opacity duration-200 ${searchOpen ? 'opacity-0' : 'opacity-100'}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+              </svg>
+              <svg className={`absolute h-4 w-4 transition-opacity duration-200 ${searchOpen ? 'opacity-100' : 'opacity-0'}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
 
       {loading && (
         <>
@@ -221,11 +340,23 @@ export default function Emails() {
         </div>
       )}
 
-      {!loading && !error && mailboxConnected && emails.length > 0 && (
+      {!loading && !error && mailboxConnected && emails.length > 0 && searchQuery.trim() !== '' && filteredEmails.length === 0 && (
+        <div className="mt-12 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16">
+          <svg className="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+          </svg>
+          <h3 className="mt-4 text-lg font-medium text-gray-900">No results found</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            No emails match &ldquo;{searchQuery}&rdquo;
+          </p>
+        </div>
+      )}
+
+      {!loading && !error && mailboxConnected && filteredEmails.length > 0 && (
         <>
           {/* Mobile — card layout */}
           <div className="mt-6 space-y-3 sm:hidden">
-            {emails.map((email) => (
+            {filteredEmails.map((email) => (
               <button
                 key={email.id}
                 onClick={() => navigate(`/dashboard/emails/${email.id}`)}
@@ -265,7 +396,7 @@ export default function Emails() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {emails.map((email) => (
+                {filteredEmails.map((email) => (
                   <tr key={email.id} className="transition hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">
                       <div className="flex items-center gap-1.5">
@@ -301,6 +432,33 @@ export default function Emails() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {(page > 1 || hasMore) && (
+            <div className="mt-4 flex items-center justify-between">
+              <button
+                onClick={goPrev}
+                disabled={page <= 1 || loading}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                </svg>
+                Previous
+              </button>
+              <span className="text-sm text-gray-500">Page {page}</span>
+              <button
+                onClick={goNext}
+                disabled={!hasMore || loading}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                </svg>
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

@@ -163,13 +163,16 @@ router.get('/emails', async (req: Request, res: Response) => {
       }
     }
 
+    const pageSize = 20;
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const skip = (page - 1) * pageSize;
+
+    const graphUrl = `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=${pageSize}&$skip=${skip}&$select=id,subject,toRecipients,sentDateTime,hasAttachments&$orderby=sentDateTime desc`;
+
     // Fetch sent emails from Microsoft Graph
-    const graphRes = await fetch(
-      `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=50&$select=id,subject,toRecipients,sentDateTime,hasAttachments&$orderby=sentDateTime desc`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      },
-    );
+    const graphRes = await fetch(graphUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
 
     if (!graphRes.ok) {
       // If 401, try refresh once
@@ -179,18 +182,16 @@ router.get('/emails', async (req: Request, res: Response) => {
           res.status(401).json({ error: 'Outlook session expired. Please reconnect.' });
           return;
         }
-        const retryRes = await fetch(
-          `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=50&$select=id,subject,toRecipients,sentDateTime,hasAttachments&$orderby=sentDateTime desc`,
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          },
-        );
+        const retryRes = await fetch(graphUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
         if (!retryRes.ok) {
           res.status(500).json({ error: 'Failed to fetch Outlook emails' });
           return;
         }
         const retryData = await retryRes.json();
-        res.json({ emails: formatMessages(retryData.value || []) });
+        const emails = formatMessages(retryData.value || []);
+        res.json({ emails, page, hasMore: emails.length === pageSize });
         return;
       }
       res.status(500).json({ error: 'Failed to fetch Outlook emails' });
@@ -198,7 +199,8 @@ router.get('/emails', async (req: Request, res: Response) => {
     }
 
     const data = await graphRes.json();
-    res.json({ emails: formatMessages(data.value || []) });
+    const emails = formatMessages(data.value || []);
+    res.json({ emails, page, hasMore: emails.length === pageSize });
   } catch (error) {
     console.error('[PostMail API] Outlook emails error:', error);
     res.status(500).json({ error: 'Failed to fetch Outlook emails' });
