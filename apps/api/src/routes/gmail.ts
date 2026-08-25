@@ -184,7 +184,7 @@ router.get('/emails', async (req: Request, res: Response) => {
       }
     });
 
-    const gmail = google.gmail({ version: 'v1', auth: client });
+    const gmail = google.gmail({ version: 'v1', auth: client as any });
 
     // List sent messages
     const listRes = await gmail.users.messages.list({
@@ -271,7 +271,7 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
       }
     });
 
-    const gmail = google.gmail({ version: 'v1', auth: client });
+    const gmail = google.gmail({ version: 'v1', auth: client as any });
 
     // Get the message to find its threadId and subject
     const msgRes = await gmail.users.messages.get({
@@ -382,7 +382,7 @@ router.get('/emails/:messageId/attachments/:attachmentId', async (req: Request, 
       }
     });
 
-    const gmail = google.gmail({ version: 'v1', auth: client });
+    const gmail = google.gmail({ version: 'v1', auth: client as any });
 
     const attachment = await gmail.users.messages.attachments.get({
       userId: 'me',
