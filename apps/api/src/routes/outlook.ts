@@ -166,8 +166,21 @@ router.get('/emails', async (req: Request, res: Response) => {
     const pageSize = 20;
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
     const skip = (page - 1) * pageSize;
+    const searchQuery = (req.query.q as string) || '';
 
-    const graphUrl = `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=${pageSize}&$skip=${skip}&$select=id,subject,toRecipients,sentDateTime,hasAttachments&$orderby=sentDateTime desc`;
+    const params = new URLSearchParams({
+      $top: String(pageSize),
+      $skip: String(skip),
+      $select: 'id,subject,toRecipients,sentDateTime,hasAttachments',
+    });
+    // $search and $orderby cannot be combined in Microsoft Graph
+    if (searchQuery) {
+      params.set('$search', `"${searchQuery}"`);
+    } else {
+      params.set('$orderby', 'sentDateTime desc');
+    }
+
+    const graphUrl = `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?${params.toString()}`;
 
     // Fetch sent emails from Microsoft Graph
     const graphRes = await fetch(graphUrl, {

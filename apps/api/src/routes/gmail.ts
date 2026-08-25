@@ -188,6 +188,7 @@ router.get('/emails', async (req: Request, res: Response) => {
 
     const pageSize = 20;
     const pageToken = (req.query.pageToken as string) || undefined;
+    const searchQuery = (req.query.q as string) || '';
 
     // List sent messages
     const listRes = await gmail.users.messages.list({
@@ -195,6 +196,7 @@ router.get('/emails', async (req: Request, res: Response) => {
       labelIds: ['SENT'],
       maxResults: pageSize,
       pageToken,
+      ...(searchQuery ? { q: searchQuery } : {}),
     });
 
     const messageIds = listRes.data.messages || [];

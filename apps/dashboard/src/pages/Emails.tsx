@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 
 function ExtensionBanner() {
@@ -83,6 +83,13 @@ function formatRecipients(recipients: string[]): string {
 
 export default function Emails() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Read initial state from URL
+  const initialQuery = searchParams.get('q') || '';
+  const initialPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+  const initialPageToken = searchParams.get('pt') || '';
+
   const [mailboxConnected, setMailboxConnected] = useState<boolean | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
   const [emails, setEmails] = useState<MailEmail[]>([]);
@@ -90,23 +97,41 @@ export default function Emails() {
   const [error, setError] = useState<string | null>(null);
 
   // Pagination state
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(initialPage);
   const [hasMore, setHasMore] = useState(false);
-  // Gmail cursor pagination: store token history for "previous" navigation
   const [gmailNextToken, setGmailNextToken] = useState<string | null>(null);
-  const [gmailTokenHistory, setGmailTokenHistory] = useState<string[]>([]);
+  const [gmailTokenHistory, setGmailTokenHistory] = useState<string[]>(
+    initialPageToken ? [initialPageToken] : [],
+  );
 
-  function fetchPage(prov: string, gmailPageToken?: string, outlookPage?: number) {
+  // Search state
+  const [searchOpen, setSearchOpen] = useState(!!initialQuery);
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
+  const [activeQuery, setActiveQuery] = useState(initialQuery);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function buildParams(q: string, pg: number, pageToken?: string) {
+    const p: Record<string, string> = {};
+    if (q) p.q = q;
+    if (pg > 1) p.page = String(pg);
+    if (pageToken) p.pt = pageToken;
+    return p;
+  }
+
+  function fetchPage(prov: string, gmailPageToken?: string, outlookPage?: number, q?: string) {
     setLoading(true);
     setError(null);
 
+    const search = q !== undefined ? q : activeQuery;
+
     const promise =
       prov === 'outlook'
-        ? api.getOutlookEmails(outlookPage).then((data) => {
+        ? api.getOutlookEmails(outlookPage, search || undefined).then((data) => {
             setEmails(data.emails);
             setHasMore(data.hasMore);
           })
-        : api.getGmailEmails(gmailPageToken).then((data) => {
+        : api.getGmailEmails(gmailPageToken, search || undefined).then((data) => {
             setEmails(data.emails);
             setGmailNextToken(data.nextPageToken);
             setHasMore(!!data.nextPageToken);
@@ -125,7 +150,10 @@ export default function Emails() {
         const prov = settings.mailboxProvider || 'gmail';
         setProvider(prov);
         if (settings.mailboxConnected) {
-          fetchPage(prov);
+          // Restore page from URL
+          const gmailToken = initialPageToken || undefined;
+          const outlookPage = initialPage > 1 ? initialPage : undefined;
+          fetchPage(prov, gmailToken, outlookPage, initialQuery || undefined);
         } else {
           setLoading(false);
         }
@@ -136,15 +164,50 @@ export default function Emails() {
       });
   }, []);
 
+  function handleSearchChange(value: string) {
+    setSearchQuery(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setActiveQuery(value);
+      setPage(1);
+      setGmailNextToken(null);
+      setGmailTokenHistory([]);
+      setSearchParams(buildParams(value, 1), { replace: true });
+      if (provider) {
+        fetchPage(provider, undefined, undefined, value);
+      }
+    }, 400);
+  }
+
+  function toggleSearch() {
+    if (searchOpen) {
+      setSearchOpen(false);
+      if (searchQuery) {
+        setSearchQuery('');
+        setActiveQuery('');
+        setPage(1);
+        setGmailNextToken(null);
+        setGmailTokenHistory([]);
+        setSearchParams({}, { replace: true });
+        if (provider) fetchPage(provider, undefined, undefined, '');
+      }
+    } else {
+      setSearchOpen(true);
+      setTimeout(() => searchInputRef.current?.focus(), 150);
+    }
+  }
+
   function goNext() {
     if (!provider) return;
     const nextPage = page + 1;
     setPage(nextPage);
     if (provider === 'outlook') {
+      setSearchParams(buildParams(activeQuery, nextPage));
       fetchPage(provider, undefined, nextPage);
     } else {
       if (gmailNextToken) {
         setGmailTokenHistory((prev) => [...prev, gmailNextToken]);
+        setSearchParams(buildParams(activeQuery, nextPage, gmailNextToken));
         fetchPage(provider, gmailNextToken);
       }
     }
@@ -155,39 +218,17 @@ export default function Emails() {
     const prevPage = page - 1;
     setPage(prevPage);
     if (provider === 'outlook') {
+      setSearchParams(buildParams(activeQuery, prevPage));
       fetchPage(provider, undefined, prevPage);
     } else {
       const history = [...gmailTokenHistory];
-      history.pop(); // remove current page's token
+      history.pop();
       const prevToken = history.length > 0 ? history[history.length - 1] : undefined;
       setGmailTokenHistory(history);
+      setSearchParams(buildParams(activeQuery, prevPage, prevToken));
       fetchPage(provider, prevToken);
     }
   }
-
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const searchInputRef = useRef<HTMLInputElement>(null);
-
-  function toggleSearch() {
-    if (searchOpen) {
-      setSearchOpen(false);
-      setSearchQuery('');
-    } else {
-      setSearchOpen(true);
-      setTimeout(() => searchInputRef.current?.focus(), 150);
-    }
-  }
-
-  const filteredEmails = searchQuery.trim()
-    ? emails.filter((email) => {
-        const q = searchQuery.toLowerCase();
-        return (
-          email.subject.toLowerCase().includes(q) ||
-          email.recipients.some((r) => r.toLowerCase().includes(q))
-        );
-      })
-    : emails;
 
   return (
     <div>
@@ -212,7 +253,7 @@ export default function Emails() {
               ref={searchInputRef}
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Search emails…"
               className={`h-10 bg-transparent text-sm text-gray-900 outline-none transition-all duration-200 ${
                 searchOpen ? 'flex-1 pl-4 pr-10 opacity-100 placeholder-gray-400 delay-150' : 'pointer-events-none w-0 p-0 opacity-0 placeholder-transparent'
@@ -340,23 +381,23 @@ export default function Emails() {
         </div>
       )}
 
-      {!loading && !error && mailboxConnected && emails.length > 0 && searchQuery.trim() !== '' && filteredEmails.length === 0 && (
+      {!loading && !error && mailboxConnected && activeQuery && emails.length === 0 && (
         <div className="mt-12 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16">
           <svg className="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
           </svg>
           <h3 className="mt-4 text-lg font-medium text-gray-900">No results found</h3>
           <p className="mt-1 text-sm text-gray-500">
-            No emails match &ldquo;{searchQuery}&rdquo;
+            No emails match &ldquo;{activeQuery}&rdquo;
           </p>
         </div>
       )}
 
-      {!loading && !error && mailboxConnected && filteredEmails.length > 0 && (
+      {!loading && !error && mailboxConnected && emails.length > 0 && (
         <>
           {/* Mobile — card layout */}
           <div className="mt-6 space-y-3 sm:hidden">
-            {filteredEmails.map((email) => (
+            {emails.map((email) => (
               <button
                 key={email.id}
                 onClick={() => navigate(`/dashboard/emails/${email.id}`)}
@@ -396,7 +437,7 @@ export default function Emails() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredEmails.map((email) => (
+                {emails.map((email) => (
                   <tr key={email.id} className="transition hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">
                       <div className="flex items-center gap-1.5">

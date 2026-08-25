@@ -94,9 +94,12 @@ export const api = {
     return res.json();
   },
 
-  async getGmailEmails(pageToken?: string) {
-    const params = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : '';
-    const res = await authFetch(`/api/gmail/emails${params}`);
+  async getGmailEmails(pageToken?: string, q?: string) {
+    const searchParams = new URLSearchParams();
+    if (pageToken) searchParams.set('pageToken', pageToken);
+    if (q) searchParams.set('q', q);
+    const qs = searchParams.toString();
+    const res = await authFetch(`/api/gmail/emails${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw new Error('Failed to fetch Gmail emails');
     return res.json() as Promise<{
       emails: Array<{
@@ -138,9 +141,12 @@ export const api = {
     return res.json();
   },
 
-  async getOutlookEmails(page?: number) {
-    const params = page && page > 1 ? `?page=${page}` : '';
-    const res = await authFetch(`/api/outlook/emails${params}`);
+  async getOutlookEmails(page?: number, q?: string) {
+    const searchParams = new URLSearchParams();
+    if (page && page > 1) searchParams.set('page', String(page));
+    if (q) searchParams.set('q', q);
+    const qs = searchParams.toString();
+    const res = await authFetch(`/api/outlook/emails${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw new Error('Failed to fetch Outlook emails');
     return res.json() as Promise<{
       emails: Array<{
