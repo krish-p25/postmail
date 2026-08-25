@@ -229,7 +229,7 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
 
     const gmail = google.gmail({ version: 'v1', auth: client });
 
-    // First get the message to find its threadId
+    // Get the message to find its threadId and subject
     const msgRes = await gmail.users.messages.get({
       userId: 'me',
       id: req.params.id,
@@ -246,9 +246,9 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
       format: 'full',
     });
 
-    console.log(`[PostMail API] Thread ${threadId} has ${threadRes.data.messages?.length ?? 0} messages`);
+    const rawMessages = threadRes.data.messages || [];
 
-    const messages = (threadRes.data.messages || []).map((msg) => {
+    const messages = rawMessages.map((msg) => {
       const headers = msg.payload?.headers || [];
       const getHeader = (name: string) => headers.find((h) => h.name === name)?.value || '';
 

@@ -143,7 +143,7 @@ export default function EmailDetail() {
       {!loading && !error && messages.length > 0 && (
         <div>
           <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">{subject}</h2>
+            <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">{subject}</h2>
             <p className="mt-1 text-sm text-gray-500">
               {messages.length} {messages.length === 1 ? 'message' : 'messages'} in thread
             </p>
@@ -157,17 +157,17 @@ export default function EmailDetail() {
                   key={msg.id}
                   className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200"
                 >
-                  <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-4">
-                    <div className="flex items-start justify-between">
+                  <div className="border-b border-gray-100 bg-gray-50/50 px-4 py-3 sm:px-5 sm:py-4">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700">
                             {sender.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-gray-900">{sender.name}</p>
+                            <p className="truncate text-sm font-semibold text-gray-900">{sender.name}</p>
                             {sender.name !== sender.email && (
-                              <p className="text-xs text-gray-500">{sender.email}</p>
+                              <p className="truncate text-xs text-gray-500">{sender.email}</p>
                             )}
                           </div>
                         </div>
@@ -186,7 +186,7 @@ export default function EmailDetail() {
                         </div>
                       </div>
 
-                      <div className="ml-4 shrink-0 text-right">
+                      <div className="shrink-0 text-right">
                         <p className="text-xs text-gray-500">{formatDate(msg.date)}</p>
                         <span className="mt-1 inline-block text-xs text-gray-400">
                           #{index + 1}
@@ -195,7 +195,7 @@ export default function EmailDetail() {
                     </div>
                   </div>
 
-                  <div className="px-5 py-4">
+                  <div className="px-4 py-3 sm:px-5 sm:py-4">
                     {msg.body ? (
                       <EmailBody html={msg.body} />
                     ) : (

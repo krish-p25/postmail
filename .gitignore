@@ -13,4 +13,5 @@ docs
 pgdata/
 
 apps/api/postmail_google_oauth.json
+apps/api/postmail_email_tracker.json
 apps/dashboard/src/components/logo.jpg

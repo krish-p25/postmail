@@ -6,6 +6,12 @@ export default {
   ],
   theme: {
     extend: {
+      keyframes: {
+        shimmer: {
+          '0%': { backgroundPosition: '200% 0' },
+          '100%': { backgroundPosition: '-200% 0' },
+        },
+      },
       colors: {
         primary: {
           50: '#eff6ff',

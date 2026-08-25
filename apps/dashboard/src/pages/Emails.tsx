@@ -66,10 +66,18 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function extractName(recipient: string): string {
+  // "John Doe <john@example.com>" → "John Doe"
+  const match = recipient.match(/^(.+?)\s*<[^>]+>$/);
+  if (match) return match[1].trim().replace(/^"|"$/g, '');
+  return recipient.trim();
+}
+
 function formatRecipients(recipients: string[]): string {
   if (recipients.length === 0) return '—';
-  if (recipients.length === 1) return recipients[0];
-  return `${recipients[0]} +${recipients.length - 1}`;
+  const first = extractName(recipients[0]);
+  if (recipients.length === 1) return first;
+  return `${first} +${recipients.length - 1}`;
 }
 
 export default function Emails() {
@@ -110,9 +118,46 @@ export default function Emails() {
       </p>
 
       {loading && (
-        <div className="mt-12 flex justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
-        </div>
+        <>
+          {/* Skeleton — mobile cards */}
+          <div className="mt-6 space-y-3 sm:hidden">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200">
+                <div className="h-4 w-3/4 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+                <div className="mt-3 h-3 w-1/2 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.15s' }} />
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="h-3 w-24 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.3s' }} />
+                  <div className="h-5 w-16 animate-[shimmer_1.5s_infinite] rounded-full bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.45s' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Skeleton — desktop table */}
+          <div className="mt-6 hidden overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200 sm:block">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50/50">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Subject</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Recipient</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Sent</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i}>
+                    <td className="px-4 py-3"><div className="h-4 w-48 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-36 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.15s' }} /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-24 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.3s' }} /></td>
+                    <td className="px-4 py-3"><div className="h-5 w-16 animate-[shimmer_1.5s_infinite] rounded-full bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.45s' }} /></td>
+                    <td className="px-4 py-3"><div className="h-7 w-14 animate-[shimmer_1.5s_infinite] rounded-lg bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.6s' }} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {error && (
@@ -176,47 +221,72 @@ export default function Emails() {
       )}
 
       {!loading && !error && mailboxConnected && emails.length > 0 && (
-        <div className="mt-6 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Subject</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Recipient</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Sent</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {emails.map((email) => (
-                <tr key={email.id} className="transition hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                    {email.subject}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600" title={email.recipients.join(', ')}>
-                    {formatRecipients(email.recipients)}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">
-                    {formatDate(email.sentAt)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-600">
-                      Untracked
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => navigate(`/dashboard/emails/${email.id}`)}
-                      className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary-700"
-                    >
-                      View
-                    </button>
-                  </td>
+        <>
+          {/* Mobile — card layout */}
+          <div className="mt-6 space-y-3 sm:hidden">
+            {emails.map((email) => (
+              <button
+                key={email.id}
+                onClick={() => navigate(`/dashboard/emails/${email.id}`)}
+                className="block w-full rounded-xl bg-white p-4 text-left shadow-sm ring-1 ring-gray-200 transition active:bg-gray-50"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-medium text-gray-900 line-clamp-2">{email.subject}</p>
+                  <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600">
+                    Untracked
+                  </span>
+                </div>
+                <p className="mt-1.5 text-sm text-gray-600" title={email.recipients.join(', ')}>
+                  {formatRecipients(email.recipients)}
+                </p>
+                <p className="mt-1 text-xs text-gray-400">{formatDate(email.sentAt)}</p>
+              </button>
+            ))}
+          </div>
+
+          {/* Desktop — table layout */}
+          <div className="mt-6 hidden overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200 sm:block">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50/50">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Subject</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Recipient</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Sent</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {emails.map((email) => (
+                  <tr key={email.id} className="transition hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      {email.subject}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600" title={email.recipients.join(', ')}>
+                      {formatRecipients(email.recipients)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500">
+                      {formatDate(email.sentAt)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-600">
+                        Untracked
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => navigate(`/dashboard/emails/${email.id}`)}
+                        className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary-700"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
