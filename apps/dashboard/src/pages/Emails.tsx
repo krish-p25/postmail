@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 
 function ExtensionBanner() {
   const [extensionDetected, setExtensionDetected] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Give the content script a moment to inject the marker
     const timer = setTimeout(() => {
       const installed = document.documentElement.getAttribute('data-postmail-extension') === 'true';
       setExtensionDetected(installed);
@@ -51,37 +52,172 @@ function ExtensionBanner() {
   );
 }
 
+interface MailEmail {
+  id: string;
+  subject: string;
+  recipients: string[];
+  sentAt: string | null;
+  tracked: boolean;
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatRecipients(recipients: string[]): string {
+  if (recipients.length === 0) return '—';
+  if (recipients.length === 1) return recipients[0];
+  return `${recipients[0]} +${recipients.length - 1}`;
+}
+
 export default function Emails() {
+  const navigate = useNavigate();
+  const [mailboxConnected, setMailboxConnected] = useState<boolean | null>(null);
+  const [emails, setEmails] = useState<MailEmail[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .getSettings()
+      .then((settings) => {
+        setMailboxConnected(settings.mailboxConnected ?? false);
+        if (settings.mailboxConnected) {
+          const fetchEmails =
+            settings.mailboxProvider === 'outlook'
+              ? api.getOutlookEmails()
+              : api.getGmailEmails();
+          return fetchEmails.then((data) => {
+            setEmails(data.emails);
+          });
+        }
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load emails');
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
-    <div className="min-h-screen">
+    <div>
       <ExtensionBanner />
+
       <h2 className="text-2xl font-bold text-gray-900">Tracked Emails</h2>
       <p className="mt-1 text-sm text-gray-600">
         View open-tracking activity for your sent emails.
       </p>
 
-      {/* Empty state */}
-      <div className="mt-12 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16">
-        <svg
-          className="h-12 w-12 text-gray-300"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={1}
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"
-          />
-        </svg>
-        <h3 className="mt-4 text-lg font-medium text-gray-900">
-          No tracked emails yet
-        </h3>
-        <p className="mt-1 text-sm text-gray-500">
-          Emails you track with the PostMail extension will appear here.
-        </p>
-      </div>
+      {loading && (
+        <div className="mt-12 flex justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && mailboxConnected === false && (
+        <div className="mt-12 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16">
+          <svg
+            className="h-12 w-12 text-gray-300"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1}
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"
+            />
+          </svg>
+          <h3 className="mt-4 text-lg font-medium text-gray-900">
+            Connect your mailbox
+          </h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Link your Gmail or Outlook account to see your sent emails here.
+          </p>
+          <Link
+            to="/dashboard/settings"
+            className="mt-6 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700"
+          >
+            Go to Settings
+          </Link>
+        </div>
+      )}
+
+      {!loading && !error && mailboxConnected && emails.length === 0 && (
+        <div className="mt-12 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16">
+          <svg
+            className="h-12 w-12 text-gray-300"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1}
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"
+            />
+          </svg>
+          <h3 className="mt-4 text-lg font-medium text-gray-900">
+            No sent emails found
+          </h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Your sent emails will appear here.
+          </p>
+        </div>
+      )}
+
+      {!loading && !error && mailboxConnected && emails.length > 0 && (
+        <div className="mt-6 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50/50">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Subject</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Recipient</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Sent</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {emails.map((email) => (
+                <tr key={email.id} className="transition hover:bg-gray-50">
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    {email.subject}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600" title={email.recipients.join(', ')}>
+                    {formatRecipients(email.recipients)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-500">
+                    {formatDate(email.sentAt)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-600">
+                      Untracked
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => navigate(`/dashboard/emails/${email.id}`)}
+                      className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary-700"
+                    >
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

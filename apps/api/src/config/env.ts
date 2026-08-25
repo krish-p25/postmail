@@ -19,6 +19,16 @@ export const config = {
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
   googleRedirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3006/oauth/callback',
 
+  // Gmail OAuth (separate app for mailbox access)
+  gmailClientId: process.env.GMAIL_CLIENT_ID || '',
+  gmailClientSecret: process.env.GMAIL_CLIENT_SECRET || '',
+  gmailRedirectUri: process.env.GMAIL_REDIRECT_URI || 'http://localhost:3006/gmail/callback',
+
+  // Microsoft/Outlook OAuth
+  microsoftClientId: process.env.MICROSOFT_CLIENT_ID || '',
+  microsoftClientSecret: process.env.MICROSOFT_CLIENT_SECRET || '',
+  microsoftRedirectUri: process.env.MICROSOFT_REDIRECT_URI || 'http://localhost:3006/outlook/callback',
+
   // CORS
   dashboardUrl: process.env.DASHBOARD_URL || 'http://localhost:3006',
 } as const;

@@ -12,6 +12,8 @@ import authRoutes from './routes/auth';
 import meRoutes from './routes/me';
 import emailRoutes from './routes/emails';
 import settingsRoutes from './routes/settings';
+import gmailRoutes from './routes/gmail';
+import outlookRoutes from './routes/outlook';
 
 const app = express();
 
@@ -44,6 +46,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/me', authMiddleware, meRoutes);
 app.use('/api/emails', authMiddleware, emailRoutes);
 app.use('/api/settings', authMiddleware, settingsRoutes);
+app.use('/api/gmail', authMiddleware, gmailRoutes);
+app.use('/api/outlook', authMiddleware, outlookRoutes);
 
 // Error handler (must be last middleware)
 app.use(errorHandler);

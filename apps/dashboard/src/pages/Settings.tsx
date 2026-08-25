@@ -4,6 +4,8 @@ import ConnectMailboxCard from '../components/ConnectMailboxCard';
 
 export default function Settings() {
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
+  const [mailboxConnected, setMailboxConnected] = useState(false);
+  const [mailboxProvider, setMailboxProvider] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -13,6 +15,8 @@ export default function Settings() {
       .getSettings()
       .then((data) => {
         setDiscordWebhookUrl(data.discordWebhookUrl ?? '');
+        setMailboxConnected(data.mailboxConnected ?? false);
+        setMailboxProvider(data.mailboxProvider ?? null);
       })
       .catch(() => {
         setMessage({ type: 'error', text: 'Failed to load settings.' });
@@ -96,7 +100,14 @@ export default function Settings() {
         </div>
 
         {/* Connect mailbox */}
-        <ConnectMailboxCard />
+        <ConnectMailboxCard
+          connected={mailboxConnected}
+          provider={mailboxProvider}
+          onDisconnect={() => {
+            setMailboxConnected(false);
+            setMailboxProvider(null);
+          }}
+        />
       </div>
     </div>
   );
