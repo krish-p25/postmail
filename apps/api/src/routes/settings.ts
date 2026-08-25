@@ -17,13 +17,12 @@ router.get('/', async (req: Request, res: Response) => {
       });
     });
 
-    res.json({
-      settings: settings || {
-        discordWebhookUrl: null,
-        mailboxConnected: false,
-        mailboxProvider: null,
-      },
-    });
+    const data = settings || {
+      discordWebhookUrl: null,
+      mailboxConnected: false,
+      mailboxProvider: null,
+    };
+    res.json(data);
   } catch (error) {
     console.error('[PostMail API] Error in GET /api/settings:', error);
     res.status(500).json({ error: 'Failed to fetch settings' });

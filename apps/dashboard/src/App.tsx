@@ -10,6 +10,10 @@ import OAuthCallback from './pages/OAuthCallback';
 import Home from './pages/Home';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
+import GmailCallback from './pages/GmailCallback';
+import OutlookCallback from './pages/OutlookCallback';
+import EmailDetail from './pages/EmailDetail';
+import AttachmentPreview from './pages/AttachmentPreview';
 
 function App() {
   return (
@@ -18,6 +22,9 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/oauth/callback" element={<OAuthCallback />} />
+        <Route path="/gmail/callback" element={<AuthGuard><GmailCallback /></AuthGuard>} />
+        <Route path="/outlook/callback" element={<AuthGuard><OutlookCallback /></AuthGuard>} />
+        <Route path="/preview" element={<AuthGuard><AttachmentPreview /></AuthGuard>} />
         <Route
           path="/dashboard"
           element={
@@ -28,6 +35,7 @@ function App() {
         >
           <Route index element={<Navigate to="emails" replace />} />
           <Route path="emails" element={<Emails />} />
+          <Route path="emails/:id" element={<EmailDetail />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="/" element={<Home />} />
