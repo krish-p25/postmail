@@ -13,6 +13,11 @@
       "matches": ["https://mail.google.com/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["http://localhost:3006/*", "https://*.postmail.app/*"],
+      "js": ["dashboard-marker.js"],
+      "run_at": "document_start"
     }
   ],
   "action": {

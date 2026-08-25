@@ -19,6 +19,6 @@ COPY tsconfig.base.json ./
 
 WORKDIR /app/apps/dashboard
 
-EXPOSE 5173
+EXPOSE 3006
 
 CMD ["npx", "vite", "--host", "0.0.0.0"]

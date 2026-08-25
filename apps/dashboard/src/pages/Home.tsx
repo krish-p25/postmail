@@ -6,8 +6,8 @@ function Navbar() {
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <span className="text-lg font-bold text-white">PostMail</span>
         <div className="flex items-center gap-6 text-sm">
-          <a href="#features" className="text-gray-400 transition hover:text-white">Features</a>
-          <a href="#pricing" className="text-gray-400 transition hover:text-white">Pricing</a>
+          <a href="#features" onClick={(e) => { e.preventDefault(); document.querySelector('#features')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-gray-400 transition hover:text-white">Features</a>
+          <a href="#pricing" onClick={(e) => { e.preventDefault(); document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-gray-400 transition hover:text-white">Pricing</a>
           <Link to="/login" className="text-gray-400 transition hover:text-white">Login</Link>
           <Link
             to="/signup"
@@ -279,8 +279,8 @@ const FOOTER_LINKS = {
     { label: 'Contact', href: '#' },
   ],
   Legal: [
-    { label: 'Privacy Policy', href: '#' },
-    { label: 'Terms of Service', href: '#' },
+    { label: 'Privacy Policy', href: '/privacy' },
+    { label: 'Terms of Service', href: '/terms' },
   ],
 };
 
@@ -301,9 +301,15 @@ function Footer() {
               <ul className="mt-3 space-y-2">
                 {links.map((link) => (
                   <li key={link.label}>
-                    <a href={link.href} className="text-sm text-gray-400 transition hover:text-white">
-                      {link.label}
-                    </a>
+                    {link.href.startsWith('/') ? (
+                      <Link to={link.href} className="text-sm text-gray-400 transition hover:text-white">
+                        {link.label}
+                      </Link>
+                    ) : (
+                      <a href={link.href} className="text-sm text-gray-400 transition hover:text-white">
+                        {link.label}
+                      </a>
+                    )}
                   </li>
                 ))}
               </ul>

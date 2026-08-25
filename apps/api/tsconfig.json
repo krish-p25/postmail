@@ -1,10 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "./dist",
     "module": "commonjs",
-    "moduleResolution": "node",
     "esModuleInterop": true,
+    "rootDir": "./src",
+    "outDir": "./dist",
     "paths": {
       "@postmail/shared": ["../../packages/shared/src"],
       "@postmail/shared/*": ["../../packages/shared/src/*"]

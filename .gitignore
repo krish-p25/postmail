@@ -6,6 +6,11 @@ dist/
 *.tsbuildinfo
 coverage/
 .claude
+docs
+.superpowers
 
 # Docker
 pgdata/
+
+apps/api/postmail_google_oauth.json
+apps/dashboard/src/components/logo.jpg

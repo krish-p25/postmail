@@ -7,6 +7,7 @@ module.exports = (env, argv) => ({
   entry: {
     background: './src/background/service-worker.ts',
     content: './src/content/index.ts',
+    'dashboard-marker': './src/content/dashboard-marker.ts',
     popup: './src/popup/popup.ts',
   },
   output: {

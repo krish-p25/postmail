@@ -19,6 +19,6 @@ COPY tsconfig.base.json ./
 
 WORKDIR /app/apps/api
 
-EXPOSE 3001
+EXPOSE 3005
 
 CMD ["npx", "ts-node-dev", "--respawn", "--transpile-only", "src/index.ts"]
