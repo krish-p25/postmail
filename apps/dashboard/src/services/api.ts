@@ -173,4 +173,48 @@ export const api = {
     if (!res.ok) throw new Error('Failed to disconnect Outlook');
     return res.json();
   },
+
+  async getTrackedEmails() {
+    const res = await authFetch('/api/emails');
+    if (!res.ok) throw new Error('Failed to fetch tracked emails');
+    return res.json() as Promise<{
+      emails: Array<{
+        id: string;
+        trackingToken: string;
+        recipient: string | null;
+        subject: string | null;
+        status: 'pending' | 'sent' | 'discarded' | 'failed';
+        sentAt: string | null;
+        createdAt: string;
+        opens: Array<{
+          id: string;
+          opened_at: string;
+          user_agent: string | null;
+          ip_address: string | null;
+        }>;
+      }>;
+    }>;
+  },
+
+  async getTrackedEmail(id: string) {
+    const res = await authFetch(`/api/emails/${id}`);
+    if (!res.ok) throw new Error('Failed to fetch tracked email');
+    return res.json() as Promise<{
+      email: {
+        id: string;
+        trackingToken: string;
+        recipient: string | null;
+        subject: string | null;
+        status: 'pending' | 'sent' | 'discarded' | 'failed';
+        sentAt: string | null;
+        createdAt: string;
+        opens: Array<{
+          id: string;
+          opened_at: string;
+          user_agent: string | null;
+          ip_address: string | null;
+        }>;
+      };
+    }>;
+  },
 };

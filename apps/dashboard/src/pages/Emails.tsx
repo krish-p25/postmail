@@ -61,6 +61,30 @@ interface MailEmail {
   hasAttachments: boolean;
 }
 
+interface TrackedEmailData {
+  id: string;
+  trackingToken: string;
+  recipient: string | null;
+  subject: string | null;
+  status: 'pending' | 'sent' | 'discarded' | 'failed';
+  sentAt: string | null;
+  createdAt: string;
+  opens: Array<{
+    id: string;
+    opened_at: string;
+    user_agent: string | null;
+    ip_address: string | null;
+  }>;
+}
+
+interface MergedEmail extends MailEmail {
+  trackingStatus: 'tracked' | 'opened' | 'draft' | 'untracked';
+  openCount: number;
+  trackedEmailId: string | null;
+}
+
+type FilterOption = 'all' | 'tracked' | 'untracked';
+
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -68,7 +92,6 @@ function formatDate(iso: string | null): string {
 }
 
 function extractName(recipient: string): string {
-  // "John Doe <john@example.com>" → "John Doe"
   const match = recipient.match(/^(.+?)\s*<[^>]+>$/);
   if (match) return match[1].trim().replace(/^"|"$/g, '');
   return recipient.trim();
@@ -81,22 +104,118 @@ function formatRecipients(recipients: string[]): string {
   return `${first} +${recipients.length - 1}`;
 }
 
+function mergeEmails(sentEmails: MailEmail[], trackedEmails: TrackedEmailData[]): MergedEmail[] {
+  const merged: MergedEmail[] = sentEmails.map((email) => {
+    // Try to match against tracked emails:
+    //   1. By subject + recipient (strongest match)
+    //   2. By subject alone (if tracked email has no recipient — reader bug fallback)
+    const match = trackedEmails.find((te) => {
+      if (!te.subject) return false;
+      const subjectMatch = te.subject.toLowerCase() === email.subject.toLowerCase();
+      if (!subjectMatch) return false;
+
+      // If tracked email has a recipient, verify it matches
+      if (te.recipient) {
+        const recipientMatch = email.recipients.some((r) =>
+          r.toLowerCase().includes((te.recipient || '').split(',')[0].trim().toLowerCase()),
+        );
+        return recipientMatch;
+      }
+
+      // Subject-only match (tracked email has no recipient stored)
+      return true;
+    });
+
+    if (match) {
+      const openCount = match.opens.length;
+      let trackingStatus: MergedEmail['trackingStatus'] = 'tracked';
+      if (openCount > 0) trackingStatus = 'opened';
+      if (match.status === 'pending') trackingStatus = 'draft';
+
+      return {
+        ...email,
+        tracked: true,
+        trackingStatus,
+        openCount,
+        trackedEmailId: match.id,
+      };
+    }
+
+    return {
+      ...email,
+      trackingStatus: 'untracked',
+      openCount: 0,
+      trackedEmailId: null,
+    };
+  });
+
+  // Add pending tracked emails that aren't in the sent list yet (drafts)
+  for (const te of trackedEmails) {
+    if (te.status !== 'pending') continue;
+    const alreadyMerged = merged.some((m) => m.trackedEmailId === te.id);
+    if (alreadyMerged) continue;
+
+    merged.push({
+      id: te.id,
+      subject: te.subject || '(no subject)',
+      recipients: te.recipient ? te.recipient.split(', ') : [],
+      sentAt: te.sentAt,
+      tracked: true,
+      hasAttachments: false,
+      trackingStatus: 'draft',
+      openCount: 0,
+      trackedEmailId: te.id,
+    });
+  }
+
+  return merged;
+}
+
+function StatusBadge({ status, openCount }: { status: MergedEmail['trackingStatus']; openCount: number }) {
+  switch (status) {
+    case 'opened':
+      return (
+        <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-600">
+          Opened {openCount}x
+        </span>
+      );
+    case 'tracked':
+      return (
+        <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-600">
+          Tracked
+        </span>
+      );
+    case 'draft':
+      return (
+        <span className="rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-600">
+          Draft
+        </span>
+      );
+    case 'untracked':
+      return (
+        <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-600">
+          Untracked
+        </span>
+      );
+  }
+}
+
 export default function Emails() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Read initial state from URL
   const initialQuery = searchParams.get('q') || '';
   const initialPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
   const initialPageToken = searchParams.get('pt') || '';
+  const initialFilter = (searchParams.get('filter') as FilterOption) || 'all';
 
   const [mailboxConnected, setMailboxConnected] = useState<boolean | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
-  const [emails, setEmails] = useState<MailEmail[]>([]);
+  const [emails, setEmails] = useState<MergedEmail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Pagination state
+  // Pagination
   const [page, setPage] = useState(initialPage);
   const [hasMore, setHasMore] = useState(false);
   const [gmailNextToken, setGmailNextToken] = useState<string | null>(null);
@@ -104,18 +223,22 @@ export default function Emails() {
     initialPageToken ? [initialPageToken] : [],
   );
 
-  // Search state
+  // Search
   const [searchOpen, setSearchOpen] = useState(!!initialQuery);
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [activeQuery, setActiveQuery] = useState(initialQuery);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function buildParams(q: string, pg: number, pageToken?: string) {
+  // Filter
+  const [filter, setFilter] = useState<FilterOption>(initialFilter);
+
+  function buildParams(q: string, pg: number, pageToken?: string, f?: FilterOption) {
     const p: Record<string, string> = {};
     if (q) p.q = q;
     if (pg > 1) p.page = String(pg);
     if (pageToken) p.pt = pageToken;
+    if (f && f !== 'all') p.filter = f;
     return p;
   }
 
@@ -125,19 +248,25 @@ export default function Emails() {
 
     const search = q !== undefined ? q : activeQuery;
 
-    const promise =
+    const sentPromise =
       prov === 'outlook'
         ? api.getOutlookEmails(outlookPage, search || undefined).then((data) => {
-            setEmails(data.emails);
             setHasMore(data.hasMore);
+            return data.emails;
           })
         : api.getGmailEmails(gmailPageToken, search || undefined).then((data) => {
-            setEmails(data.emails);
             setGmailNextToken(data.nextPageToken);
             setHasMore(!!data.nextPageToken);
+            return data.emails;
           });
 
-    promise
+    const trackedPromise = api.getTrackedEmails().then((data) => data.emails);
+
+    Promise.all([sentPromise, trackedPromise])
+      .then(([sentEmails, trackedEmails]) => {
+        const merged = mergeEmails(sentEmails, trackedEmails);
+        setEmails(merged);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load emails'))
       .finally(() => setLoading(false));
   }
@@ -150,7 +279,6 @@ export default function Emails() {
         const prov = settings.mailboxProvider || 'gmail';
         setProvider(prov);
         if (settings.mailboxConnected) {
-          // Restore page from URL
           const gmailToken = initialPageToken || undefined;
           const outlookPage = initialPage > 1 ? initialPage : undefined;
           fetchPage(prov, gmailToken, outlookPage, initialQuery || undefined);
@@ -172,7 +300,7 @@ export default function Emails() {
       setPage(1);
       setGmailNextToken(null);
       setGmailTokenHistory([]);
-      setSearchParams(buildParams(value, 1), { replace: true });
+      setSearchParams(buildParams(value, 1, undefined, filter), { replace: true });
       if (provider) {
         fetchPage(provider, undefined, undefined, value);
       }
@@ -188,7 +316,7 @@ export default function Emails() {
         setPage(1);
         setGmailNextToken(null);
         setGmailTokenHistory([]);
-        setSearchParams({}, { replace: true });
+        setSearchParams(buildParams('', 1, undefined, filter), { replace: true });
         if (provider) fetchPage(provider, undefined, undefined, '');
       }
     } else {
@@ -197,17 +325,22 @@ export default function Emails() {
     }
   }
 
+  function handleFilterChange(newFilter: FilterOption) {
+    setFilter(newFilter);
+    setSearchParams(buildParams(activeQuery, page, undefined, newFilter), { replace: true });
+  }
+
   function goNext() {
     if (!provider) return;
     const nextPage = page + 1;
     setPage(nextPage);
     if (provider === 'outlook') {
-      setSearchParams(buildParams(activeQuery, nextPage));
+      setSearchParams(buildParams(activeQuery, nextPage, undefined, filter));
       fetchPage(provider, undefined, nextPage);
     } else {
       if (gmailNextToken) {
         setGmailTokenHistory((prev) => [...prev, gmailNextToken]);
-        setSearchParams(buildParams(activeQuery, nextPage, gmailNextToken));
+        setSearchParams(buildParams(activeQuery, nextPage, gmailNextToken, filter));
         fetchPage(provider, gmailNextToken);
       }
     }
@@ -218,17 +351,25 @@ export default function Emails() {
     const prevPage = page - 1;
     setPage(prevPage);
     if (provider === 'outlook') {
-      setSearchParams(buildParams(activeQuery, prevPage));
+      setSearchParams(buildParams(activeQuery, prevPage, undefined, filter));
       fetchPage(provider, undefined, prevPage);
     } else {
       const history = [...gmailTokenHistory];
       history.pop();
       const prevToken = history.length > 0 ? history[history.length - 1] : undefined;
       setGmailTokenHistory(history);
-      setSearchParams(buildParams(activeQuery, prevPage, prevToken));
+      setSearchParams(buildParams(activeQuery, prevPage, prevToken, filter));
       fetchPage(provider, prevToken);
     }
   }
+
+  // Apply client-side filter
+  const filteredEmails = emails.filter((email) => {
+    if (filter === 'all') return true;
+    if (filter === 'tracked') return email.trackingStatus !== 'untracked';
+    if (filter === 'untracked') return email.trackingStatus === 'untracked';
+    return true;
+  });
 
   return (
     <div>
@@ -277,6 +418,25 @@ export default function Emails() {
           </div>
         </div>
       </div>
+
+      {/* Filter bar */}
+      {!loading && mailboxConnected && (
+        <div className="mt-4 flex gap-2">
+          {(['all', 'tracked', 'untracked'] as FilterOption[]).map((opt) => (
+            <button
+              key={opt}
+              onClick={() => handleFilterChange(opt)}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-medium capitalize transition ${
+                filter === opt
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading && (
         <>
@@ -329,59 +489,34 @@ export default function Emails() {
 
       {!loading && !error && mailboxConnected === false && (
         <div className="mt-12 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16">
-          <svg
-            className="h-12 w-12 text-gray-300"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1}
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"
-            />
+          <svg className="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
           </svg>
-          <h3 className="mt-4 text-lg font-medium text-gray-900">
-            Connect your mailbox
-          </h3>
-          <p className="mt-1 text-sm text-gray-500">
-            Link your Gmail or Outlook account to see your sent emails here.
-          </p>
-          <Link
-            to="/dashboard/settings"
-            className="mt-6 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700"
-          >
+          <h3 className="mt-4 text-lg font-medium text-gray-900">Connect your mailbox</h3>
+          <p className="mt-1 text-sm text-gray-500">Link your Gmail or Outlook account to see your sent emails here.</p>
+          <Link to="/dashboard/settings" className="mt-6 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700">
             Go to Settings
           </Link>
         </div>
       )}
 
-      {!loading && !error && mailboxConnected && emails.length === 0 && (
+      {!loading && !error && mailboxConnected && filteredEmails.length === 0 && !activeQuery && (
         <div className="mt-12 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16">
-          <svg
-            className="h-12 w-12 text-gray-300"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1}
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"
-            />
+          <svg className="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
           </svg>
           <h3 className="mt-4 text-lg font-medium text-gray-900">
-            No sent emails found
+            {filter !== 'all' ? `No ${filter} emails` : 'No sent emails found'}
           </h3>
           <p className="mt-1 text-sm text-gray-500">
-            Your sent emails will appear here.
+            {filter !== 'all'
+              ? `No emails match the "${filter}" filter.`
+              : 'Your sent emails will appear here.'}
           </p>
         </div>
       )}
 
-      {!loading && !error && mailboxConnected && activeQuery && emails.length === 0 && (
+      {!loading && !error && mailboxConnected && activeQuery && filteredEmails.length === 0 && (
         <div className="mt-12 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16">
           <svg className="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
@@ -393,11 +528,11 @@ export default function Emails() {
         </div>
       )}
 
-      {!loading && !error && mailboxConnected && emails.length > 0 && (
+      {!loading && !error && mailboxConnected && filteredEmails.length > 0 && (
         <>
           {/* Mobile — card layout */}
           <div className="mt-6 space-y-3 sm:hidden">
-            {emails.map((email) => (
+            {filteredEmails.map((email) => (
               <button
                 key={email.id}
                 onClick={() => navigate(`/dashboard/emails/${email.id}`)}
@@ -412,9 +547,7 @@ export default function Emails() {
                       </svg>
                     )}
                   </div>
-                  <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600">
-                    Untracked
-                  </span>
+                  <StatusBadge status={email.trackingStatus} openCount={email.openCount} />
                 </div>
                 <p className="mt-1.5 text-sm text-gray-600" title={email.recipients.join(', ')}>
                   {formatRecipients(email.recipients)}
@@ -437,7 +570,7 @@ export default function Emails() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {emails.map((email) => (
+                {filteredEmails.map((email) => (
                   <tr key={email.id} className="transition hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">
                       <div className="flex items-center gap-1.5">
@@ -456,9 +589,7 @@ export default function Emails() {
                       {formatDate(email.sentAt)}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-600">
-                        Untracked
-                      </span>
+                      <StatusBadge status={email.trackingStatus} openCount={email.openCount} />
                     </td>
                     <td className="px-4 py-3">
                       <button

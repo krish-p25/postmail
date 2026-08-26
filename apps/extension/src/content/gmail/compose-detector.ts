@@ -21,6 +21,7 @@ export class ComposeDetector {
   }
 
   start(): void {
+    console.log('[PostMail][Detector] Starting, scanning for existing compose windows...');
     this.scan();
 
     this.observer = new MutationObserver(() => this.scan());
@@ -28,6 +29,7 @@ export class ComposeDetector {
       childList: true,
       subtree: true,
     });
+    console.log('[PostMail][Detector] MutationObserver started');
   }
 
   stop(): void {
@@ -47,6 +49,7 @@ export class ComposeDetector {
       currentComposes.add(el);
 
       if (!this.trackedComposes.has(el)) {
+        console.log('[PostMail][Detector] New compose dialog found');
         this.trackedComposes.add(el);
         this.callbacks.onComposeDetected(el);
       }
@@ -54,6 +57,7 @@ export class ComposeDetector {
 
     for (const tracked of this.trackedComposes) {
       if (!currentComposes.has(tracked) || !document.body.contains(tracked)) {
+        console.log('[PostMail][Detector] Compose dialog removed');
         this.trackedComposes.delete(tracked);
         this.callbacks.onComposeRemoved(tracked);
       }

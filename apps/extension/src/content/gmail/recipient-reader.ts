@@ -24,10 +24,23 @@ export class RecipientReader {
     const chips = this.composeElement.querySelectorAll(SELECTORS.RECIPIENT_CHIP);
     const emails: string[] = [];
     chips.forEach((chip) => {
-      const email = chip.getAttribute('email');
-      if (email) emails.push(email);
+      // Gmail uses different attributes depending on version/layout
+      const email = chip.getAttribute('email')
+        || chip.getAttribute('data-hovercard-id')
+        || chip.getAttribute('data-name');
+      if (email && email.includes('@')) emails.push(email);
     });
-    return emails;
+
+    // Fallback: scan for any element with an email-like data attribute
+    if (emails.length === 0) {
+      this.composeElement.querySelectorAll('[data-hovercard-id]').forEach((el) => {
+        const val = el.getAttribute('data-hovercard-id');
+        if (val && val.includes('@')) emails.push(val);
+      });
+    }
+
+    console.log(`[PostMail][RecipientReader] readRecipients found ${emails.length}: [${emails.join(', ')}]`);
+    return [...new Set(emails)];
   }
 
   /** Register a callback for recipient changes. */
@@ -37,10 +50,12 @@ export class RecipientReader {
 
   /** Start observing for recipient changes. Fires initial notification if recipients exist. */
   start(): void {
+    console.log('[PostMail][RecipientReader] Starting observer');
     this.readAndNotify();
 
     const toField = this.composeElement.querySelector(SELECTORS.TO_FIELD);
     const observeTarget = toField ?? this.composeElement;
+    console.log(`[PostMail][RecipientReader] Observing ${toField ? 'TO field' : 'compose element (fallback)'}`);
 
     this.observer = new MutationObserver(() => this.readAndNotify());
     this.observer.observe(observeTarget, {
@@ -60,6 +75,7 @@ export class RecipientReader {
   private readAndNotify(): void {
     const recipients = this.readRecipients();
     if (!this.recipientsEqual(recipients, this.lastRecipients)) {
+      console.log(`[PostMail][RecipientReader] Recipients changed: [${this.lastRecipients.join(', ')}] → [${recipients.join(', ')}]`);
       this.lastRecipients = recipients;
       this.callbacks.forEach((cb) => cb(recipients));
     }

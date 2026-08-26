@@ -18,6 +18,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Check for existing token and load user
     const token = auth.getToken();
     if (token) {
+      // Push token to extension via custom DOM event
+      document.dispatchEvent(new CustomEvent('postmail-token-sync', { detail: token }));
+
       // Validate token by calling /api/me
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3005';
       fetch(`${API_URL}/api/me`, {
@@ -35,8 +38,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Whenever user state changes, sync token to extension
+  useEffect(() => {
+    const token = auth.getToken();
+    if (user && token) {
+      document.dispatchEvent(new CustomEvent('postmail-token-sync', { detail: token }));
+    }
+  }, [user]);
+
   const signOut = useCallback(() => {
     auth.clearToken();
+    document.dispatchEvent(new CustomEvent('postmail-token-sync', { detail: null }));
     setUser(null);
   }, []);
 
