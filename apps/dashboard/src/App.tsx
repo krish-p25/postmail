@@ -14,6 +14,7 @@ import GmailCallback from './pages/GmailCallback';
 import OutlookCallback from './pages/OutlookCallback';
 import EmailDetail from './pages/EmailDetail';
 import AttachmentPreview from './pages/AttachmentPreview';
+import Setup from './pages/Setup';
 
 function App() {
   return (
@@ -37,6 +38,7 @@ function App() {
           <Route path="emails" element={<Emails />} />
           <Route path="emails/:id" element={<EmailDetail />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="setup" element={<Setup />} />
         </Route>
         <Route path="/" element={<Home />} />
         <Route path="/privacy" element={<Privacy />} />
