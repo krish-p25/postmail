@@ -10,8 +10,8 @@ export const SELECTORS = {
   COMPOSE_SUBJECT: 'input[name="subjectbox"]',
   COMPOSE_BODY: 'div[role="textbox"][g_editable="true"]',
   COMPOSE_BODY_FALLBACK: 'div[role="textbox"][aria-label="Message Body"]',
-  RECIPIENT_CHIP: 'span[email]',
-  TO_FIELD: 'div[name="to"]',
+  RECIPIENT_CHIP: 'span[email], div[data-hovercard-id][data-name]',
+  TO_FIELD: 'div[name="to"], tr.bzf',
   CC_FIELD: 'div[name="cc"]',
   BCC_FIELD: 'div[name="bcc"]',
 } as const;
@@ -30,8 +30,19 @@ export function findRecipientChips(composeElement: Element): string[] {
   const chips = composeElement.querySelectorAll(SELECTORS.RECIPIENT_CHIP);
   const emails: string[] = [];
   chips.forEach((chip) => {
-    const email = chip.getAttribute('email');
-    if (email) emails.push(email);
+    const email = chip.getAttribute('email')
+      || chip.getAttribute('data-hovercard-id')
+      || chip.getAttribute('data-name');
+    if (email && email.includes('@')) emails.push(email);
   });
-  return emails;
+
+  // Fallback: scan for any element with an email-like data attribute
+  if (emails.length === 0) {
+    composeElement.querySelectorAll('[data-hovercard-id]').forEach((el) => {
+      const val = el.getAttribute('data-hovercard-id');
+      if (val && val.includes('@')) emails.push(val);
+    });
+  }
+
+  return [...new Set(emails)];
 }

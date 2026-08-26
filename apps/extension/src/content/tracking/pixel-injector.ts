@@ -25,7 +25,10 @@ export class PixelInjector {
   inject(trackingUrl: string): boolean {
     try {
       const body = findComposeBody(this.composeElement);
-      if (!body) return false;
+      if (!body) {
+        console.warn('[PostMail][Pixel] Compose body not found, cannot inject');
+        return false;
+      }
 
       // Remove existing pixel(s) first
       this.removeFromDom();
@@ -36,12 +39,13 @@ export class PixelInjector {
       pixel.height = 1;
       pixel.alt = '';
       pixel.setAttribute(TRACKING_PIXEL_ATTR, 'true');
-      pixel.style.display = 'none';
+      pixel.style.cssText = 'position:absolute;opacity:0;width:1px;height:1px;overflow:hidden;';
 
       body.appendChild(pixel);
+      console.log(`[PostMail][Pixel] Injected tracking pixel: ${trackingUrl}`);
       return true;
-    } catch {
-      console.warn('[PostMail] Failed to inject tracking pixel');
+    } catch (err) {
+      console.warn('[PostMail][Pixel] Failed to inject tracking pixel:', err);
       return false;
     }
   }
@@ -58,6 +62,9 @@ export class PixelInjector {
 
   private removeFromDom(): void {
     const existing = this.composeElement.querySelectorAll(PIXEL_SELECTOR);
+    if (existing.length > 0) {
+      console.log(`[PostMail][Pixel] Removing ${existing.length} existing pixel(s)`);
+    }
     existing.forEach((el) => el.remove());
   }
 }

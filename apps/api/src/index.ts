@@ -14,8 +14,14 @@ import emailRoutes from './routes/emails';
 import settingsRoutes from './routes/settings';
 import gmailRoutes from './routes/gmail';
 import outlookRoutes from './routes/outlook';
+import pixelRoutes from './routes/pixel';
+import trackRoutes from './routes/track';
 
 const app = express();
+
+// Pixel tracking route — mounted before helmet/CORS/auth
+// because email clients fetch this without CORS headers
+app.use('/o', pixelRoutes);
 
 // Security
 app.use(helmet());
@@ -48,6 +54,7 @@ app.use('/api/emails', authMiddleware, emailRoutes);
 app.use('/api/settings', authMiddleware, settingsRoutes);
 app.use('/api/gmail', authMiddleware, gmailRoutes);
 app.use('/api/outlook', authMiddleware, outlookRoutes);
+app.use('/api/track', authMiddleware, trackRoutes);
 
 // Error handler (must be last middleware)
 app.use(errorHandler);

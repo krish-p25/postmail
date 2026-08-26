@@ -123,6 +123,74 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+interface TrackingData {
+  status: string;
+  opens: Array<{
+    id: string;
+    opened_at: string;
+    user_agent: string | null;
+    ip_address: string | null;
+  }>;
+}
+
+function parseUserAgent(ua: string | null): string {
+  if (!ua) return 'Unknown';
+  if (ua.includes('Thunderbird')) return 'Thunderbird';
+  if (ua.includes('Outlook')) return 'Outlook';
+  if (ua.includes('iPhone') || ua.includes('iPad')) return 'Apple Mail (iOS)';
+  if (ua.includes('Macintosh') && ua.includes('AppleWebKit')) return 'Apple Mail (macOS)';
+  if (ua.includes('Chrome')) return 'Chrome';
+  if (ua.includes('Firefox')) return 'Firefox';
+  if (ua.includes('Safari')) return 'Safari';
+  if (ua.includes('Googlebot')) return 'Gmail (image proxy)';
+  return 'Email client';
+}
+
+function OpensTimeline({ tracking }: { tracking: TrackingData }) {
+  if (tracking.opens.length === 0) {
+    return (
+      <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
+        <h3 className="text-sm font-semibold text-gray-900">Opens</h3>
+        <p className="mt-2 text-sm text-gray-500">No opens recorded yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
+      <h3 className="text-sm font-semibold text-gray-900">
+        Opens ({tracking.opens.length})
+      </h3>
+      <div className="mt-4 space-y-3">
+        {tracking.opens.map((open, idx) => (
+          <div key={open.id} className="flex items-start gap-3">
+            <div className="relative flex flex-col items-center">
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100">
+                <svg className="h-3.5 w-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                </svg>
+              </div>
+              {idx < tracking.opens.length - 1 && (
+                <div className="mt-1 h-full w-px bg-gray-200" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1 pb-3">
+              <p className="text-sm font-medium text-gray-900">
+                {formatDate(open.opened_at)}
+              </p>
+              <p className="mt-0.5 text-xs text-gray-500">
+                {parseUserAgent(open.user_agent)}
+                {open.ip_address && ` · ${open.ip_address}`}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function EmailDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -130,6 +198,7 @@ export default function EmailDetail() {
   const [provider, setProvider] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tracking, setTracking] = useState<TrackingData | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -147,6 +216,18 @@ export default function EmailDetail() {
       .then((data) => setMessages(data.messages))
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load email'))
       .finally(() => setLoading(false));
+
+    // Try to load tracking data (may not exist for this email)
+    api.getTrackedEmails().then((data) => {
+      // Search for a tracked email matching this email's ID or subject
+      // Since we're on the detail page, we try matching by tracked email ID first
+      const match = data.emails.find((te) => te.id === id);
+      if (match) {
+        setTracking({ status: match.status, opens: match.opens });
+      }
+    }).catch(() => {
+      // Silently fail — tracking data is supplementary
+    });
   }, [id]);
 
   const subject = messages.length > 0 ? messages[0].subject : '';
@@ -183,6 +264,12 @@ export default function EmailDetail() {
               {messages.length} {messages.length === 1 ? 'message' : 'messages'} in thread
             </p>
           </div>
+
+          {tracking && (
+            <div className="mb-6">
+              <OpensTimeline tracking={tracking} />
+            </div>
+          )}
 
           <div className="space-y-4">
             {messages.map((msg, index) => {

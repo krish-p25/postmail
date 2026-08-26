@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Track when your Gmail emails are opened",
   "permissions": ["storage"],
-  "host_permissions": ["https://mail.google.com/*"],
+  "host_permissions": ["https://mail.google.com/*", "http://localhost:3005/*"],
   "background": {
     "service_worker": "background.js"
   },
