@@ -96,10 +96,10 @@ The pixel URL currently points to `localhost:3001` but the API runs on port `300
 
 - **Modify** `apps/extension/src/content/gmail/compose-manager.ts`
   - On `handleComposeRemoved` → check if pixel was injected
-    - If yes → trigger send verification flow
-    - The verification: call the Gmail API (via background worker) to search for the tracking token in recent sent emails
-    - If found in sent → call `confirmEmailSent(token)`
-    - If not found (draft/discarded) → wait and retry once, then call `discardTrackedEmail(token)` or leave as pending
+    - If yes → show toast in "verifying" state → trigger send verification flow
+    - The verification: call the PostMail API which uses Gmail OAuth to search for the tracking token in recent sent emails
+    - If found in sent → call `confirmEmailSent(token)` → update toast to "success"
+    - If not found → retry once after 2s delay (Gmail may have latency indexing the message), then show "draft" toast or leave as pending
 
 **2.4 Send verification via Gmail API**
 
@@ -114,6 +114,65 @@ The pixel URL currently points to `localhost:3001` but the API runs on port `300
   - Searches `in:sent` for messages containing the tracking token in the body
   - If found → update status to `sent`, set `sentAt`
   - If not found → return `{ found: false }` (let the extension decide whether to retry or discard)
+
+**2.5 Gmail tracking toast notification**
+
+A branded floating card injected into the Gmail page by the content script. Appears when a compose window with a tracking pixel is closed (i.e., user clicked Send, saved as draft, or discarded).
+
+- **Create** `apps/extension/src/content/gmail/tracking-toast.ts`
+  - `TrackingToast` class that manages the toast DOM element lifecycle
+  - **Positioning**: Fixed to bottom-right of viewport (`position: fixed; bottom: 24px; right: 24px; z-index: 9999`)
+  - **Appearance**: Floating card with PostMail branding — white background, subtle shadow (`box-shadow: 0 8px 30px rgba(0,0,0,0.12)`), rounded corners (12px), 360px width
+    - Top accent bar: 3px solid in PostMail brand color (primary-600)
+    - PostMail icon/logo on the left side of the header
+    - Dismiss X button top-right
+  - **Entry animation**: Slide up + fade in from below (`translateY(20px) → translateY(0)`, `opacity: 0 → 1`, 300ms ease-out)
+  - **Exit animation**: Slide down + fade out (reverse of entry, 200ms)
+
+  - **Three visual states**:
+
+    1. **Verifying** — shown immediately when compose closes
+       - Animated spinner icon (subtle, brand-colored)
+       - Title: **"Verifying tracking..."**
+       - Subtitle: the email subject line (truncated to ~50 chars)
+       - No auto-dismiss — stays until resolved
+
+    2. **Success** — shown when verification confirms email was sent
+       - Green checkmark icon (animated check drawing)
+       - Title: **"Tracking active"**
+       - Subtitle: recipient name/email + subject
+       - **"View on Dashboard →"** link (opens dashboard emails page in new tab)
+       - Auto-dismiss after 5 seconds
+
+    3. **Draft** — shown when verification doesn't find email in sent folder
+       - Yellow/amber warning icon
+       - Title: **"Saved as draft"**
+       - Subtitle: **"Tracking will activate when this email is sent"**
+       - **"View on Dashboard →"** link
+       - Auto-dismiss after 5 seconds
+
+    4. **Error** — shown if verification request fails
+       - Red alert icon
+       - Title: **"Could not verify tracking"**
+       - Subtitle: **"Check your connection and try again"**
+       - **"View on Dashboard →"** link
+       - Auto-dismiss after 5 seconds
+
+  - **Key methods**:
+    - `show(state: 'verifying' | 'success' | 'draft' | 'error', data: { subject, recipient })` — creates and injects the toast DOM
+    - `update(state, data)` — transitions the existing toast to a new state (smooth content swap, no re-render flicker)
+    - `dismiss()` — plays exit animation, removes from DOM
+  - **Stacking**: If multiple emails are sent in quick succession, stack toasts vertically with 12px gap (newest on bottom)
+  - **Styles**: All styles are inline or injected via a `<style>` tag with a unique PostMail prefix to avoid conflicts with Gmail's CSS
+
+- **Modify** `apps/extension/src/content/gmail/compose-manager.ts`
+  - Import `TrackingToast`
+  - On `handleComposeRemoved`:
+    - If the compose had an injected pixel:
+      1. Create `TrackingToast` instance, show in "verifying" state with subject/recipient from tracker info
+      2. Send `VERIFY_EMAIL_SENT` message to background worker
+      3. On response: update toast to "success", "draft", or "error" accordingly
+      4. Toast auto-dismisses after 5 seconds (or user clicks X)
 
 ### Phase 3: Dashboard — Merged email list with tracking data
 
