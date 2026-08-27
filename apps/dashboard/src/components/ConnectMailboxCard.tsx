@@ -4,10 +4,11 @@ import { api } from '../services/api';
 interface ConnectMailboxCardProps {
   connected: boolean;
   provider: string | null;
+  loading?: boolean;
   onDisconnect: () => void;
 }
 
-export default function ConnectMailboxCard({ connected, provider, onDisconnect }: ConnectMailboxCardProps) {
+export default function ConnectMailboxCard({ connected, provider, loading, onDisconnect }: ConnectMailboxCardProps) {
   const [connecting, setConnecting] = useState<'gmail' | 'outlook' | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +62,15 @@ export default function ConnectMailboxCard({ connected, provider, onDisconnect }
         </div>
       )}
 
-      {connected ? (
+      {loading ? (
+        <div className="mt-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-2 animate-[shimmer_1.5s_infinite] rounded-full bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+            <div className="h-4 w-32 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+          </div>
+          <div className="h-8 w-24 animate-[shimmer_1.5s_infinite] rounded-lg bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+        </div>
+      ) : connected ? (
         <div className="mt-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-2 w-2 rounded-full bg-green-500" />

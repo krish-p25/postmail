@@ -14,8 +14,15 @@ function formatDate(iso: string | null): string {
   });
 }
 
+/** Strip PostMail tracking pixel <img> tags so the dashboard doesn't trigger false opens */
+function stripTrackingPixel(html: string): string {
+  // Remove <img> tags whose src contains the /o/ tracking path
+  return html.replace(/<img[^>]*\ssrc=["'][^"']*\/o\/[a-f0-9-]+["'][^>]*\/?>/gi, '');
+}
+
 function EmailBody({ html }: { html: string }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const sanitizedHtml = stripTrackingPixel(html);
 
   const resizeIframe = useCallback(() => {
     const iframe = iframeRef.current;
@@ -32,10 +39,10 @@ function EmailBody({ html }: { html: string }) {
       if (!doc) return;
 
       // Check if the HTML is a full document or a fragment
-      const isFullDoc = /<html[\s>]/i.test(html);
+      const isFullDoc = /<html[\s>]/i.test(sanitizedHtml);
       if (isFullDoc) {
         doc.open();
-        doc.write(html);
+        doc.write(sanitizedHtml);
         doc.close();
       } else {
         doc.open();
@@ -44,7 +51,7 @@ function EmailBody({ html }: { html: string }) {
           a { color: #2563eb; text-decoration: underline; }
           img { max-width: 100%; height: auto; }
           blockquote { margin: 0 0 0 0.5em; padding-left: 0.75em; border-left: 2px solid #d1d5db; }
-        </style></head><body>${html}</body></html>`);
+        </style></head><body>${sanitizedHtml}</body></html>`);
         doc.close();
       }
 
@@ -71,7 +78,7 @@ function EmailBody({ html }: { html: string }) {
     handleLoad();
 
     return () => iframe.removeEventListener('load', handleLoad);
-  }, [html, resizeIframe]);
+  }, [sanitizedHtml, resizeIframe]);
 
   return (
     <iframe
@@ -123,14 +130,17 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+interface TrackingOpen {
+  id: string;
+  opened_at: string;
+  user_agent: string | null;
+  ip_address: string | null;
+  dismissed: boolean;
+}
+
 interface TrackingData {
   status: string;
-  opens: Array<{
-    id: string;
-    opened_at: string;
-    user_agent: string | null;
-    ip_address: string | null;
-  }>;
+  opens: TrackingOpen[];
 }
 
 function parseUserAgent(ua: string | null): string {
@@ -146,7 +156,19 @@ function parseUserAgent(ua: string | null): string {
   return 'Email client';
 }
 
-function OpensTimeline({ tracking }: { tracking: TrackingData }) {
+function isGmailProxy(ua: string | null): boolean {
+  if (!ua) return false;
+  return ua.includes('GoogleImageProxy') || ua.includes('Googlebot');
+}
+
+function OpensTimeline({ tracking, onDismiss }: { tracking: TrackingData; onDismiss: (openId: string) => void }) {
+  const sorted = [...tracking.opens].sort(
+    (a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime(),
+  );
+  const activeOpens = sorted.filter((o) => !o.dismissed && !isGmailProxy(o.user_agent));
+  const dismissedOrProxy = sorted.filter((o) => o.dismissed || isGmailProxy(o.user_agent));
+  const [showDismissed, setShowDismissed] = useState(false);
+
   if (tracking.opens.length === 0) {
     return (
       <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
@@ -156,37 +178,99 @@ function OpensTimeline({ tracking }: { tracking: TrackingData }) {
     );
   }
 
-  return (
-    <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
-      <h3 className="text-sm font-semibold text-gray-900">
-        Opens ({tracking.opens.length})
-      </h3>
-      <div className="mt-4 space-y-3">
-        {tracking.opens.map((open, idx) => (
-          <div key={open.id} className="flex items-start gap-3">
-            <div className="relative flex flex-col items-center">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100">
-                <svg className="h-3.5 w-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178Z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                </svg>
+  function renderOpen(open: TrackingOpen, idx: number, list: TrackingOpen[], isDimmed: boolean) {
+    const proxy = isGmailProxy(open.user_agent);
+    return (
+      <div key={open.id} className={`flex items-start gap-3 ${isDimmed ? 'opacity-50' : ''}`}>
+        <div className="relative flex flex-col items-center">
+          <div className={`flex h-6 w-6 items-center justify-center rounded-full ${
+            proxy ? 'bg-gray-100' : isDimmed ? 'bg-gray-100' : 'bg-blue-100'
+          }`}>
+            <svg className={`h-3.5 w-3.5 ${
+              proxy ? 'text-gray-400' : isDimmed ? 'text-gray-400' : 'text-blue-600'
+            }`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+            </svg>
+          </div>
+          {idx < list.length - 1 && (
+            <div className="mt-1 h-full w-px bg-gray-200" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1 pb-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-gray-900">
+                  {formatDate(open.opened_at)}
+                </p>
+                {proxy && (
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+                    Gmail proxy
+                  </span>
+                )}
+                {open.dismissed && (
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+                    Dismissed
+                  </span>
+                )}
               </div>
-              {idx < tracking.opens.length - 1 && (
-                <div className="mt-1 h-full w-px bg-gray-200" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1 pb-3">
-              <p className="text-sm font-medium text-gray-900">
-                {formatDate(open.opened_at)}
-              </p>
-              <p className="mt-0.5 text-xs text-gray-500">
+              <p className="mt-0.5 text-xs text-gray-500" title={open.user_agent || undefined}>
                 {parseUserAgent(open.user_agent)}
                 {open.ip_address && ` · ${open.ip_address}`}
               </p>
             </div>
+            {!open.dismissed && !proxy && (
+              <button
+                onClick={() => onDismiss(open.id)}
+                className="shrink-0 inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+                Dismiss
+              </button>
+            )}
           </div>
-        ))}
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
+      <h3 className="text-sm font-semibold text-gray-900">
+        Opens ({activeOpens.length})
+      </h3>
+      {activeOpens.length === 0 && (
+        <p className="mt-2 text-sm text-gray-500">No opens recorded yet (some were filtered).</p>
+      )}
+      {activeOpens.length > 0 && (
+        <div className="mt-4 space-y-3">
+          {activeOpens.map((open, idx) => renderOpen(open, idx, activeOpens, false))}
+        </div>
+      )}
+      {dismissedOrProxy.length > 0 && (
+        <div className="mt-3 border-t border-gray-100 pt-3">
+          <button
+            onClick={() => setShowDismissed(!showDismissed)}
+            className="flex items-center gap-1 text-xs font-medium text-gray-400 transition hover:text-gray-600"
+          >
+            <svg
+              className={`h-3.5 w-3.5 transition-transform ${showDismissed ? 'rotate-90' : ''}`}
+              fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+            </svg>
+            {dismissedOrProxy.length} filtered {dismissedOrProxy.length === 1 ? 'open' : 'opens'}
+          </button>
+          {showDismissed && (
+            <div className="mt-3 space-y-3">
+              {dismissedOrProxy.map((open, idx) => renderOpen(open, idx, dismissedOrProxy, true))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -199,6 +283,13 @@ export default function EmailDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tracking, setTracking] = useState<TrackingData | null>(null);
+  const [pendingTrackedEmails, setPendingTrackedEmails] = useState<Array<{
+    id: string;
+    subject: string | null;
+    recipient: string | null;
+    status: string;
+    opens: TrackingOpen[];
+  }> | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -219,18 +310,51 @@ export default function EmailDetail() {
 
     // Try to load tracking data (may not exist for this email)
     api.getTrackedEmails().then((data) => {
-      // Search for a tracked email matching this email's ID or subject
-      // Since we're on the detail page, we try matching by tracked email ID first
-      const match = data.emails.find((te) => te.id === id);
+      // Match by subject since the route :id is a Gmail/Outlook ID, not the DB UUID
+      const match = data.emails.find((te) => {
+        if (te.id === id) return true;
+        return false;
+      });
       if (match) {
         setTracking({ status: match.status, opens: match.opens });
+      } else {
+        // Defer subject-based matching until messages are loaded
+        setTracking(null);
+        setPendingTrackedEmails(data.emails);
       }
     }).catch(() => {
       // Silently fail — tracking data is supplementary
     });
   }, [id]);
 
+  // Once messages are loaded, try subject-based match for tracking data
+  useEffect(() => {
+    if (!pendingTrackedEmails || messages.length === 0 || tracking) return;
+    const emailSubject = messages[0].subject.toLowerCase();
+    const match = pendingTrackedEmails.find(
+      (te) => te.subject && te.subject.toLowerCase() === emailSubject,
+    );
+    if (match) {
+      setTracking({ status: match.status, opens: match.opens });
+    }
+    setPendingTrackedEmails(null);
+  }, [messages, pendingTrackedEmails, tracking]);
+
   const subject = messages.length > 0 ? messages[0].subject : '';
+
+  function handleDismissOpen(openId: string) {
+    api.dismissOpen(openId).then(() => {
+      setTracking((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          opens: prev.opens.map((o) => (o.id === openId ? { ...o, dismissed: true } : o)),
+        };
+      });
+    }).catch((err) => {
+      console.error('Failed to dismiss open:', err);
+    });
+  }
 
   return (
     <div>
@@ -267,7 +391,7 @@ export default function EmailDetail() {
 
           {tracking && (
             <div className="mb-6">
-              <OpensTimeline tracking={tracking} />
+              <OpensTimeline tracking={tracking} onDismiss={handleDismissOpen} />
             </div>
           )}
 

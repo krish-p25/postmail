@@ -8,10 +8,11 @@ interface EmailOpenAttributes {
   openedAt: Date;
   userAgent: string | null;
   ipAddress: string | null;
+  dismissed: boolean;
   createdAt: Date;
 }
 
-interface EmailOpenCreation extends Optional<EmailOpenAttributes, 'id' | 'openedAt' | 'userAgent' | 'ipAddress' | 'createdAt'> {}
+interface EmailOpenCreation extends Optional<EmailOpenAttributes, 'id' | 'openedAt' | 'userAgent' | 'ipAddress' | 'dismissed' | 'createdAt'> {}
 
 class EmailOpen extends Model<EmailOpenAttributes, EmailOpenCreation> implements EmailOpenAttributes {
   declare id: string;
@@ -20,6 +21,7 @@ class EmailOpen extends Model<EmailOpenAttributes, EmailOpenCreation> implements
   declare openedAt: Date;
   declare userAgent: string | null;
   declare ipAddress: string | null;
+  declare dismissed: boolean;
   declare createdAt: Date;
 }
 
@@ -56,6 +58,11 @@ EmailOpen.init(
       type: DataTypes.STRING(45),
       allowNull: true,
       field: 'ip_address',
+    },
+    dismissed: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
     createdAt: {
       type: DataTypes.DATE,

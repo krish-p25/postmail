@@ -19,6 +19,9 @@ import trackRoutes from './routes/track';
 
 const app = express();
 
+// Trust proxy so req.ip reads X-Forwarded-For behind reverse proxies
+app.set('trust proxy', true);
+
 // Pixel tracking route — mounted before helmet/CORS/auth
 // because email clients fetch this without CORS headers
 app.use('/o', pixelRoutes);

@@ -56,7 +56,7 @@ export default function Setup() {
     {
       key: 'extension' as const,
       title: 'Install the Chrome extension',
-      description: 'The PostMail extension injects tracking pixels into your Gmail compose window.',
+      description: 'The PostMail extension listens to your inbox to monitor your emails.',
       done: status.extension,
       action: !status.extension
         ? { label: 'How to install', onClick: () => window.open('https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked', '_blank') }
@@ -66,7 +66,7 @@ export default function Setup() {
       key: 'token' as const,
       title: 'Sync your session',
       description: status.token
-        ? 'Your session is synced with the extension.'
+        ? 'Your account is synced with the extension.'
         : 'Visit this dashboard while the extension is installed to sync your login session. If you just installed the extension, refresh this page.',
       done: status.token && status.extension,
       action: !status.token || !status.extension
