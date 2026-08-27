@@ -103,6 +103,7 @@ export default function Settings() {
         <ConnectMailboxCard
           connected={mailboxConnected}
           provider={mailboxProvider}
+          loading={loading}
           onDisconnect={() => {
             setMailboxConnected(false);
             setMailboxProvider(null);

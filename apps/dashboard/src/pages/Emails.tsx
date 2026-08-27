@@ -74,6 +74,7 @@ interface TrackedEmailData {
     opened_at: string;
     user_agent: string | null;
     ip_address: string | null;
+    dismissed: boolean;
   }>;
 }
 
@@ -104,6 +105,11 @@ function formatRecipients(recipients: string[]): string {
   return `${first} +${recipients.length - 1}`;
 }
 
+function isProxyOpen(ua: string | null): boolean {
+  if (!ua) return false;
+  return ua.includes('GoogleImageProxy') || ua.includes('Googlebot');
+}
+
 function mergeEmails(sentEmails: MailEmail[], trackedEmails: TrackedEmailData[]): MergedEmail[] {
   const merged: MergedEmail[] = sentEmails.map((email) => {
     // Try to match against tracked emails:
@@ -127,7 +133,10 @@ function mergeEmails(sentEmails: MailEmail[], trackedEmails: TrackedEmailData[])
     });
 
     if (match) {
-      const openCount = match.opens.length;
+      const activeOpens = match.opens.filter(
+        (o) => !o.dismissed && !isProxyOpen(o.user_agent),
+      );
+      const openCount = activeOpens.length;
       let trackingStatus: MergedEmail['trackingStatus'] = 'tracked';
       if (openCount > 0) trackingStatus = 'opened';
       if (match.status === 'pending') trackingStatus = 'draft';
@@ -582,13 +591,13 @@ export default function Emails() {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600" title={email.recipients.join(', ')}>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600" title={email.recipients.join(', ')}>
                       {formatRecipients(email.recipients)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
                       {formatDate(email.sentAt)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="whitespace-nowrap px-4 py-3">
                       <StatusBadge status={email.trackingStatus} openCount={email.openCount} />
                     </td>
                     <td className="px-4 py-3">

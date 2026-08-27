@@ -191,6 +191,7 @@ export const api = {
           opened_at: string;
           user_agent: string | null;
           ip_address: string | null;
+          dismissed: boolean;
         }>;
       }>;
     }>;
@@ -213,8 +214,15 @@ export const api = {
           opened_at: string;
           user_agent: string | null;
           ip_address: string | null;
+          dismissed: boolean;
         }>;
       };
     }>;
+  },
+
+  async dismissOpen(openId: string) {
+    const res = await authFetch(`/api/emails/opens/${openId}/dismiss`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to dismiss open');
+    return res.json();
   },
 };
