@@ -22,7 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       document.dispatchEvent(new CustomEvent('postmail-token-sync', { detail: token }));
 
       // Validate token by calling /api/me
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3005';
+      const API_URL = import.meta.env.VITE_API_URL || 'https://postmail.krishrp.xyz';
       fetch(`${API_URL}/api/me`, {
         headers: { Authorization: `Bearer ${token}` },
       })

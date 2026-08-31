@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Track when your Gmail emails are opened",
   "permissions": ["storage"],
-  "host_permissions": ["https://mail.google.com/*", "http://localhost:3005/*"],
+  "host_permissions": ["https://mail.google.com/*", "https://postmail.krishrp.xyz/*"],
   "background": {
     "service_worker": "background.js"
   },
@@ -15,7 +15,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["http://localhost:3006/*", "https://*.postmail.app/*"],
+      "matches": ["https://postmail.krishrp.xyz/*", "https://*.postmail.app/*"],
       "js": ["dashboard-marker.js"],
       "run_at": "document_start"
     }

@@ -1,6 +1,6 @@
 import { getApiToken } from './storage';
 
-const API_URL = 'http://localhost:3005';
+const API_URL = 'https://postmail.krishrp.xyz';
 
 async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const token = await getApiToken();

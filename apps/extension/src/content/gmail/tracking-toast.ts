@@ -5,8 +5,8 @@ export interface ToastData {
   recipient: string;
 }
 
-const DASHBOARD_URL = 'http://localhost:3006/dashboard/emails';
-const SETUP_URL = 'http://localhost:3006/dashboard/setup';
+const DASHBOARD_URL = 'https://postmail.krishrp.xyz/dashboard/emails';
+const SETUP_URL = 'https://postmail.krishrp.xyz/dashboard/setup';
 const TOAST_WIDTH = 360;
 const AUTO_DISMISS_MS = 5000;
 const STACK_GAP = 12;

@@ -78,7 +78,7 @@ export default function AttachmentPreview() {
         return;
       }
       try {
-        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3005';
+        const apiBase = import.meta.env.VITE_API_URL || 'https://postmail.krishrp.xyz';
         const route = provider === 'outlook' ? 'outlook' : 'gmail';
         const url = `${apiBase}/api/${route}/emails/${messageId}/attachments/${attachmentId}`;
         const token = auth.getToken();
@@ -129,7 +129,7 @@ export default function AttachmentPreview() {
       } else if (textContent !== null) {
         triggerDownload(new Blob([textContent], { type: mime }), filename);
       } else {
-        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3005';
+        const apiBase = import.meta.env.VITE_API_URL || 'https://postmail.krishrp.xyz';
         const route = provider === 'outlook' ? 'outlook' : 'gmail';
         const url = `${apiBase}/api/${route}/emails/${messageId}/attachments/${attachmentId}`;
         const token = auth.getToken();

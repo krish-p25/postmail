@@ -1,6 +1,6 @@
 import { auth } from './auth';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3005';
+const API_URL = import.meta.env.VITE_API_URL || 'https://postmail.krishrp.xyz';
 
 export interface EmailAttachment {
   attachmentId: string;

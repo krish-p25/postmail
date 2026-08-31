@@ -35,5 +35,5 @@ toggle.addEventListener('change', () => {
 // Dashboard link
 dashboardLink.addEventListener('click', (e) => {
   e.preventDefault();
-  chrome.tabs.create({ url: 'http://localhost:3006' });
+  chrome.tabs.create({ url: 'https://postmail.krishrp.xyz' });
 });

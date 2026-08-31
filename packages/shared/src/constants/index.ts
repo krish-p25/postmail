@@ -1,5 +1,5 @@
 /** Base URL for the tracking pixel endpoint. Override via environment/config. */
-export const TRACKING_PIXEL_BASE_URL = 'http://localhost:3005';
+export const TRACKING_PIXEL_BASE_URL = 'https://postmail.krishrp.xyz';
 
 /** Path prefix for the tracking pixel endpoint */
 export const TRACKING_PIXEL_PATH = '/o';
