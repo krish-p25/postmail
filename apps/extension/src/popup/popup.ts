@@ -32,8 +32,8 @@ toggle.addEventListener('change', () => {
   });
 });
 
-// Dashboard link (placeholder URL for now)
+// Dashboard link
 dashboardLink.addEventListener('click', (e) => {
   e.preventDefault();
-  chrome.tabs.create({ url: 'http://localhost:3000' });
+  chrome.tabs.create({ url: 'http://localhost:3006' });
 });
