@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
@@ -17,8 +17,33 @@ COPY packages/shared/ ./packages/shared/
 COPY apps/api/ ./apps/api/
 COPY tsconfig.base.json ./
 
+# Build shared package
+WORKDIR /app/packages/shared
+RUN npx tsc
+
+# Build API
+WORKDIR /app/apps/api
+RUN npx tsc
+
+# Production stage
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY packages/shared/package.json ./packages/shared/
+COPY apps/api/package.json ./apps/api/
+COPY apps/dashboard/package.json ./apps/dashboard/
+COPY apps/extension/package.json ./apps/extension/
+
+RUN npm ci --omit=dev
+
+COPY packages/shared/ ./packages/shared/
+COPY --from=build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=build /app/apps/api/dist ./apps/api/dist
+
 WORKDIR /app/apps/api
 
 EXPOSE 3005
 
-CMD ["npx", "ts-node-dev", "--respawn", "--transpile-only", "src/index.ts"]
+CMD ["node", "dist/index.js"]

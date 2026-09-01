@@ -207,7 +207,7 @@ router.post('/verify-sent', async (req: Request, res: Response) => {
       }
     });
 
-    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client as any });
 
     // Build a targeted search: use subject if we have a tracked email record
     const subject = trackedEmail?.subject;
