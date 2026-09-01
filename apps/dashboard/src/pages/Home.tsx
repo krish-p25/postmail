@@ -35,7 +35,7 @@ function Hero() {
         </div>
 
         {/* Headline */}
-        <h1 className="bg-gradient-to-b from-white to-white/70 bg-clip-text text-5xl font-extrabold leading-tight text-transparent md:text-7xl">
+        <h1 className="bg-gradient-to-b from-white to-white/70 bg-clip-text pb-4 text-5xl font-extrabold leading-tight text-transparent md:text-7xl">
           Never send blind
           <br />
           emails again
