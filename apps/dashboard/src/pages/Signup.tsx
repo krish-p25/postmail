@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../services/auth';
+import { PasswordInput, PasswordStrengthMeter, getPasswordStrength } from '../components/PasswordInput';
 
 export default function Signup() {
   const { user, loading, setUser } = useAuth();
@@ -24,20 +25,15 @@ export default function Signup() {
     return <Navigate to="/dashboard" replace />;
   }
 
+  const isStrong = getPasswordStrength(password).label === 'Strong';
+  const passwordsMatch = password.length > 0 && password === confirmPassword;
+  const showMismatch = confirmPassword.length > 0 && password !== confirmPassword;
+  const canSubmit = email.length > 0 && isStrong && passwordsMatch && !isSubmitting;
+
   async function handleSignup(e: FormEvent) {
     e.preventDefault();
+    if (!canSubmit) return;
     setError(null);
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
@@ -99,30 +95,41 @@ export default function Signup() {
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
-              <input
+              <PasswordInput
                 id="password"
-                type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 placeholder="••••••••"
-                minLength={6}
               />
+              <div className="mt-2">
+                <PasswordStrengthMeter password={password} />
+              </div>
             </div>
 
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">Confirm password</label>
-              <input
+              <PasswordInput
                 id="confirmPassword"
-                type="password"
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className={`mt-1 block w-full rounded-lg border px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-1 ${
+                  showMismatch
+                    ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                    : passwordsMatch
+                      ? 'border-green-300 focus:border-green-500 focus:ring-green-500'
+                      : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
+                }`}
                 placeholder="••••••••"
-                minLength={6}
               />
+              {showMismatch && (
+                <p className="mt-1 text-xs text-red-500">Passwords do not match</p>
+              )}
+              {passwordsMatch && (
+                <p className="mt-1 text-xs text-green-500">Passwords match</p>
+              )}
             </div>
 
             {error && (
@@ -131,7 +138,7 @@ export default function Signup() {
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={!canSubmit}
               className="w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? 'Creating account...' : 'Create account'}
