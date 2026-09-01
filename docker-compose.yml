@@ -17,43 +17,34 @@ services:
       retries: 5
 
   api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    image: postmail-api:latest
     container_name: postmail-api
     ports:
       - "${API_PORT:-3005}:3005"
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       PORT: 3005
       DATABASE_URL: postgres://${POSTGRES_USER:-postmail}:${POSTGRES_PASSWORD:-postmail_dev}@postgres:5432/${POSTGRES_DB:-postmail}
       JWT_SECRET: ${JWT_SECRET}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3006/oauth/callback}
+      GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID}
+      GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET}
+      GMAIL_REDIRECT_URI: ${GMAIL_REDIRECT_URI:-http://localhost:3006/gmail/callback}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET}
+      MICROSOFT_REDIRECT_URI: ${MICROSOFT_REDIRECT_URI:-http://localhost:3006/outlook/callback}
       DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3006}
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - ./apps/api/src:/app/apps/api/src
-      - ./packages/shared/src:/app/packages/shared/src
-    command: npx ts-node-dev --respawn --transpile-only src/index.ts
 
   dashboard:
-    build:
-      context: .
-      dockerfile: apps/dashboard/Dockerfile
+    image: postmail-dashboard:latest
     container_name: postmail-dashboard
     ports:
       - "${DASHBOARD_PORT:-3006}:3006"
-    environment:
-      VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      VITE_API_URL: ${API_URL:-http://localhost:3005}
-    volumes:
-      - ./apps/dashboard/src:/app/apps/dashboard/src
-      - ./apps/dashboard/index.html:/app/apps/dashboard/index.html
-    command: npx vite --host 0.0.0.0
 
 volumes:
   pgdata:
