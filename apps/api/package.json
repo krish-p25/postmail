@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "cd ../.. && docker-compose stop api && docker-compose rm -f api && docker-compose up -d --build api",
+    "build": "cd ../.. && docker-compose stop api && docker-compose rm -f api && docker build -f apps/api/Dockerfile -t postmail-api:latest . && docker-compose up -d api",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },
