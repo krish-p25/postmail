@@ -135,11 +135,15 @@ router.post('/google', async (req: Request, res: Response) => {
     let user = await User.findOne({ where: { googleId } });
 
     if (!user) {
-      // Check if email account exists (email/password user linking Google)
       user = await User.findOne({ where: { email } });
 
       if (user) {
-        // Link Google to existing account
+        if (user.passwordHash) {
+          // Existing password account — require password confirmation to link
+          res.json({ requiresPassword: true, email, idToken });
+          return;
+        }
+        // No password set — safe to auto-link
         await user.update({ googleId });
       } else {
         // Create new user
@@ -155,6 +159,54 @@ router.post('/google', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[PostMail API] Google auth error:', error);
     res.status(500).json({ error: 'Google authentication failed' });
+  }
+});
+
+/**
+ * POST /auth/google/link
+ * Body: { idToken, password }
+ *
+ * Links a Google account to an existing password account after password confirmation.
+ */
+router.post('/google/link', async (req: Request, res: Response) => {
+  try {
+    const { idToken: rawIdToken, password } = req.body;
+
+    if (!rawIdToken || !password) {
+      res.status(400).json({ error: 'ID token and password are required' });
+      return;
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: rawIdToken,
+      audience: config.googleClientId,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email) {
+      res.status(400).json({ error: 'Invalid Google token' });
+      return;
+    }
+
+    const user = await User.findOne({ where: { email: payload.email } });
+    if (!user || !user.passwordHash) {
+      res.status(401).json({ error: 'Account not found' });
+      return;
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: 'Incorrect password' });
+      return;
+    }
+
+    await user.update({ googleId: payload.sub, displayName: payload.name || user.displayName });
+
+    const token = signToken(user);
+    res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+  } catch (error) {
+    console.error('[PostMail API] Google link error:', error);
+    res.status(500).json({ error: 'Failed to link Google account' });
   }
 });
 
