@@ -8,5 +8,6 @@ export default defineConfig({
   server: {
     port: 3006,
     host: true,
+    allowedHosts: ['localhost', '127.0.0.1', '0.0.0.0', 'postmail.krishrp.xyz'],
   },
 });

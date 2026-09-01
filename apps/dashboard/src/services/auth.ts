@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'https://postmail.krishrp.xyz';
+const API_URL = import.meta.env.VITE_API_URL || 'https://api.postmail.krishrp.xyz';
 const TOKEN_KEY = 'postmail_token';
 
 export interface AuthUser {
@@ -20,7 +20,7 @@ async function handleResponse(res: Response): Promise<AuthResponse> {
 
 export const auth = {
   async register(email: string, password: string): Promise<AuthResponse> {
-    const res = await fetch(`${API_URL}/api/auth/register`, {
+    const res = await fetch(`${API_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -31,7 +31,7 @@ export const auth = {
   },
 
   async login(email: string, password: string): Promise<AuthResponse> {
-    const res = await fetch(`${API_URL}/api/auth/login`, {
+    const res = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -42,7 +42,7 @@ export const auth = {
   },
 
   async googleLogin(code: string): Promise<AuthResponse> {
-    const res = await fetch(`${API_URL}/api/auth/google`, {
+    const res = await fetch(`${API_URL}/auth/google`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
