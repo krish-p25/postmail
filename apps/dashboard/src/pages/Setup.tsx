@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
 import { auth } from '../services/auth';
@@ -20,7 +20,10 @@ export default function Setup() {
   });
   const [loading, setLoading] = useState(true);
 
+  const setupChecked = useRef(false);
   useEffect(() => {
+    if (setupChecked.current) return;
+    setupChecked.current = true;
     checkSetupStatus();
   }, [user]);
 

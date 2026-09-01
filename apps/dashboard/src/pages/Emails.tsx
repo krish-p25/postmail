@@ -280,7 +280,11 @@ export default function Emails() {
       .finally(() => setLoading(false));
   }
 
+  const settingsFetched = useRef(false);
   useEffect(() => {
+    if (settingsFetched.current) return;
+    settingsFetched.current = true;
+
     api
       .getSettings()
       .then((settings) => {

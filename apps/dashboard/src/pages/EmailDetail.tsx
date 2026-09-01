@@ -291,8 +291,11 @@ export default function EmailDetail() {
     opens: TrackingOpen[];
   }> | null>(null);
 
+  const detailFetched = useRef(false);
   useEffect(() => {
     if (!id) return;
+    if (detailFetched.current) return;
+    detailFetched.current = true;
 
     api
       .getSettings()

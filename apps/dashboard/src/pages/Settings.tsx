@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, useRef, FormEvent } from 'react';
 import { api } from '../services/api';
 import ConnectMailboxCard from '../components/ConnectMailboxCard';
 
@@ -10,7 +10,11 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const settingsFetched = useRef(false);
   useEffect(() => {
+    if (settingsFetched.current) return;
+    settingsFetched.current = true;
+
     api
       .getSettings()
       .then((data) => {
