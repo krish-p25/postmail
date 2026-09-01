@@ -41,11 +41,26 @@ export const auth = {
     return data;
   },
 
-  async googleLogin(code: string): Promise<AuthResponse> {
+  async googleLogin(code: string): Promise<AuthResponse | { requiresPassword: true; email: string; idToken: string }> {
     const res = await fetch(`${API_URL}/auth/google`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Google sign-in failed');
+    if (data.requiresPassword) {
+      return { requiresPassword: true, email: data.email, idToken: data.idToken };
+    }
+    localStorage.setItem(TOKEN_KEY, data.token);
+    return data;
+  },
+
+  async googleLink(idToken: string, password: string): Promise<AuthResponse> {
+    const res = await fetch(`${API_URL}/auth/google/link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken, password }),
     });
     const data = await handleResponse(res);
     localStorage.setItem(TOKEN_KEY, data.token);
