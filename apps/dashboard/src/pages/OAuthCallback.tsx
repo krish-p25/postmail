@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../services/auth';
 import { useAuth } from '../contexts/AuthContext';
+import VerifyCodeForm from '../components/VerifyCodeForm';
 
 export default function OAuthCallback() {
   const navigate = useNavigate();
@@ -10,6 +11,8 @@ export default function OAuthCallback() {
   const [linkState, setLinkState] = useState<{ email: string; idToken: string } | null>(null);
   const [password, setPassword] = useState('');
   const [linking, setLinking] = useState(false);
+  const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
   const exchanged = useRef(false);
 
   useEffect(() => {
@@ -50,14 +53,33 @@ export default function OAuthCallback() {
     setError(null);
     setLinking(true);
     try {
-      const data = await auth.googleLink(linkState.idToken, password);
-      setUser(data.user);
-      navigate('/dashboard', { replace: true });
+      await auth.googleLink(linkState.idToken, password);
+      setVerifyEmail(linkState.email);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to link account');
     } finally {
       setLinking(false);
     }
+  }
+
+  // Verification step
+  if (verifyEmail) {
+    return (
+      <VerifyCodeForm
+        email={verifyEmail}
+        error={verifyError}
+        onVerify={async (code) => {
+          setVerifyError(null);
+          try {
+            const data = await auth.verifyEmail(verifyEmail, code, 'google-link');
+            setUser(data.user);
+            navigate('/dashboard', { replace: true });
+          } catch (err) {
+            setVerifyError(err instanceof Error ? err.message : 'Verification failed');
+          }
+        }}
+      />
+    );
   }
 
   if (linkState) {

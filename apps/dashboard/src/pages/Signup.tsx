@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../services/auth';
 import { PasswordInput, PasswordStrengthMeter, getPasswordStrength } from '../components/PasswordInput';
+import VerifyCodeForm from '../components/VerifyCodeForm';
 
 export default function Signup() {
   const { user, loading, setUser } = useAuth();
@@ -12,6 +13,8 @@ export default function Signup() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   if (loading) {
     return (
@@ -23,6 +26,26 @@ export default function Signup() {
 
   if (user) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  // Verification step
+  if (verifyEmail) {
+    return (
+      <VerifyCodeForm
+        email={verifyEmail}
+        error={verifyError}
+        onVerify={async (code) => {
+          setVerifyError(null);
+          try {
+            const data = await auth.verifyEmail(verifyEmail, code, 'register');
+            setUser(data.user);
+            navigate('/dashboard', { replace: true });
+          } catch (err) {
+            setVerifyError(err instanceof Error ? err.message : 'Verification failed');
+          }
+        }}
+      />
+    );
   }
 
   const isStrong = getPasswordStrength(password).label === 'Strong';
@@ -37,9 +60,8 @@ export default function Signup() {
     setIsSubmitting(true);
 
     try {
-      const data = await auth.register(email, password);
-      setUser(data.user);
-      navigate('/dashboard');
+      await auth.register(email, password);
+      setVerifyEmail(email);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Sign up failed');
     } finally {

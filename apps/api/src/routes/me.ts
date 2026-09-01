@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import { User } from '../db/models';
+import { sendPasswordChangedEmail } from '../services/email';
 
 const router = Router();
 const SALT_ROUNDS = 10;
@@ -53,6 +54,10 @@ router.post('/set-password', async (req: Request, res: Response) => {
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     await user.update({ passwordHash });
 
+    sendPasswordChangedEmail(user.email).catch((err) =>
+      console.error('[PostMail API] Failed to send password changed email:', err),
+    );
+
     res.json({ success: true });
   } catch (error) {
     console.error('[PostMail API] Error in POST /me/set-password:', error);
@@ -93,6 +98,10 @@ router.post('/change-password', async (req: Request, res: Response) => {
 
     const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
     await user.update({ passwordHash });
+
+    sendPasswordChangedEmail(user.email).catch((err) =>
+      console.error('[PostMail API] Failed to send password changed email:', err),
+    );
 
     res.json({ success: true });
   } catch (error) {

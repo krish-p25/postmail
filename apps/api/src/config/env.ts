@@ -32,6 +32,13 @@ export const config = {
   // Tracking pixel
   trackingBaseUrl: process.env.TRACKING_BASE_URL || 'http://localhost:3005',
 
+  // SMTP (for verification emails)
+  smtpHost: process.env.SMTP_HOST || '',
+  smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
+  smtpUser: process.env.SMTP_USER || '',
+  smtpPass: process.env.SMTP_PASS || '',
+  smtpFrom: process.env.SMTP_FROM || 'PostMail <noreply@postmail.krishrp.xyz>',
+
   // CORS
   dashboardUrl: process.env.DASHBOARD_URL || 'http://localhost:3006',
 } as const;

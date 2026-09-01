@@ -12,6 +12,11 @@ interface AuthResponse {
   user: AuthUser;
 }
 
+interface VerificationRequired {
+  requiresVerification: true;
+  email: string;
+}
+
 async function handleResponse(res: Response): Promise<AuthResponse> {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Request failed');
@@ -19,11 +24,22 @@ async function handleResponse(res: Response): Promise<AuthResponse> {
 }
 
 export const auth = {
-  async register(email: string, password: string): Promise<AuthResponse> {
+  async register(email: string, password: string): Promise<VerificationRequired> {
     const res = await fetch(`${API_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Registration failed');
+    return { requiresVerification: true, email: data.email };
+  },
+
+  async verifyEmail(email: string, code: string, type: 'register' | 'google-link'): Promise<AuthResponse> {
+    const res = await fetch(`${API_URL}/auth/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code, type }),
     });
     const data = await handleResponse(res);
     localStorage.setItem(TOKEN_KEY, data.token);
@@ -56,15 +72,15 @@ export const auth = {
     return data;
   },
 
-  async googleLink(idToken: string, password: string): Promise<AuthResponse> {
+  async googleLink(idToken: string, password: string): Promise<VerificationRequired> {
     const res = await fetch(`${API_URL}/auth/google/link`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ idToken, password }),
     });
-    const data = await handleResponse(res);
-    localStorage.setItem(TOKEN_KEY, data.token);
-    return data;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to link Google account');
+    return { requiresVerification: true, email: data.email };
   },
 
   getToken(): string | null {
