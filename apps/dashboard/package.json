@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "cd ../.. && docker-compose stop dashboard && docker-compose rm -f dashboard && docker-compose up -d --build dashboard",
+    "build": "cd ../.. && docker-compose stop dashboard && docker-compose rm -f dashboard && docker build -f apps/dashboard/Dockerfile -t postmail-dashboard:latest . && docker-compose up -d dashboard",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
