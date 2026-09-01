@@ -43,21 +43,21 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Placeholder for routes (added in later tasks)
-app.get('/api', (_req, res) => {
+// API info
+app.get('/', (_req, res) => {
   res.json({ name: 'PostMail API', version: '0.1.0' });
 });
 
 // Public auth routes (no middleware)
-app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes);
 
 // Authenticated API routes
-app.use('/api/me', authMiddleware, meRoutes);
-app.use('/api/emails', authMiddleware, emailRoutes);
-app.use('/api/settings', authMiddleware, settingsRoutes);
-app.use('/api/gmail', authMiddleware, gmailRoutes);
-app.use('/api/outlook', authMiddleware, outlookRoutes);
-app.use('/api/track', authMiddleware, trackRoutes);
+app.use('/me', authMiddleware, meRoutes);
+app.use('/emails', authMiddleware, emailRoutes);
+app.use('/settings', authMiddleware, settingsRoutes);
+app.use('/gmail', authMiddleware, gmailRoutes);
+app.use('/outlook', authMiddleware, outlookRoutes);
+app.use('/track', authMiddleware, trackRoutes);
 
 // Error handler (must be last middleware)
 app.use(errorHandler);

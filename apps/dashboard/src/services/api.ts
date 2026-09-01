@@ -1,6 +1,6 @@
 import { auth } from './auth';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://postmail.krishrp.xyz';
+const API_URL = import.meta.env.VITE_API_URL || 'https://api.postmail.krishrp.xyz';
 
 export interface EmailAttachment {
   attachmentId: string;
@@ -47,31 +47,31 @@ async function authFetch(path: string, options: RequestInit = {}): Promise<Respo
 
 export const api = {
   async getMe() {
-    const res = await authFetch('/api/me');
+    const res = await authFetch('/me');
     if (!res.ok) throw new Error('Failed to fetch profile');
     return res.json();
   },
 
   async getEmails() {
-    const res = await authFetch('/api/emails');
+    const res = await authFetch('/emails');
     if (!res.ok) throw new Error('Failed to fetch emails');
     return res.json();
   },
 
   async getEmail(id: string) {
-    const res = await authFetch(`/api/emails/${id}`);
+    const res = await authFetch(`/emails/${id}`);
     if (!res.ok) throw new Error('Failed to fetch email');
     return res.json();
   },
 
   async getSettings() {
-    const res = await authFetch('/api/settings');
+    const res = await authFetch('/settings');
     if (!res.ok) throw new Error('Failed to fetch settings');
     return res.json();
   },
 
   async updateSettings(data: { discordWebhookUrl?: string | null }) {
-    const res = await authFetch('/api/settings', {
+    const res = await authFetch('/settings', {
       method: 'PUT',
       body: JSON.stringify(data),
     });
@@ -80,13 +80,13 @@ export const api = {
   },
 
   async getGmailConnectUrl() {
-    const res = await authFetch('/api/gmail/connect');
+    const res = await authFetch('/gmail/connect');
     if (!res.ok) throw new Error('Failed to get Gmail connect URL');
     return res.json() as Promise<{ url: string }>;
   },
 
   async gmailCallback(code: string) {
-    const res = await authFetch('/api/gmail/callback', {
+    const res = await authFetch('/gmail/callback', {
       method: 'POST',
       body: JSON.stringify({ code }),
     });
@@ -99,7 +99,7 @@ export const api = {
     if (pageToken) searchParams.set('pageToken', pageToken);
     if (q) searchParams.set('q', q);
     const qs = searchParams.toString();
-    const res = await authFetch(`/api/gmail/emails${qs ? `?${qs}` : ''}`);
+    const res = await authFetch(`/gmail/emails${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw new Error('Failed to fetch Gmail emails');
     return res.json() as Promise<{
       emails: Array<{
@@ -115,25 +115,25 @@ export const api = {
   },
 
   async getGmailEmailDetail(id: string) {
-    const res = await authFetch(`/api/gmail/emails/${encodeURIComponent(id)}`);
+    const res = await authFetch(`/gmail/emails/${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error('Failed to fetch email details');
     return res.json() as Promise<{ messages: EmailMessage[] }>;
   },
 
   async disconnectGmail() {
-    const res = await authFetch('/api/gmail/disconnect', { method: 'POST' });
+    const res = await authFetch('/gmail/disconnect', { method: 'POST' });
     if (!res.ok) throw new Error('Failed to disconnect Gmail');
     return res.json();
   },
 
   async getOutlookConnectUrl() {
-    const res = await authFetch('/api/outlook/connect');
+    const res = await authFetch('/outlook/connect');
     if (!res.ok) throw new Error('Failed to get Outlook connect URL');
     return res.json() as Promise<{ url: string }>;
   },
 
   async outlookCallback(code: string) {
-    const res = await authFetch('/api/outlook/callback', {
+    const res = await authFetch('/outlook/callback', {
       method: 'POST',
       body: JSON.stringify({ code }),
     });
@@ -146,7 +146,7 @@ export const api = {
     if (page && page > 1) searchParams.set('page', String(page));
     if (q) searchParams.set('q', q);
     const qs = searchParams.toString();
-    const res = await authFetch(`/api/outlook/emails${qs ? `?${qs}` : ''}`);
+    const res = await authFetch(`/outlook/emails${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw new Error('Failed to fetch Outlook emails');
     return res.json() as Promise<{
       emails: Array<{
@@ -163,19 +163,19 @@ export const api = {
   },
 
   async getOutlookEmailDetail(id: string) {
-    const res = await authFetch(`/api/outlook/emails/${encodeURIComponent(id)}`);
+    const res = await authFetch(`/outlook/emails/${encodeURIComponent(id)}`);
     if (!res.ok) throw new Error('Failed to fetch email details');
     return res.json() as Promise<{ messages: EmailMessage[] }>;
   },
 
   async disconnectOutlook() {
-    const res = await authFetch('/api/outlook/disconnect', { method: 'POST' });
+    const res = await authFetch('/outlook/disconnect', { method: 'POST' });
     if (!res.ok) throw new Error('Failed to disconnect Outlook');
     return res.json();
   },
 
   async getTrackedEmails() {
-    const res = await authFetch('/api/emails');
+    const res = await authFetch('/emails');
     if (!res.ok) throw new Error('Failed to fetch tracked emails');
     return res.json() as Promise<{
       emails: Array<{
@@ -198,7 +198,7 @@ export const api = {
   },
 
   async getTrackedEmail(id: string) {
-    const res = await authFetch(`/api/emails/${id}`);
+    const res = await authFetch(`/emails/${id}`);
     if (!res.ok) throw new Error('Failed to fetch tracked email');
     return res.json() as Promise<{
       email: {
@@ -221,7 +221,7 @@ export const api = {
   },
 
   async dismissOpen(openId: string) {
-    const res = await authFetch(`/api/emails/opens/${openId}/dismiss`, { method: 'POST' });
+    const res = await authFetch(`/emails/opens/${openId}/dismiss`, { method: 'POST' });
     if (!res.ok) throw new Error('Failed to dismiss open');
     return res.json();
   },

@@ -1,6 +1,6 @@
 import { getApiToken } from './storage';
 
-const API_URL = 'https://postmail.krishrp.xyz';
+const API_URL = 'https://api.postmail.krishrp.xyz';
 
 async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const token = await getApiToken();
@@ -37,7 +37,7 @@ export async function checkAuth(): Promise<PreflightResult> {
 
   let res: Response;
   try {
-    res = await authFetch('/api/track/preflight');
+    res = await authFetch('/track/preflight');
   } catch (err) {
     return { ok: false, reason: 'server_unreachable', detail: `Could not reach API server at ${API_URL}. Is it running?` };
   }
@@ -58,7 +58,7 @@ export async function registerTrackedEmail(
   recipients: string[],
   subject: string,
 ): Promise<{ id: string; trackingToken: string; status: string; authError?: boolean }> {
-  const res = await authFetch('/api/track/register', {
+  const res = await authFetch('/track/register', {
     method: 'POST',
     body: JSON.stringify({ trackingToken, recipients, subject }),
   });
@@ -77,7 +77,7 @@ export async function registerTrackedEmail(
 export async function confirmEmailSent(
   trackingToken: string,
 ): Promise<{ success: boolean }> {
-  const res = await authFetch('/api/track/confirm-sent', {
+  const res = await authFetch('/track/confirm-sent', {
     method: 'POST',
     body: JSON.stringify({ trackingToken }),
   });
@@ -94,7 +94,7 @@ export async function updateTrackedEmail(
   recipients: string[],
   subject: string,
 ): Promise<{ success: boolean }> {
-  const res = await authFetch('/api/track/update', {
+  const res = await authFetch('/track/update', {
     method: 'POST',
     body: JSON.stringify({ trackingToken, recipients, subject }),
   });
@@ -109,7 +109,7 @@ export async function updateTrackedEmail(
 export async function discardTrackedEmail(
   trackingToken: string,
 ): Promise<{ success: boolean }> {
-  const res = await authFetch('/api/track/discard', {
+  const res = await authFetch('/track/discard', {
     method: 'POST',
     body: JSON.stringify({ trackingToken }),
   });
@@ -124,7 +124,7 @@ export async function discardTrackedEmail(
 export async function verifyEmailSent(
   trackingToken: string,
 ): Promise<{ found: boolean; authError?: boolean }> {
-  const res = await authFetch('/api/track/verify-sent', {
+  const res = await authFetch('/track/verify-sent', {
     method: 'POST',
     body: JSON.stringify({ trackingToken }),
   });

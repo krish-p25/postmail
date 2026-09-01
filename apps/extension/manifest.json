@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Track when your Gmail emails are opened",
   "permissions": ["storage"],
-  "host_permissions": ["https://mail.google.com/*", "https://postmail.krishrp.xyz/*"],
+  "host_permissions": ["https://mail.google.com/*", "https://api.postmail.krishrp.xyz/*", "https://postmail.krishrp.xyz/*"],
   "background": {
     "service_worker": "background.js"
   },
