@@ -8,7 +8,8 @@
     "paths": {
       "@postmail/shared": ["../../packages/shared/src"],
       "@postmail/shared/*": ["../../packages/shared/src/*"]
-    }
+    },
+    "ignoreDeprecations": "5.0"
   },
   "include": ["src/**/*"]
 }

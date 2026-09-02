@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { config } from '../config/env';
 import { User, UserSetting } from '../db/models';
+import { createVerification, verifyCode } from '../services/verification';
+import { sendVerificationEmail } from '../services/email';
 
 const router = Router();
 
@@ -22,8 +24,11 @@ function signToken(user: { id: string; email: string }): string {
 }
 
 /**
- * POST /api/auth/register
+ * POST /auth/register
  * Body: { email, password, displayName? }
+ *
+ * Validates input, stores pending registration, sends verification code.
+ * Returns { requiresVerification: true, email }.
  */
 router.post('/register', async (req: Request, res: Response) => {
   try {
@@ -46,11 +51,14 @@ router.post('/register', async (req: Request, res: Response) => {
     }
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-    const user = await User.create({ email, passwordHash, displayName: displayName || null });
-    await UserSetting.create({ userId: user.id });
+    const code = createVerification(email, 'register', {
+      email,
+      passwordHash,
+      displayName: displayName || null,
+    });
 
-    const token = signToken(user);
-    res.status(201).json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+    await sendVerificationEmail(email, code);
+    res.json({ requiresVerification: true, email });
   } catch (error) {
     console.error('[PostMail API] Register error:', error);
     res.status(500).json({ error: 'Registration failed' });
@@ -58,7 +66,80 @@ router.post('/register', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/auth/login
+ * POST /auth/verify
+ * Body: { email, code, type: 'register' | 'google-link' }
+ *
+ * Verifies the emailed code and completes the pending action.
+ */
+router.post('/verify', async (req: Request, res: Response) => {
+  try {
+    const { email, code, type } = req.body;
+
+    if (!email || !code || !type) {
+      res.status(400).json({ error: 'Email, code, and type are required' });
+      return;
+    }
+
+    const result = verifyCode(email, code, type);
+    if (!result.valid) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+
+    if (type === 'register') {
+      const { passwordHash, displayName } = result.data as {
+        email: string;
+        passwordHash: string;
+        displayName: string | null;
+      };
+
+      // Re-check for race condition
+      const existing = await User.findOne({ where: { email } });
+      if (existing) {
+        res.status(409).json({ error: 'An account with this email already exists' });
+        return;
+      }
+
+      const user = await User.create({ email, passwordHash, displayName });
+      await UserSetting.create({ userId: user.id });
+
+      const token = signToken(user);
+      res.status(201).json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+    } else if (type === 'google-link') {
+      const { idToken: storedIdToken } = result.data as { idToken: string };
+
+      const ticket = await googleClient.verifyIdToken({
+        idToken: storedIdToken,
+        audience: config.googleClientId,
+      });
+
+      const payload = ticket.getPayload();
+      if (!payload || !payload.email) {
+        res.status(400).json({ error: 'Google token expired. Please try again.' });
+        return;
+      }
+
+      const user = await User.findOne({ where: { email: payload.email } });
+      if (!user) {
+        res.status(404).json({ error: 'Account not found' });
+        return;
+      }
+
+      await user.update({ googleId: payload.sub, displayName: payload.name || user.displayName });
+
+      const token = signToken(user);
+      res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+    } else {
+      res.status(400).json({ error: 'Invalid verification type' });
+    }
+  } catch (error) {
+    console.error('[PostMail API] Verify error:', error);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+/**
+ * POST /auth/login
  * Body: { email, password }
  */
 router.post('/login', async (req: Request, res: Response) => {
@@ -91,7 +172,7 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/auth/google
+ * POST /auth/google
  * Body: { code }
  *
  * Exchanges a Google OAuth authorization code for user info,
@@ -135,11 +216,15 @@ router.post('/google', async (req: Request, res: Response) => {
     let user = await User.findOne({ where: { googleId } });
 
     if (!user) {
-      // Check if email account exists (email/password user linking Google)
       user = await User.findOne({ where: { email } });
 
       if (user) {
-        // Link Google to existing account
+        if (user.passwordHash) {
+          // Existing password account — require password confirmation to link
+          res.json({ requiresPassword: true, email, idToken });
+          return;
+        }
+        // No password set — safe to auto-link
         await user.update({ googleId });
       } else {
         // Create new user
@@ -155,6 +240,55 @@ router.post('/google', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[PostMail API] Google auth error:', error);
     res.status(500).json({ error: 'Google authentication failed' });
+  }
+});
+
+/**
+ * POST /auth/google/link
+ * Body: { idToken, password }
+ *
+ * Validates the password, then sends a verification code.
+ * Returns { requiresVerification: true, email }.
+ */
+router.post('/google/link', async (req: Request, res: Response) => {
+  try {
+    const { idToken: rawIdToken, password } = req.body;
+
+    if (!rawIdToken || !password) {
+      res.status(400).json({ error: 'ID token and password are required' });
+      return;
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: rawIdToken,
+      audience: config.googleClientId,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email) {
+      res.status(400).json({ error: 'Invalid Google token' });
+      return;
+    }
+
+    const user = await User.findOne({ where: { email: payload.email } });
+    if (!user || !user.passwordHash) {
+      res.status(401).json({ error: 'Account not found' });
+      return;
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: 'Incorrect password' });
+      return;
+    }
+
+    const code = createVerification(payload.email, 'google-link', { idToken: rawIdToken });
+    await sendVerificationEmail(payload.email, code);
+
+    res.json({ requiresVerification: true, email: payload.email });
+  } catch (error) {
+    console.error('[PostMail API] Google link error:', error);
+    res.status(500).json({ error: 'Failed to link Google account' });
   }
 });
 

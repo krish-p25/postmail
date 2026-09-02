@@ -15,7 +15,6 @@ import OutlookCallback from './pages/OutlookCallback';
 import EmailDetail from './pages/EmailDetail';
 import AttachmentPreview from './pages/AttachmentPreview';
 import Setup from './pages/Setup';
-
 function App() {
   return (
     <AuthProvider>

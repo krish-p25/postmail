@@ -49,6 +49,36 @@ export const api = {
   async getMe() {
     const res = await authFetch('/me');
     if (!res.ok) throw new Error('Failed to fetch profile');
+    return res.json() as Promise<{
+      id: string;
+      email: string;
+      displayName: string | null;
+      hasPassword: boolean;
+      hasGoogle: boolean;
+    }>;
+  },
+
+  async setPassword(password: string) {
+    const res = await authFetch('/me/set-password', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || 'Failed to set password');
+    }
+    return res.json();
+  },
+
+  async changePassword(currentPassword: string, newPassword: string) {
+    const res = await authFetch('/me/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || 'Failed to change password');
+    }
     return res.json();
   },
 

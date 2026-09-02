@@ -38,6 +38,7 @@ COPY apps/extension/package.json ./apps/extension/
 
 RUN npm ci --omit=dev
 
+COPY .env ./
 COPY packages/shared/ ./packages/shared/
 COPY --from=build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=build /app/apps/api/dist ./apps/api/dist
