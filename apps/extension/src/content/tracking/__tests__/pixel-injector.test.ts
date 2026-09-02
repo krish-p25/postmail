@@ -25,7 +25,7 @@ describe('PixelInjector', () => {
     expect(img.width).toBe(1);
     expect(img.height).toBe(1);
     expect(img.alt).toBe('');
-    expect(img.style.display).toBe('none');
+    expect(img.style.border).toBe('0px');
     expect(img.getAttribute(TRACKING_PIXEL_ATTR)).toBe('true');
   });
 

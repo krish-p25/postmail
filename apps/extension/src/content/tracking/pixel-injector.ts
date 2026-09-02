@@ -39,7 +39,10 @@ export class PixelInjector {
       pixel.height = 1;
       pixel.alt = '';
       pixel.setAttribute(TRACKING_PIXEL_ATTR, 'true');
-      pixel.style.cssText = 'position:absolute;opacity:0;width:1px;height:1px;overflow:hidden;';
+      // Only use Gmail-safe styles — Gmail strips position, opacity, overflow,
+      // display:none, and visibility:hidden from outgoing email HTML.
+      // A 1x1 transparent GIF with border:0 is practically invisible without hiding CSS.
+      pixel.style.cssText = 'border:0;';
 
       body.appendChild(pixel);
       console.log(`[PostMail][Pixel] Injected tracking pixel: ${trackingUrl}`);
