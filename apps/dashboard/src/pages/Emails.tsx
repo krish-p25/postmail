@@ -220,6 +220,7 @@ export default function Emails() {
 
   const [mailboxConnected, setMailboxConnected] = useState<boolean | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
+  const [mailboxEmail, setMailboxEmail] = useState<string | null>(null);
   const [emails, setEmails] = useState<MergedEmail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -291,6 +292,7 @@ export default function Emails() {
         setMailboxConnected(settings.mailboxConnected ?? false);
         const prov = settings.mailboxProvider || 'gmail';
         setProvider(prov);
+        setMailboxEmail(settings.mailboxEmail ?? null);
         if (settings.mailboxConnected) {
           const gmailToken = initialPageToken || undefined;
           const outlookPage = initialPage > 1 ? initialPage : undefined;
@@ -393,6 +395,9 @@ export default function Emails() {
           <h2 className="text-2xl font-bold text-gray-900">Tracked Emails</h2>
           <p className="mt-1 text-sm text-gray-600">
             View open-tracking activity for your sent emails.
+            {mailboxEmail && (
+              <span className="ml-1 text-gray-400">· {mailboxEmail}</span>
+            )}
           </p>
         </div>
 

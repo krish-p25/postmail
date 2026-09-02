@@ -82,7 +82,7 @@ export default function Setup() {
       description: 'Connect Gmail so PostMail can verify when tracked emails are sent.',
       done: status.mailbox,
       action: !status.mailbox
-        ? { label: 'Go to Settings', onClick: () => window.location.href = '/dashboard/settings' }
+        ? { label: 'Go to Settings', onClick: () => window.location.href = '/dashboard/settings?highlight=mailbox' }
         : null,
     },
   ];
