@@ -97,7 +97,7 @@ export function PasswordStrengthMeter({ password }: { password: string }) {
 
       {/* Criteria checklist */}
       {password.length > 0 && (
-        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+        <div className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
           {checks.map((check) => (
             <div key={check.label} className="flex items-center gap-1.5">
               <svg

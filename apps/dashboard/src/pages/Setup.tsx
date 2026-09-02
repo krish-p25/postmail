@@ -92,7 +92,7 @@ export default function Setup() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-900">Setup</h2>
+      <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">Setup</h2>
       <p className="mt-1 text-sm text-gray-600">
         Complete these steps to start tracking email opens.
       </p>
@@ -124,11 +124,11 @@ export default function Setup() {
           {steps.map((step, index) => (
             <div
               key={step.key}
-              className={`rounded-xl bg-white p-5 shadow-sm ring-1 transition ${
+              className={`rounded-xl bg-white p-4 shadow-sm ring-1 transition sm:p-5 ${
                 step.done ? 'ring-green-200' : 'ring-gray-200'
               }`}
             >
-              <div className="flex items-start gap-4">
+              <div className="flex items-start gap-3 sm:gap-4">
                 {/* Step indicator */}
                 <div
                   className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold ${
@@ -156,7 +156,7 @@ export default function Setup() {
                   {step.action && !step.done && (
                     <button
                       onClick={step.action.onClick}
-                      className="mt-3 rounded-lg bg-primary-600 px-3.5 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700"
+                      className="mt-3 min-h-[44px] rounded-lg bg-primary-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700"
                     >
                       {step.action.label}
                     </button>
@@ -169,9 +169,9 @@ export default function Setup() {
       )}
 
       {allDone && (
-        <div className="mt-8 rounded-xl bg-green-50 p-6 ring-1 ring-green-200">
-          <div className="flex items-center gap-3">
-            <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <div className="mt-8 rounded-xl bg-green-50 p-4 ring-1 ring-green-200 sm:p-6">
+          <div className="flex items-start gap-3">
+            <svg className="h-6 w-6 shrink-0 text-green-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
             </svg>
             <div>
@@ -183,7 +183,7 @@ export default function Setup() {
           </div>
           <a
             href="/dashboard/emails"
-            className="mt-4 inline-block rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-700"
+            className="mt-4 inline-flex min-h-[44px] items-center rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-700"
           >
             Go to Emails
           </a>

@@ -4,16 +4,16 @@ export default function Privacy() {
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <nav className="border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4 sm:px-6">
           <Link to="/" className="text-lg font-bold text-white">PostMail</Link>
         </div>
       </nav>
 
-      <main className="mx-auto max-w-4xl px-6 py-16">
-        <h1 className="text-4xl font-bold text-white">Privacy Policy</h1>
+      <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-16">
+        <h1 className="text-2xl font-bold text-white sm:text-4xl">Privacy Policy</h1>
         <p className="mt-2 text-sm text-gray-500">Last updated: August 25, 2026</p>
 
-        <div className="mt-12 space-y-10 text-gray-300 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-white [&_p]:mt-3 [&_p]:leading-relaxed [&_p]:text-gray-400 [&_ul]:mt-3 [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:pl-6 [&_ul]:text-gray-400">
+        <div className="mt-8 space-y-8 text-gray-300 sm:mt-12 sm:space-y-10 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-white sm:[&_h2]:text-xl [&_p]:mt-3 [&_p]:leading-relaxed [&_p]:text-gray-400 [&_ul]:mt-3 [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:pl-5 [&_ul]:text-gray-400 sm:[&_ul]:pl-6">
           <section>
             <h2>1. Introduction</h2>
             <p>
