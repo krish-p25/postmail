@@ -13,6 +13,11 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Highlight mailbox card when navigating from Setup
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [highlightMailbox, setHighlightMailbox] = useState(false);
+  const mailboxRef = useRef<HTMLDivElement>(null);
+
   // Account security state
   const [hasPassword, setHasPassword] = useState(false);
   const [hasGoogle, setHasGoogle] = useState(false);
@@ -32,6 +37,7 @@ export default function Settings() {
         setDiscordWebhookUrl(settings.discordWebhookUrl ?? '');
         setMailboxConnected(settings.mailboxConnected ?? false);
         setMailboxProvider(settings.mailboxProvider ?? null);
+        setMailboxEmail(settings.mailboxEmail ?? null);
         setHasPassword(me.hasPassword);
         setHasGoogle(me.hasGoogle);
       })
