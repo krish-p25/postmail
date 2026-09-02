@@ -83,7 +83,7 @@ export default function VerifyCodeForm({ email, onVerify, error }: VerifyCodeFor
           <h1 className="text-3xl font-bold text-gray-900">PostMail</h1>
         </div>
 
-        <div className="rounded-xl bg-white p-8 shadow-sm ring-1 ring-gray-200">
+        <div className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200 sm:p-8">
           {/* Email icon */}
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary-50">
             <svg className="h-7 w-7 text-primary-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -97,7 +97,7 @@ export default function VerifyCodeForm({ email, onVerify, error }: VerifyCodeFor
           </p>
 
           {/* Code inputs */}
-          <div className="mt-8 flex justify-center gap-2.5">
+          <div className="mt-8 flex justify-center gap-2 sm:gap-2.5">
             {digits.map((digit, i) => (
               <input
                 key={i}
@@ -111,7 +111,7 @@ export default function VerifyCodeForm({ email, onVerify, error }: VerifyCodeFor
                 onPaste={i === 0 ? handlePaste : undefined}
                 autoFocus={i === 0}
                 disabled={verifying}
-                className="h-12 w-11 rounded-lg border border-gray-300 text-center text-lg font-semibold text-gray-900 shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50 disabled:text-gray-400"
+                className="h-12 w-10 rounded-lg border border-gray-300 text-center text-lg font-semibold text-gray-900 shadow-sm transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50 disabled:text-gray-400 sm:w-11"
               />
             ))}
           </div>
@@ -123,7 +123,7 @@ export default function VerifyCodeForm({ email, onVerify, error }: VerifyCodeFor
           <button
             onClick={submit}
             disabled={!isComplete || verifying}
-            className="mt-6 w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-6 w-full rounded-lg bg-primary-600 px-4 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {verifying ? 'Verifying...' : 'Verify'}
           </button>

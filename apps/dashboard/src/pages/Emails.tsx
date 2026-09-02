@@ -16,7 +16,7 @@ function ExtensionBanner() {
   if (extensionDetected !== false) return null;
 
   return (
-    <div className="mb-6 rounded-xl bg-amber-50 p-5 ring-1 ring-amber-200">
+    <div className="mb-6 rounded-xl bg-amber-50 p-4 ring-1 ring-amber-200 sm:p-5">
       <div className="flex items-start gap-3">
         <div className="mt-0.5 shrink-0 rounded-full bg-amber-100 p-2">
           <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
@@ -31,7 +31,7 @@ function ExtensionBanner() {
           <ol className="mt-3 space-y-2 text-sm text-gray-700">
             <li className="flex gap-2.5">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">1</span>
-              <span>Open <code className="rounded bg-white px-1.5 py-0.5 text-xs text-gray-800 ring-1 ring-gray-200">chrome://extensions</code> in your browser</span>
+              <span>Open <code className="break-all rounded bg-white px-1.5 py-0.5 text-xs text-gray-800 ring-1 ring-gray-200">chrome://extensions</code> in your browser</span>
             </li>
             <li className="flex gap-2.5">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">2</span>
@@ -39,7 +39,7 @@ function ExtensionBanner() {
             </li>
             <li className="flex gap-2.5">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">3</span>
-              <span>Click <strong className="font-medium text-gray-900">Load unpacked</strong> and select the <code className="rounded bg-white px-1.5 py-0.5 text-xs text-gray-800 ring-1 ring-gray-200">apps/extension/dist</code> folder</span>
+              <span>Click <strong className="font-medium text-gray-900">Load unpacked</strong> and select the <code className="break-all rounded bg-white px-1.5 py-0.5 text-xs text-gray-800 ring-1 ring-gray-200">apps/extension/dist</code> folder</span>
             </li>
             <li className="flex gap-2.5">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">4</span>
@@ -390,13 +390,14 @@ export default function Emails() {
     <div>
       <ExtensionBanner />
 
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-start justify-between gap-3 sm:items-center sm:gap-4">
         <div className="min-w-0">
-          <h2 className="text-2xl font-bold text-gray-900">Tracked Emails</h2>
+          <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">Tracked Emails</h2>
           <p className="mt-1 text-sm text-gray-600">
-            View open-tracking activity for your sent emails.
+            <span className="hidden sm:inline">View open-tracking activity for your sent emails.</span>
+            <span className="sm:hidden">Track your sent email opens.</span>
             {mailboxEmail && (
-              <span className="ml-1 text-gray-400">· {mailboxEmail}</span>
+              <span className="ml-1 hidden text-gray-400 sm:inline">· {mailboxEmail}</span>
             )}
           </p>
         </div>
@@ -404,7 +405,7 @@ export default function Emails() {
         <div className="relative flex shrink-0 items-center">
           <div
             className={`flex h-10 cursor-pointer items-center overflow-hidden rounded-full border border-gray-200 bg-white transition-all duration-300 ease-in-out ${
-              searchOpen ? 'w-64 cursor-text sm:w-80' : 'w-10'
+              searchOpen ? 'w-[calc(100vw-7rem)] max-w-80 cursor-text sm:w-80' : 'w-10'
             }`}
             onClick={() => { if (!searchOpen) toggleSearch(); }}
           >
@@ -439,12 +440,12 @@ export default function Emails() {
 
       {/* Filter bar */}
       {!loading && mailboxConnected && (
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           {(['all', 'tracked', 'untracked'] as FilterOption[]).map((opt) => (
             <button
               key={opt}
               onClick={() => handleFilterChange(opt)}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-medium capitalize transition ${
+              className={`min-h-[36px] rounded-full px-3.5 py-1.5 text-xs font-medium capitalize transition ${
                 filter === opt
                   ? 'bg-primary-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -506,27 +507,27 @@ export default function Emails() {
       )}
 
       {!loading && !error && mailboxConnected === false && (
-        <div className="mt-12 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16">
+        <div className="mt-8 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-4 py-12 sm:mt-12 sm:py-16">
           <svg className="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
           </svg>
           <h3 className="mt-4 text-lg font-medium text-gray-900">Connect your mailbox</h3>
-          <p className="mt-1 text-sm text-gray-500">Link your Gmail or Outlook account to see your sent emails here.</p>
-          <Link to="/dashboard/settings" className="mt-6 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700">
+          <p className="mt-1 text-center text-sm text-gray-500">Link your Gmail or Outlook account to see your sent emails here.</p>
+          <Link to="/dashboard/settings" className="mt-6 rounded-lg bg-primary-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-primary-700">
             Go to Settings
           </Link>
         </div>
       )}
 
       {!loading && !error && mailboxConnected && filteredEmails.length === 0 && !activeQuery && (
-        <div className="mt-12 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16">
+        <div className="mt-8 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-4 py-12 sm:mt-12 sm:py-16">
           <svg className="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
           </svg>
           <h3 className="mt-4 text-lg font-medium text-gray-900">
             {filter !== 'all' ? `No ${filter} emails` : 'No sent emails found'}
           </h3>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-center text-sm text-gray-500">
             {filter !== 'all'
               ? `No emails match the "${filter}" filter.`
               : 'Your sent emails will appear here.'}
@@ -535,12 +536,12 @@ export default function Emails() {
       )}
 
       {!loading && !error && mailboxConnected && activeQuery && filteredEmails.length === 0 && (
-        <div className="mt-12 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16">
+        <div className="mt-8 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-4 py-12 sm:mt-12 sm:py-16">
           <svg className="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
           </svg>
           <h3 className="mt-4 text-lg font-medium text-gray-900">No results found</h3>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-center text-sm text-gray-500">
             No emails match &ldquo;{activeQuery}&rdquo;
           </p>
         </div>
@@ -629,18 +630,19 @@ export default function Emails() {
               <button
                 onClick={goPrev}
                 disabled={page <= 1 || loading}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
                 </svg>
-                Previous
+                <span className="hidden sm:inline">Previous</span>
+                <span className="sm:hidden">Prev</span>
               </button>
               <span className="text-sm text-gray-500">Page {page}</span>
               <button
                 onClick={goNext}
                 disabled={!hasMore || loading}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">

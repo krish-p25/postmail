@@ -118,7 +118,7 @@ function AttachmentButton({ attachment, provider }: { attachment: EmailAttachmen
       <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
       </svg>
-      <span className="max-w-[200px] truncate">{attachment.filename}</span>
+      <span className="max-w-[120px] truncate sm:max-w-[200px]">{attachment.filename}</span>
       <span className="shrink-0 text-xs text-gray-400">{formatFileSize(attachment.size)}</span>
     </button>
   );
@@ -199,8 +199,8 @@ function OpensTimeline({ tracking, onDismiss }: { tracking: TrackingData; onDism
         </div>
         <div className="min-w-0 flex-1 pb-3">
           <div className="flex items-start justify-between gap-2">
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                 <p className="text-sm font-medium text-gray-900">
                   {formatDate(open.opened_at)}
                 </p>
@@ -215,7 +215,7 @@ function OpensTimeline({ tracking, onDismiss }: { tracking: TrackingData; onDism
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-gray-500" title={open.user_agent || undefined}>
+              <p className="mt-0.5 truncate text-xs text-gray-500" title={open.user_agent || undefined}>
                 {parseUserAgent(open.user_agent)}
                 {open.ip_address && ` · ${open.ip_address}`}
               </p>
@@ -363,7 +363,7 @@ export default function EmailDetail() {
     <div>
       <button
         onClick={() => navigate('/dashboard/emails')}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 transition hover:text-gray-900"
+        className="mb-4 inline-flex min-h-[44px] items-center gap-1.5 text-sm font-medium text-gray-600 transition hover:text-gray-900"
       >
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
@@ -474,9 +474,9 @@ export default function EmailDetail() {
       )}
 
       {!loading && !error && messages.length === 0 && (
-        <div className="mt-12 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16">
+        <div className="mt-8 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-4 py-12 sm:mt-12 sm:py-16">
           <h3 className="text-lg font-medium text-gray-900">Email not found</h3>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-center text-sm text-gray-500">
             This email could not be loaded.
           </p>
         </div>
