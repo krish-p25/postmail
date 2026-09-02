@@ -7,12 +7,13 @@ interface UserSettingAttributes {
   discordWebhookUrl: string | null;
   mailboxConnected: boolean;
   mailboxProvider: string | null;
+  mailboxEmail: string | null;
   mailboxConnectedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-interface UserSettingCreation extends Optional<UserSettingAttributes, 'id' | 'discordWebhookUrl' | 'mailboxConnected' | 'mailboxProvider' | 'mailboxConnectedAt' | 'createdAt' | 'updatedAt'> {}
+interface UserSettingCreation extends Optional<UserSettingAttributes, 'id' | 'discordWebhookUrl' | 'mailboxConnected' | 'mailboxProvider' | 'mailboxEmail' | 'mailboxConnectedAt' | 'createdAt' | 'updatedAt'> {}
 
 class UserSetting extends Model<UserSettingAttributes, UserSettingCreation> implements UserSettingAttributes {
   declare id: string;
@@ -20,6 +21,7 @@ class UserSetting extends Model<UserSettingAttributes, UserSettingCreation> impl
   declare discordWebhookUrl: string | null;
   declare mailboxConnected: boolean;
   declare mailboxProvider: string | null;
+  declare mailboxEmail: string | null;
   declare mailboxConnectedAt: Date | null;
   declare createdAt: Date;
   declare updatedAt: Date;
@@ -53,6 +55,11 @@ UserSetting.init(
       type: DataTypes.STRING,
       allowNull: true,
       field: 'mailbox_provider',
+    },
+    mailboxEmail: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: 'mailbox_email',
     },
     mailboxConnectedAt: {
       type: DataTypes.DATE,

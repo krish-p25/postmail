@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import ConnectMailboxCard from '../components/ConnectMailboxCard';
 
@@ -6,9 +7,15 @@ export default function Settings() {
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
   const [mailboxConnected, setMailboxConnected] = useState(false);
   const [mailboxProvider, setMailboxProvider] = useState<string | null>(null);
+  const [mailboxEmail, setMailboxEmail] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Highlight mailbox card when navigating from Setup
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [highlightMailbox, setHighlightMailbox] = useState(false);
+  const mailboxRef = useRef<HTMLDivElement>(null);
 
   const settingsFetched = useRef(false);
   useEffect(() => {
@@ -21,12 +28,32 @@ export default function Settings() {
         setDiscordWebhookUrl(data.discordWebhookUrl ?? '');
         setMailboxConnected(data.mailboxConnected ?? false);
         setMailboxProvider(data.mailboxProvider ?? null);
+        setMailboxEmail(data.mailboxEmail ?? null);
       })
       .catch(() => {
         setMessage({ type: 'error', text: 'Failed to load settings.' });
       })
       .finally(() => setLoading(false));
   }, []);
+
+  // Scroll to mailbox card and highlight when ?highlight=mailbox is present
+  useEffect(() => {
+    if (loading || searchParams.get('highlight') !== 'mailbox') return;
+
+    const scrollTimer = setTimeout(() => {
+      mailboxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+
+    const highlightTimer = setTimeout(() => {
+      setHighlightMailbox(true);
+      setSearchParams({}, { replace: true });
+    }, 600);
+
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(highlightTimer);
+    };
+  }, [loading, searchParams, setSearchParams]);
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
@@ -104,15 +131,38 @@ export default function Settings() {
         </div>
 
         {/* Connect mailbox */}
-        <ConnectMailboxCard
-          connected={mailboxConnected}
-          provider={mailboxProvider}
-          loading={loading}
-          onDisconnect={() => {
-            setMailboxConnected(false);
-            setMailboxProvider(null);
-          }}
-        />
+        <div ref={mailboxRef} className="relative z-[60]">
+          {highlightMailbox && (
+            <>
+              <style>{`
+                @keyframes mailbox-pulse {
+                  0%, 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.5); }
+                  50% { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); }
+                }
+                @keyframes mailbox-fade {
+                  0% { opacity: 1; }
+                  100% { opacity: 0; }
+                }
+              `}</style>
+              <div
+                className="pointer-events-none absolute -inset-0.5 rounded-xl border-2 border-primary-500"
+                style={{ animation: 'mailbox-pulse 1.5s ease-in-out 2, mailbox-fade 0.6s ease-out 3s forwards' }}
+                onAnimationEnd={(e) => { if (e.animationName === 'mailbox-fade') setHighlightMailbox(false); }}
+              />
+            </>
+          )}
+          <ConnectMailboxCard
+            connected={mailboxConnected}
+            provider={mailboxProvider}
+            email={mailboxEmail}
+            loading={loading}
+            onDisconnect={() => {
+              setMailboxConnected(false);
+              setMailboxProvider(null);
+              setMailboxEmail(null);
+            }}
+          />
+        </div>
       </div>
     </div>
   );

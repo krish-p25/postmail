@@ -88,11 +88,26 @@ router.post('/callback', async (req: Request, res: Response) => {
         : null,
     });
 
+    // Fetch the connected Outlook email address
+    let mailboxEmail: string | null = null;
+    try {
+      const profileRes = await fetch(`${MS_GRAPH_URL}/me?$select=mail,userPrincipalName`, {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      });
+      if (profileRes.ok) {
+        const profile = await profileRes.json();
+        mailboxEmail = profile.mail || profile.userPrincipalName || null;
+      }
+    } catch (err) {
+      console.error('[PostMail API] Failed to fetch Outlook profile email:', err);
+    }
+
     await withRLS(req.user!.id, async (transaction) => {
       await UserSetting.update(
         {
           mailboxConnected: true,
           mailboxProvider: 'outlook',
+          mailboxEmail,
           mailboxConnectedAt: new Date(),
         },
         { where: { userId: req.user!.id }, transaction },
@@ -457,6 +472,7 @@ router.post('/disconnect', async (req: Request, res: Response) => {
         {
           mailboxConnected: false,
           mailboxProvider: null,
+          mailboxEmail: null,
           mailboxConnectedAt: null,
         },
         { where: { userId: req.user!.id }, transaction },

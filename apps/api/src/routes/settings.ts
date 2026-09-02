@@ -21,6 +21,7 @@ router.get('/', async (req: Request, res: Response) => {
       discordWebhookUrl: null,
       mailboxConnected: false,
       mailboxProvider: null,
+      mailboxEmail: null,
     };
     res.json(data);
   } catch (error) {

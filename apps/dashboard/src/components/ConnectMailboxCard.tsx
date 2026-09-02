@@ -4,13 +4,15 @@ import { api } from '../services/api';
 interface ConnectMailboxCardProps {
   connected: boolean;
   provider: string | null;
+  email?: string | null;
   loading?: boolean;
   onDisconnect: () => void;
 }
 
-export default function ConnectMailboxCard({ connected, provider, loading, onDisconnect }: ConnectMailboxCardProps) {
+export default function ConnectMailboxCard({ connected, provider, email, loading, onDisconnect }: ConnectMailboxCardProps) {
   const [connecting, setConnecting] = useState<'gmail' | 'outlook' | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleConnect(type: 'gmail' | 'outlook') {
@@ -37,6 +39,7 @@ export default function ConnectMailboxCard({ connected, provider, loading, onDis
       } else {
         await api.disconnectGmail();
       }
+      setConfirmOpen(false);
       onDisconnect();
     } catch {
       setError('Failed to disconnect. Please try again.');
@@ -76,14 +79,16 @@ export default function ConnectMailboxCard({ connected, provider, loading, onDis
             <div className="h-2 w-2 rounded-full bg-green-500" />
             <span className="text-sm font-medium text-gray-700">
               {providerLabel} connected
+              {email && (
+                <span className="ml-1 font-normal text-gray-500">({email})</span>
+              )}
             </span>
           </div>
           <button
-            onClick={handleDisconnect}
-            disabled={disconnecting}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => setConfirmOpen(true)}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
           >
-            {disconnecting ? 'Disconnecting...' : 'Disconnect'}
+            Disconnect
           </button>
         </div>
       ) : (
@@ -108,6 +113,43 @@ export default function ConnectMailboxCard({ connected, provider, loading, onDis
             </svg>
             {connecting === 'outlook' ? 'Connecting...' : 'Connect Outlook'}
           </button>
+        </div>
+      )}
+
+      {/* Disconnect confirmation modal */}
+      {confirmOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4" onClick={() => !disconnecting && setConfirmOpen(false)}>
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100">
+                <svg className="h-5 w-5 text-red-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">Disconnect {providerLabel}?</h3>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  {email ? `${email} will be ` : 'Your mailbox will be '}removed. You can reconnect anytime.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmOpen(false)}
+                disabled={disconnecting}
+                className="rounded-lg border border-gray-300 px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDisconnect}
+                disabled={disconnecting}
+                className="rounded-lg bg-red-600 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {disconnecting ? 'Disconnecting...' : 'Disconnect'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -135,12 +135,24 @@ router.post('/callback', async (req: Request, res: Response) => {
       gmailTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
     });
 
+    // Fetch the connected Gmail address
+    let mailboxEmail: string | null = null;
+    try {
+      client.setCredentials(tokens);
+      const gmail = google.gmail({ version: 'v1', auth: client as any });
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      mailboxEmail = profile.data.emailAddress || null;
+    } catch (err) {
+      console.error('[PostMail API] Failed to fetch Gmail profile email:', err);
+    }
+
     // Update user_settings (RLS-protected)
     await withRLS(req.user!.id, async (transaction) => {
       await UserSetting.update(
         {
           mailboxConnected: true,
           mailboxProvider: 'gmail',
+          mailboxEmail,
           mailboxConnectedAt: new Date(),
         },
         { where: { userId: req.user!.id }, transaction },
@@ -457,6 +469,7 @@ router.post('/disconnect', async (req: Request, res: Response) => {
         {
           mailboxConnected: false,
           mailboxProvider: null,
+          mailboxEmail: null,
           mailboxConnectedAt: null,
         },
         { where: { userId: req.user!.id }, transaction },
