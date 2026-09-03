@@ -47,7 +47,7 @@ export default function DashboardLayout() {
               </span>
             )}
           </button>
-          <h1 className="text-lg font-bold text-gray-900">PostMail</h1>
+          <h1 className="text-lg font-bold text-gray-900">Post<span className="text-primary-500">Mail</span></h1>
         </div>
 
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">

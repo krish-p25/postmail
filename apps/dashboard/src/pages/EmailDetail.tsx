@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api, EmailMessage, EmailAttachment } from '../services/api';
+import LoadingScreen from '../components/LoadingScreen';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -371,11 +372,7 @@ export default function EmailDetail() {
         Back to Emails
       </button>
 
-      {loading && (
-        <div className="mt-12 flex justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
-        </div>
-      )}
+      {loading && <LoadingScreen inline />}
 
       {error && (
         <div className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-600">

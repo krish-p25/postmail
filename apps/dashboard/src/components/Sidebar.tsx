@@ -24,7 +24,7 @@ export default function Sidebar({ open, onClose, setupIncomplete }: SidebarProps
   const content = (
     <>
       <div className="flex h-16 items-center justify-between border-b border-gray-200 px-6">
-        <h1 className="text-xl font-bold text-gray-900">PostMail</h1>
+        <h1 className="text-xl font-bold text-gray-900">Post<span className="text-primary-500">Mail</span></h1>
         <button
           onClick={onClose}
           className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 md:hidden"

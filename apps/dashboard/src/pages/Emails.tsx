@@ -438,7 +438,18 @@ export default function Emails() {
         </div>
       </div>
 
-      {/* Filter bar */}
+      {/* Filter bar — skeleton while loading, real buttons when loaded */}
+      {loading && (
+        <div className="mt-4 flex gap-2">
+          {[44, 64, 80].map((w, i) => (
+            <div
+              key={i}
+              className="h-7 rounded-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]"
+              style={{ width: `${w}px`, animationDelay: `${i * 0.1}s` }}
+            />
+          ))}
+        </div>
+      )}
       {!loading && mailboxConnected && (
         <div className="mt-4 flex flex-wrap gap-2">
           {(['all', 'tracked', 'untracked'] as FilterOption[]).map((opt) => (
