@@ -3,26 +3,8 @@ import { Suspense, lazy, useState, useEffect, useRef } from 'react';
 import '@designcodeio/threeui/style.css';
 
 // Lazy-load ThreeUI components for code splitting
-const ConstellationField = lazy(() => import('@designcodeio/threeui/components/ConstellationField').then(m => ({ default: m.ConstellationField })));
 const FlowField = lazy(() => import('@designcodeio/threeui/components/FlowField').then(m => ({ default: m.FlowField })));
-const DataField = lazy(() => import('@designcodeio/threeui/components/DataField').then(m => ({ default: m.DataField })));
-const ConnectivityGraph = lazy(() => import('@designcodeio/threeui/components/ConnectivityGraph').then(m => ({ default: m.ConnectivityGraph })));
-const WarpFieldBackground = lazy(() => import('@designcodeio/threeui/components/WarpFieldBackground').then(m => ({ default: m.WarpFieldBackground })));
-const BrandOrbs = lazy(() => import('@designcodeio/threeui/components/BrandOrbs').then(m => ({ default: m.BrandOrbs })));
-const LumenCta = lazy(() => import('@designcodeio/threeui/components/LumenCta').then(m => ({ default: m.LumenCta })));
-const SparkBadge = lazy(() => import('@designcodeio/threeui/components/SparkBadge').then(m => ({ default: m.SparkBadge })));
-const PerformanceGauges = lazy(() => import('@designcodeio/threeui/components/PerformanceGauges').then(m => ({ default: m.PerformanceGauges })));
-const DiagnosticsPanel = lazy(() => import('@designcodeio/threeui/components/DiagnosticsPanel').then(m => ({ default: m.DiagnosticsPanel })));
-const InterfaceLines = lazy(() => import('@designcodeio/threeui/components/InterfaceLines').then(m => ({ default: m.InterfaceLines })));
-const DefenseLines = lazy(() => import('@designcodeio/threeui/components/DefenseLines').then(m => ({ default: m.DefenseLines })));
-const PredictiveArcCanvas = lazy(() => import('@designcodeio/threeui/components/PredictiveArcCanvas').then(m => ({ default: m.PredictiveArcCanvas })));
-const ParticleDrift = lazy(() => import('@designcodeio/threeui/components/ParticleDrift').then(m => ({ default: m.ParticleDrift })));
 const TopologyField = lazy(() => import('@designcodeio/threeui/components/TopologyField').then(m => ({ default: m.TopologyField })));
-const DotMatrixBackground = lazy(() => import('@designcodeio/threeui/components/DotMatrixBackground').then(m => ({ default: m.DotMatrixBackground })));
-const SemanticBloom = lazy(() => import('@designcodeio/threeui/components/SemanticBloom').then(m => ({ default: m.SemanticBloom })));
-const GatewayFlow = lazy(() => import('@designcodeio/threeui/components/GatewayFlow').then(m => ({ default: m.GatewayFlow })));
-const EmberStorm = lazy(() => import('@designcodeio/threeui/components/EmberStorm').then(m => ({ default: m.EmberStorm })));
-const HalftoneFlow = lazy(() => import('@designcodeio/threeui/components/HalftoneFlow').then(m => ({ default: m.HalftoneFlow })));
 
 /* ─── Utility: animate elements on scroll ─── */
 function useInView(threshold = 0.15) {
@@ -129,11 +111,9 @@ function Hero() {
   const anim = useInView(0.1);
   return (
     <section className="relative flex min-h-screen items-center justify-center overflow-hidden" style={{ background: `linear-gradient(170deg, ${C.white} 0%, ${C.orangePastel} 50%, ${C.white} 100%)` }}>
-      {/* ThreeUI background */}
-      <div className="pointer-events-none absolute inset-0 opacity-40">
-        <Suspense fallback={null}>
-          <ConstellationField mode="light" hue={25} saturation={0.9} brightness={1.2} speed={0.4} className="h-full w-full" />
-        </Suspense>
+      {/* Background */}
+      <div className="shader-frame absolute inset-0 " style={{ background: 'linear-gradient(170deg, #FFFFFF 10%,rgb(242, 192, 155) 50%, #FFFFFF 100%)' }}>
+        
       </div>
 
       {/* Soft gradient orbs */}
@@ -143,9 +123,10 @@ function Hero() {
       <div ref={anim.ref} className={`relative z-10 mx-auto max-w-4xl px-6 text-center transition-all duration-1000 ${anim.visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
         {/* Badge */}
         <div className="mb-8 inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-medium" style={{ borderColor: C.orangeLight, color: C.orange, background: 'rgba(255,247,237,0.8)' }}>
-          <Suspense fallback={<span className="inline-block h-4 w-4" />}>
-            <SparkBadge className="h-4 w-4" />
-          </Suspense>
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ backgroundColor: C.orange }} />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ backgroundColor: C.orange }} />
+          </span>
           Now with Gmail &amp; Outlook support
         </div>
 
@@ -173,7 +154,7 @@ function Hero() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
             </svg>
           </Link>
-          <button onClick={() => document.querySelector('#how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="inline-flex items-center gap-2 rounded-full border px-6 py-4 text-base font-medium transition hover:bg-gray-50" style={{ borderColor: C.gray200, color: C.gray700 }}>
+          <button onClick={() => document.querySelector('#how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="inline-flex items-center gap-2 rounded-full border px-6 py-4 text-base font-medium transition hover:bg-gray-50" style={{ borderColor: C.gray700, color: C.gray700 }}>
             See How It Works
           </button>
         </div>
@@ -197,16 +178,20 @@ function LiveDemoBanner() {
 
   useEffect(() => {
     if (!anim.visible) return;
-    const interval = setInterval(() => {
-      setOpens(prev => prev + 1);
+    let timer: ReturnType<typeof setTimeout>;
+    function tick() {
+      const increment = Math.random() < 0.3 ? Math.floor(Math.random() * 3) + 2 : 1;
+      setOpens(prev => prev + increment);
       setPulse(true);
       setTimeout(() => setPulse(false), 600);
-    }, 3000);
-    return () => clearInterval(interval);
+      timer = setTimeout(tick, 1500 + Math.random() * 4000);
+    }
+    timer = setTimeout(tick, 1000 + Math.random() * 2000);
+    return () => clearTimeout(timer);
   }, [anim.visible]);
 
   return (
-    <section ref={anim.ref} className="relative overflow-hidden py-6" style={{ background: `linear-gradient(90deg, ${C.orange}, ${C.orangeNeon})` }}>
+    <section ref={anim.ref} className="relative overflow-hidden py-3" style={{ background: `linear-gradient(90deg, ${C.orange}, ${C.orangeNeon})` }}>
       <div className="pointer-events-none absolute inset-0 opacity-20">
         <Suspense fallback={null}>
           <FlowField mode="light" hue={25} speed={0.3} className="h-full w-full" />
@@ -228,7 +213,7 @@ function LiveDemoBanner() {
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   FEATURES — rich showcase with ThreeUI visuals
+   FEATURES
    ════════════════════════════════════════════════════════════════════════════ */
 const FEATURE_SECTIONS = [
   {
@@ -236,7 +221,7 @@ const FEATURE_SECTIONS = [
     title: 'Know the second your email is opened',
     description: 'PostMail injects an invisible tracking pixel into every email you send. The moment a recipient opens your email, we capture the open event with sub-second precision and surface it on your dashboard instantly.',
     bullets: ['Sub-second open detection', 'Device & location fingerprinting', 'Duplicate-filtered accuracy'],
-    visual: 'gauges',
+    visual: 'flow',
     reverse: false,
   },
   {
@@ -268,19 +253,57 @@ const FEATURE_SECTIONS = [
 function FeatureVisual({ type }: { type: string }) {
   return (
     <div className="relative h-[300px] w-full overflow-hidden rounded-2xl shadow-2xl shadow-orange-100 ring-1 ring-gray-100 sm:h-[350px] md:h-[400px]">
-      <Suspense fallback={<div className="flex h-full items-center justify-center bg-gray-50"><div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-orange-500" /></div>}>
-        {type === 'gauges' && <PerformanceGauges mode="light" hue={25} saturation={0.8} brightness={1.1} className="h-full w-full" />}
-        {type === 'connectivity' && <ConnectivityGraph mode="light" hue={25} saturation={0.7} brightness={1.1} speed={0.5} className="h-full w-full" />}
-        {type === 'interface' && <InterfaceLines mode="light" hue={25} saturation={0.8} brightness={1.0} speed={0.4} className="h-full w-full" />}
-        {type === 'predictive' && <PredictiveArcCanvas className="h-full w-full" />}
-      </Suspense>
+      {type === 'flow' ? (
+        <Suspense fallback={<div className="flex h-full items-center justify-center bg-gray-50"><div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-orange-500" /></div>}>
+          <FlowField mode="light" hue={25} saturation={0.8} brightness={1.1} className="h-full w-full" />
+        </Suspense>
+      ) : (
+        <div className="relative h-full w-full" style={{ background: C.gray50 }}>
+          {type === 'connectivity' && (
+            <>
+              <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 30% 40%, ${C.orangePastel} 0%, transparent 50%), radial-gradient(circle at 70% 60%, rgba(249,115,22,0.08) 0%, transparent 50%)` }} />
+              {[{ x: 20, y: 25 }, { x: 50, y: 50 }, { x: 80, y: 30 }, { x: 35, y: 70 }, { x: 65, y: 75 }].map((p, i) => (
+                <div key={i} className="absolute h-3 w-3 rounded-full" style={{ left: `${p.x}%`, top: `${p.y}%`, background: C.orange, opacity: 0.6 + i * 0.08, boxShadow: `0 0 20px ${C.orangeLight}` }} />
+              ))}
+              <svg className="absolute inset-0 h-full w-full" style={{ opacity: 0.15 }}>
+                <line x1="20%" y1="25%" x2="50%" y2="50%" stroke={C.orange} strokeWidth="1.5" />
+                <line x1="50%" y1="50%" x2="80%" y2="30%" stroke={C.orange} strokeWidth="1.5" />
+                <line x1="50%" y1="50%" x2="35%" y2="70%" stroke={C.orange} strokeWidth="1.5" />
+                <line x1="50%" y1="50%" x2="65%" y2="75%" stroke={C.orange} strokeWidth="1.5" />
+                <line x1="35%" y1="70%" x2="65%" y2="75%" stroke={C.orange} strokeWidth="1.5" />
+              </svg>
+            </>
+          )}
+          {type === 'interface' && (
+            <div className="absolute inset-0" style={{
+              background: `repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(249,115,22,0.06) 39px, rgba(249,115,22,0.06) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(249,115,22,0.06) 39px, rgba(249,115,22,0.06) 40px)`,
+            }}>
+              <div className="absolute left-[15%] top-[20%] h-16 w-32 rounded-lg border" style={{ borderColor: C.orangeLight, opacity: 0.4 }} />
+              <div className="absolute right-[20%] top-[35%] h-12 w-48 rounded-lg border" style={{ borderColor: C.orangeLight, opacity: 0.3 }} />
+              <div className="absolute bottom-[25%] left-[25%] h-20 w-40 rounded-lg border" style={{ borderColor: C.orangeLight, opacity: 0.35 }} />
+              <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 50%, rgba(249,115,22,0.06) 0%, transparent 60%)` }} />
+            </div>
+          )}
+          {type === 'predictive' && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 50%, ${C.orangePastel} 0%, transparent 60%)` }} />
+              <svg className="h-3/4 w-3/4" viewBox="0 0 200 200" style={{ opacity: 0.5 }}>
+                <circle cx="100" cy="100" r="80" fill="none" stroke={C.orangeLight} strokeWidth="1" strokeDasharray="4 4" />
+                <circle cx="100" cy="100" r="55" fill="none" stroke={C.orangeLight} strokeWidth="1" strokeDasharray="4 4" />
+                <circle cx="100" cy="100" r="30" fill="none" stroke={C.orange} strokeWidth="1.5" strokeDasharray="4 4" />
+                <path d="M 30 140 Q 70 80 100 90 T 170 60" fill="none" stroke={C.orange} strokeWidth="2" opacity="0.6" />
+              </svg>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 function Features() {
   return (
-    <section id="features" className="py-24 sm:py-32" style={{ background: C.white }}>
+    <section id="features" className="py-12 sm:py-16" style={{ background: C.white }}>
       <div className="mx-auto max-w-6xl px-6">
         {/* Section header */}
         <div className="mx-auto max-w-2xl text-center">
@@ -327,10 +350,6 @@ function Features() {
                       ))}
                     </ul>
                   </div>
-                  {/* Visual */}
-                  <div className="w-full flex-1">
-                    <FeatureVisual type={feature.visual} />
-                  </div>
                 </div>
               </FadeIn>
             );
@@ -353,13 +372,12 @@ function HowItWorks() {
   ];
 
   return (
-    <section id="how-it-works" className="relative overflow-hidden py-24 sm:py-32" style={{ background: C.gray50 }}>
-      {/* Background */}
-      <div className="pointer-events-none absolute inset-0 opacity-30">
-        <Suspense fallback={null}>
-          <DotMatrixBackground hue={25} speed={0.3} className="h-full w-full" />
-        </Suspense>
-      </div>
+    <section id="how-it-works" className="relative overflow-hidden py-12 sm:py-16" style={{ background: C.gray50 }}>
+      {/* Background — CSS dot matrix */}
+      <div className="pointer-events-none absolute inset-0 opacity-30" style={{
+        backgroundImage: `radial-gradient(circle, ${C.orangeLight} 1px, transparent 1px)`,
+        backgroundSize: '24px 24px',
+      }} />
 
       <div ref={anim.ref} className="relative z-10 mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
@@ -390,12 +408,12 @@ function HowItWorks() {
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   ANALYTICS SHOWCASE — dashboard preview with ThreeUI data visuals
+   ANALYTICS SHOWCASE
    ════════════════════════════════════════════════════════════════════════════ */
 function AnalyticsShowcase() {
   const anim = useInView();
   return (
-    <section className="relative overflow-hidden py-24 sm:py-32" style={{ background: C.white }}>
+    <section className="relative overflow-hidden py-12 sm:py-16" style={{ background: C.white }}>
       <div ref={anim.ref} className="mx-auto max-w-6xl px-6">
         <div className={`mx-auto max-w-2xl text-center transition-all duration-700 ${anim.visible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
           <p className="text-sm font-bold uppercase tracking-widest" style={{ color: C.orange }}>Analytics</p>
@@ -408,26 +426,16 @@ function AnalyticsShowcase() {
         </div>
 
         {/* Visual grid */}
-        <div className={`mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 transition-all duration-1000 ${anim.visible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
-          {/* Card 1: Diagnostics */}
-          <div className="overflow-hidden rounded-2xl shadow-xl shadow-orange-50 ring-1 ring-gray-100">
-            <div className="h-[250px]">
-              <Suspense fallback={<div className="flex h-full items-center justify-center bg-gray-50"><div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-orange-500" /></div>}>
-                <DiagnosticsPanel mode="light" hue={25} saturation={0.7} className="h-full w-full" />
-              </Suspense>
-            </div>
-            <div className="border-t p-5" style={{ borderColor: C.gray100 }}>
-              <h4 className="font-bold" style={{ color: C.gray900 }}>Live Diagnostics</h4>
-              <p className="mt-1 text-sm" style={{ color: C.gray500 }}>Monitor delivery health and open rates in real-time.</p>
-            </div>
-          </div>
-
-          {/* Card 2: Defense */}
-          <div className="overflow-hidden rounded-2xl shadow-xl shadow-orange-50 ring-1 ring-gray-100">
-            <div className="h-[250px]">
-              <Suspense fallback={<div className="flex h-full items-center justify-center bg-gray-50"><div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-orange-500" /></div>}>
-                <DefenseLines mode="light" hue={25} saturation={0.8} speed={0.4} className="h-full w-full" />
-              </Suspense>
+        <div className={`mt-16 grid gap-6 sm:grid-cols-2 transition-all duration-1000 ${anim.visible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
+          {/* Card 1: Privacy Shield */}
+          <div className="overflow-hidden rounded-2xl ring-1 ring-gray-100" style={{ boxShadow: '0 0 24px rgba(249,115,22,0.15)' }}>
+            <div className="relative h-[250px]" style={{ background: C.gray50 }}>
+              <div className="absolute inset-0" style={{ background: `repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(249,115,22,0.04) 10px, rgba(249,115,22,0.04) 11px)` }} />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <svg className="h-24 w-24" style={{ color: C.orangeLight, opacity: 0.5 }} fill="none" viewBox="0 0 24 24" strokeWidth={0.8} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                </svg>
+              </div>
             </div>
             <div className="border-t p-5" style={{ borderColor: C.gray100 }}>
               <h4 className="font-bold" style={{ color: C.gray900 }}>Privacy Shield</h4>
@@ -435,12 +443,53 @@ function AnalyticsShowcase() {
             </div>
           </div>
 
-          {/* Card 3: Data Field */}
-          <div className="overflow-hidden rounded-2xl shadow-xl shadow-orange-50 ring-1 ring-gray-100 sm:col-span-2 lg:col-span-1">
-            <div className="h-[250px]">
-              <Suspense fallback={<div className="flex h-full items-center justify-center bg-gray-50"><div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-orange-500" /></div>}>
-                <DataField mode="light" hue={25} saturation={0.7} className="h-full w-full" />
-              </Suspense>
+          {/* Card 2: Engagement Heatmap */}
+          <div className="overflow-hidden rounded-2xl ring-1 ring-gray-100" style={{ boxShadow: '0 0 24px rgba(249,115,22,0.15)' }}>
+            <div className="flex h-[250px] gap-4 p-5" style={{ background: C.gray50 }}>
+              {/* Heatmap */}
+              <div className="flex min-w-0 flex-1 flex-col">
+                {/* Hour labels */}
+                <div className="ml-8 flex gap-[4px] text-[10px] font-medium" style={{ color: C.gray400 }}>
+                  {['6am', '8am', '10am', '12pm', '2pm', '4pm', '6pm', '8pm', '10pm'].map(h => (
+                    <div key={h} className="flex-1 text-center">{h}</div>
+                  ))}
+                </div>
+                {/* Rows: day label + cells — flex-1 so the grid fills remaining height */}
+                <div className="mt-1 flex flex-1 flex-col gap-[4px]">
+                  {[
+                    { day: 'Mon', vals: [0.1, 0.2, 0.6, 0.9, 0.8, 0.5, 0.3, 0.1, 0.05] },
+                    { day: 'Tue', vals: [0.05, 0.3, 0.7, 0.85, 0.9, 0.6, 0.4, 0.15, 0.05] },
+                    { day: 'Wed', vals: [0.1, 0.25, 0.8, 0.95, 0.7, 0.55, 0.35, 0.2, 0.1] },
+                    { day: 'Thu', vals: [0.05, 0.2, 0.65, 0.8, 0.85, 0.5, 0.3, 0.1, 0.05] },
+                    { day: 'Fri', vals: [0.1, 0.35, 0.7, 0.75, 0.6, 0.4, 0.2, 0.1, 0.05] },
+                    { day: 'Sat', vals: [0.0, 0.05, 0.1, 0.15, 0.1, 0.05, 0.15, 0.3, 0.2] },
+                    { day: 'Sun', vals: [0.0, 0.05, 0.05, 0.1, 0.05, 0.05, 0.1, 0.25, 0.15] },
+                  ].map(({ day, vals }) => (
+                    <div key={day} className="flex flex-1 items-center gap-[4px]">
+                      <span className="w-7 shrink-0 text-right text-[10px] font-medium" style={{ color: C.gray400 }}>{day}</span>
+                      {vals.map((v, ci) => (
+                        <div
+                          key={ci}
+                          className="h-full flex-1 rounded-[4px]"
+                          style={{
+                            background: v === 0
+                              ? C.gray100
+                              : `rgba(249, 115, 22, ${0.15 + v * 0.75})`,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Legend */}
+              <div className="flex shrink-0 flex-col items-center justify-center gap-1.5 text-[10px] font-medium" style={{ color: C.gray400 }}>
+                <span>Less</span>
+                {[0.1, 0.3, 0.55, 0.8, 1].map((v, i) => (
+                  <div key={i} className="h-3 w-3 rounded-[2px]" style={{ background: `rgba(249, 115, 22, ${0.15 + v * 0.75})` }} />
+                ))}
+                <span>More</span>
+              </div>
             </div>
             <div className="border-t p-5" style={{ borderColor: C.gray100 }}>
               <h4 className="font-bold" style={{ color: C.gray900 }}>Engagement Heatmap</h4>
@@ -454,26 +503,25 @@ function AnalyticsShowcase() {
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   INTEGRATIONS — BrandOrbs + integration cards
+   INTEGRATIONS
    ════════════════════════════════════════════════════════════════════════════ */
 function Integrations() {
   const anim = useInView();
   const integrations = [
-    { name: 'Gmail', desc: 'Native Chrome extension for Gmail compose', orb: 'email' as const },
-    { name: 'Outlook', desc: 'Full Outlook OAuth integration', orb: 'email' as const },
-    { name: 'Discord', desc: 'Instant open notifications via webhooks', orb: 'github' as const },
-    { name: 'Slack', desc: 'Team-wide open alerts in any channel', orb: 'figma' as const },
-    { name: 'Zapier', desc: 'Connect to 5,000+ apps automatically', orb: 'react' as const },
-    { name: 'API', desc: 'Full REST API for custom integrations', orb: 'css' as const },
+    { name: 'Gmail', desc: 'Native Chrome extension for Gmail compose' },
+    { name: 'Outlook', desc: 'Full Outlook OAuth integration' },
+    { name: 'Discord', desc: 'Instant open notifications via webhooks' },
+    { name: 'Slack', desc: 'Team-wide open alerts in any channel' },
+    { name: 'Zapier', desc: 'Connect to 5,000+ apps automatically' },
+    { name: 'API', desc: 'Full REST API for custom integrations' },
   ];
 
   return (
-    <section id="integrations" className="relative overflow-hidden py-24 sm:py-32" style={{ background: `linear-gradient(180deg, ${C.orangePastel} 0%, ${C.white} 100%)` }}>
-      <div className="pointer-events-none absolute inset-0 opacity-20">
-        <Suspense fallback={null}>
-          <ParticleDrift mode="light" hue={25} saturation={0.6} speed={0.3} className="h-full w-full" />
-        </Suspense>
-      </div>
+    <section id="integrations" className="relative overflow-hidden py-12 sm:py-16" style={{ background: `linear-gradient(180deg, ${C.white} 0%, ${C.orangePastel} 15%, ${C.orangePastel} 75%, ${C.white} 100%)` }}>
+      {/* Background — CSS particle drift */}
+      <div className="pointer-events-none absolute inset-0 opacity-20" style={{
+        background: `radial-gradient(circle at 20% 55%, ${C.orangeLight} 0%, transparent 30%), radial-gradient(circle at 80% 70%, ${C.orangeLight} 0%, transparent 25%), radial-gradient(circle at 50% 60%, rgba(249,115,22,0.1) 0%, transparent 40%)`,
+      }} />
 
       <div ref={anim.ref} className="relative z-10 mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
@@ -489,10 +537,8 @@ function Integrations() {
         <div className={`mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 transition-all duration-700 ${anim.visible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
           {integrations.map((item, i) => (
             <div key={item.name} className="group flex items-center gap-5 rounded-2xl border bg-white/80 p-6 shadow-sm backdrop-blur-sm transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-orange-50" style={{ borderColor: C.gray200, transitionDelay: `${i * 100}ms` }}>
-              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl">
-                <Suspense fallback={<div className="h-full w-full rounded-xl bg-orange-50" />}>
-                  <BrandOrbs variant={item.orb} size="small" mode="light" className="h-full w-full" />
-                </Suspense>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl" style={{ background: `linear-gradient(135deg, ${C.orangePastel}, rgba(249,115,22,0.15))` }}>
+                <span className="text-lg font-bold" style={{ color: C.orange }}>{item.name.charAt(0)}</span>
               </div>
               <div>
                 <h4 className="font-bold" style={{ color: C.gray900 }}>{item.name}</h4>
@@ -507,12 +553,12 @@ function Integrations() {
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
-   WORKFLOW SHOWCASE — visual flow with ThreeUI backgrounds
+   WORKFLOW SHOWCASE
    ════════════════════════════════════════════════════════════════════════════ */
 function WorkflowShowcase() {
   const anim = useInView();
   return (
-    <section className="relative overflow-hidden py-24 sm:py-32" style={{ background: C.white }}>
+    <section className="relative overflow-hidden py-12 sm:py-16" style={{ background: C.white }}>
       <div ref={anim.ref} className="mx-auto max-w-6xl px-6">
         <div className={`mx-auto max-w-2xl text-center transition-all duration-700 ${anim.visible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
           <p className="text-sm font-bold uppercase tracking-widest" style={{ color: C.orange }}>Workflow</p>
@@ -526,11 +572,24 @@ function WorkflowShowcase() {
 
         {/* Full-width visual panels */}
         <div className="mt-16 grid gap-6 md:grid-cols-2">
-          <div className="overflow-hidden rounded-2xl ring-1 ring-gray-100">
-            <div className="h-[280px]">
-              <Suspense fallback={<div className="flex h-full items-center justify-center bg-gray-50"><div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-orange-500" /></div>}>
-                <GatewayFlow mode="light" hue={25} saturation={0.7} speed={0.4} className="h-full w-full" />
-              </Suspense>
+          <div className="overflow-hidden rounded-2xl ring-1 ring-gray-100" style={{ boxShadow: '0 0 24px rgba(249,115,22,0.15)' }}>
+            <div className="relative h-[280px]" style={{ background: C.gray50 }}>
+              <div className="absolute inset-0 flex items-center justify-center px-8">
+                {/* Pipeline stages with connectors */}
+                <div className="flex w-full items-center justify-between">
+                  {['Compose', 'Send', 'Deliver', 'Open'].map((stage, i) => (
+                    <div key={stage} className="flex items-center" style={{ flex: i < 3 ? 1 : undefined }}>
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full" style={{ background: `rgba(249,115,22,${0.1 + i * 0.08})`, border: `2px solid rgba(249,115,22,${0.2 + i * 0.15})` }}>
+                          <span className="text-xs font-bold" style={{ color: C.orange }}>{i + 1}</span>
+                        </div>
+                        <span className="text-xs font-medium" style={{ color: C.gray500 }}>{stage}</span>
+                      </div>
+                      {i < 3 && <div className="mb-5 h-px flex-1 mx-2" style={{ background: `linear-gradient(90deg, ${C.orangeLight}, rgba(249,115,22,0.2))` }} />}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="p-6" style={{ background: C.gray50 }}>
               <h4 className="text-lg font-bold" style={{ color: C.gray900 }}>Email Delivery Pipeline</h4>
@@ -538,11 +597,52 @@ function WorkflowShowcase() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl ring-1 ring-gray-100">
-            <div className="h-[280px]">
-              <Suspense fallback={<div className="flex h-full items-center justify-center bg-gray-50"><div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-orange-500" /></div>}>
-                <SemanticBloom mode="light" className="h-full w-full" />
-              </Suspense>
+          <div className="overflow-hidden rounded-2xl ring-1 ring-gray-100" style={{ boxShadow: '0 0 24px rgba(249,115,22,0.15)' }}>
+            <div className="relative flex h-[280px] flex-col px-6 py-4" style={{ background: C.gray50 }}>
+              {/* Mock engagement timeline / thread view */}
+              <div className="flex flex-1 flex-col gap-2">
+                {/* Thread header */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold" style={{ color: C.gray700 }}>Thread Activity</span>
+                  <span className="text-[10px] font-medium" style={{ color: C.gray400 }}>Last 7 days</span>
+                </div>
+                {/* Thread rows */}
+                {[
+                  { initials: 'SC', name: 'Sarah Chen', subject: 'Q3 Proposal', opens: 5, clicks: 2, lastOpen: '2m ago', heat: 0.95 },
+                  { initials: 'MJ', name: 'Marcus J.', subject: 'Interview Follow-up', opens: 3, clicks: 1, lastOpen: '1h ago', heat: 0.7 },
+                  { initials: 'PP', name: 'Priya Patel', subject: 'Partnership Deck', opens: 8, clicks: 4, lastOpen: '15m ago', heat: 1.0 },
+                  { initials: 'DK', name: 'David Kim', subject: 'Pricing Breakdown', opens: 1, clicks: 0, lastOpen: '2d ago', heat: 0.25 },
+                ].map((row) => (
+                  <div key={row.initials} className="flex flex-1 items-center gap-3 rounded-lg border bg-white px-3" style={{ borderColor: C.gray200 }}>
+                    {/* Avatar */}
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ background: `rgba(249,115,22,${0.4 + row.heat * 0.6})` }}>
+                      {row.initials}
+                    </div>
+                    {/* Name + subject */}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[11px] font-semibold" style={{ color: C.gray800 }}>{row.name}</p>
+                      <p className="truncate text-[10px]" style={{ color: C.gray400 }}>{row.subject}</p>
+                    </div>
+                    {/* Stats */}
+                    <div className="flex shrink-0 items-center gap-3 text-[10px] font-medium" style={{ color: C.gray500 }}>
+                      <span className="flex items-center gap-1">
+                        <svg className="h-3 w-3" style={{ color: C.orange }} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                        {row.opens}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <svg className="h-3 w-3" style={{ color: C.orange }} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.07a4.5 4.5 0 00-6.364-6.364L6.34 5.67" /></svg>
+                        {row.clicks}
+                      </span>
+                    </div>
+                    {/* Engagement bar */}
+                    <div className="hidden h-2 w-16 shrink-0 overflow-hidden rounded-full sm:block" style={{ background: C.gray100 }}>
+                      <div className="h-full rounded-full" style={{ width: `${row.heat * 100}%`, background: `linear-gradient(90deg, ${C.orangeLight}, ${C.orange})` }} />
+                    </div>
+                    {/* Last open */}
+                    <span className="hidden shrink-0 text-[10px] sm:block" style={{ color: C.gray400 }}>{row.lastOpen}</span>
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="p-6" style={{ background: C.gray50 }}>
               <h4 className="text-lg font-bold" style={{ color: C.gray900 }}>Recipient Engagement Graph</h4>
@@ -568,17 +668,17 @@ function StatsBanner() {
   ];
 
   return (
-    <section className="relative overflow-hidden py-16" style={{ background: C.gray900 }}>
-      <div className="pointer-events-none absolute inset-0 opacity-30">
+    <section className="relative overflow-hidden py-8" style={{ background: `linear-gradient(90deg, ${C.orange}, ${C.orangeNeon})` }}>
+      <div className="pointer-events-none absolute inset-0 opacity-20">
         <Suspense fallback={null}>
-          <EmberStorm mode="dark" hue={25} saturation={1} className="h-full w-full" />
+          <FlowField mode="light" hue={25} speed={0.3} className="h-full w-full" />
         </Suspense>
       </div>
       <div className="relative z-10 mx-auto grid max-w-6xl grid-cols-2 gap-8 px-6 md:grid-cols-4">
         {stats.map((stat, i) => (
           <div key={stat.label} ref={anim.ref} className={`text-center transition-all duration-700 ${anim.visible ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'}`} style={{ transitionDelay: `${i * 150}ms` }}>
             <p className="text-3xl font-extrabold text-white sm:text-4xl">{stat.value}</p>
-            <p className="mt-1 text-sm text-gray-400">{stat.label}</p>
+            <p className="mt-1 text-sm text-white/80">{stat.label}</p>
           </div>
         ))}
       </div>
@@ -592,16 +692,9 @@ function StatsBanner() {
 function Security() {
   const anim = useInView();
   return (
-    <section className="relative overflow-hidden py-24 sm:py-32" style={{ background: C.gray50 }}>
+    <section className="relative overflow-hidden py-12 sm:py-16" style={{ background: C.gray50 }}>
       <div ref={anim.ref} className={`mx-auto max-w-6xl px-6 transition-all duration-700 ${anim.visible ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
         <div className="flex flex-col items-center gap-12 lg:flex-row lg:gap-16">
-          {/* Visual */}
-          <div className="h-[300px] w-full flex-1 overflow-hidden rounded-2xl ring-1 ring-gray-200 sm:h-[350px]">
-            <Suspense fallback={<div className="flex h-full items-center justify-center bg-white"><div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-orange-500" /></div>}>
-              <HalftoneFlow mode="light" hue={25} saturation={0.5} className="h-full w-full" />
-            </Suspense>
-          </div>
-
           {/* Text */}
           <div className="flex-1 space-y-6">
             <span className="inline-block rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider" style={{ color: C.orange, background: C.orangePastel }}>
@@ -642,7 +735,7 @@ function Testimonials() {
   ];
 
   return (
-    <section className="py-24 sm:py-32" style={{ background: C.white }}>
+    <section className="py-12 sm:py-16" style={{ background: C.white }}>
       <div ref={anim.ref} className="mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-sm font-bold uppercase tracking-widest" style={{ color: C.orange }}>Testimonials</p>
@@ -689,7 +782,7 @@ const TIERS = [
     price: '$0',
     period: '/mo',
     description: 'For individuals exploring email tracking.',
-    features: ['50 tracked emails/mo', '1 user', 'Basic dashboard', 'Chrome extension', '24h open history'],
+    features: ['50 tracked emails/mo', 'Track 1 account', 'Basic dashboard', 'Chrome extension', '24h open history'],
     cta: 'Get Started',
     highlighted: false,
   },
@@ -698,7 +791,7 @@ const TIERS = [
     price: '$12',
     period: '/mo',
     description: 'For professionals who need full visibility.',
-    features: ['Unlimited tracking', '5 team members', 'Discord & Slack notifications', 'Link click tracking', 'Priority support', '30-day analytics'],
+    features: ['Unlimited tracking', 'Track 5 accounts', 'Discord & Slack notifications', 'Link click tracking', 'Priority support', '30-day analytics'],
     cta: 'Start Free Trial',
     highlighted: true,
   },
@@ -716,7 +809,7 @@ const TIERS = [
 function Pricing() {
   const anim = useInView();
   return (
-    <section id="pricing" className="relative overflow-hidden py-24 sm:py-32" style={{ background: C.gray50 }}>
+    <section id="pricing" className="relative overflow-hidden py-12 sm:py-16" style={{ background: C.gray50 }}>
       <div className="pointer-events-none absolute inset-0 opacity-15">
         <Suspense fallback={null}>
           <TopologyField mode="light" hue={25} saturation={0.5} className="h-full w-full" />
@@ -796,13 +889,11 @@ function Pricing() {
 function FinalCta() {
   const anim = useInView();
   return (
-    <section className="relative overflow-hidden py-28 sm:py-36" style={{ background: C.gray900 }}>
-      {/* Animated background */}
-      <div className="pointer-events-none absolute inset-0 opacity-40">
-        <Suspense fallback={null}>
-          <WarpFieldBackground className="h-full w-full" />
-        </Suspense>
-      </div>
+    <section className="relative overflow-hidden py-14 sm:py-18" style={{ background: C.gray900 }}>
+      {/* CSS warp-like background */}
+      <div className="pointer-events-none absolute inset-0 opacity-40" style={{
+        background: `radial-gradient(ellipse at 30% 40%, rgba(249,115,22,0.3) 0%, transparent 50%), radial-gradient(ellipse at 70% 60%, rgba(255,107,0,0.2) 0%, transparent 40%), radial-gradient(ellipse at 50% 50%, rgba(249,115,22,0.1) 0%, transparent 60%)`,
+      }} />
 
       {/* Gradient overlay */}
       <div className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(ellipse at center, transparent 0%, ${C.gray900} 70%)` }} />
@@ -825,9 +916,9 @@ function FinalCta() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
             </svg>
           </Link>
-          <Suspense fallback={null}>
-            <LumenCta variant="ghost" mode="dark" label="Watch Demo" hue={25} saturation={0.8} onClick={() => document.querySelector('#how-it-works')?.scrollIntoView({ behavior: 'smooth' })} />
-          </Suspense>
+          <button onClick={() => document.querySelector('#how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="inline-flex items-center gap-2 rounded-full border border-gray-600 px-6 py-4 text-base font-medium text-gray-300 transition hover:border-gray-400 hover:text-white">
+            Watch Demo
+          </button>
         </div>
       </div>
     </section>
@@ -858,7 +949,7 @@ const FOOTER_LINKS = {
 
 function Footer() {
   return (
-    <footer className="border-t py-16" style={{ borderColor: C.gray200, background: C.white }}>
+    <footer className="border-t py-8" style={{ borderColor: C.gray200, background: C.white }}>
       <div className="mx-auto max-w-6xl px-6">
         <div className="grid gap-8 sm:grid-cols-2 md:grid-cols-4">
           {/* Brand */}
