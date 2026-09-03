@@ -13,11 +13,7 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (loading) {
-    return <LoadingScreen />;
-  }
-
-  if (user) {
+  if (!loading && user) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -42,6 +38,8 @@ export default function Login() {
   }
 
   return (
+    <>
+    <LoadingScreen visible={loading} />
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md">
         {/* Branding */}
@@ -131,5 +129,6 @@ export default function Login() {
         </p>
       </div>
     </div>
+    </>
   );
 }

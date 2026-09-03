@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api, EmailMessage, EmailAttachment } from '../services/api';
-import LoadingScreen from '../components/LoadingScreen';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -361,7 +360,53 @@ export default function EmailDetail() {
         Back to Emails
       </button>
 
-      {loading && <LoadingScreen inline />}
+      {loading && (
+        <div>
+          {/* Subject skeleton */}
+          <div className="mb-6">
+            <div className="h-7 w-72 max-w-full animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+            <div className="mt-2 h-4 w-40 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.1s' }} />
+          </div>
+
+          {/* Opens card skeleton */}
+          <div className="mb-6 rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
+            <div className="h-4 w-20 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.15s' }} />
+            <div className="mt-4 flex items-start gap-3">
+              <div className="h-6 w-6 shrink-0 animate-[shimmer_1.5s_infinite] rounded-full bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.2s' }} />
+              <div className="flex-1">
+                <div className="h-4 w-44 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.25s' }} />
+                <div className="mt-1.5 h-3 w-32 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.3s' }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Email message skeleton */}
+          <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200">
+            <div className="border-b border-gray-100 bg-gray-50/50 px-4 py-3 sm:px-5 sm:py-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 shrink-0 animate-[shimmer_1.5s_infinite] rounded-full bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.35s' }} />
+                  <div>
+                    <div className="h-4 w-32 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.4s' }} />
+                    <div className="mt-1 h-3 w-48 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.45s' }} />
+                  </div>
+                </div>
+                <div className="h-3 w-28 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.5s' }} />
+              </div>
+              <div className="mt-3 space-y-1.5">
+                <div className="h-3 w-56 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.55s' }} />
+              </div>
+            </div>
+            <div className="space-y-3 px-4 py-3 sm:px-5 sm:py-4">
+              <div className="h-3 w-full animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.6s' }} />
+              <div className="h-3 w-full animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.65s' }} />
+              <div className="h-3 w-4/5 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.7s' }} />
+              <div className="h-3 w-full animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.75s' }} />
+              <div className="h-3 w-3/5 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.8s' }} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mt-6 rounded-lg bg-red-50 p-4 text-sm text-red-600">

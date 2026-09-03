@@ -48,5 +48,5 @@ export default function OutlookCallback() {
     );
   }
 
-  return <LoadingScreen message="Connecting Outlook..." />;
+  return <LoadingScreen visible message="Connecting Outlook..." />;
 }

@@ -144,5 +144,5 @@ export default function OAuthCallback() {
     );
   }
 
-  return <LoadingScreen />;
+  return <LoadingScreen visible />;
 }

@@ -12,12 +12,13 @@ export default {
           '100%': { backgroundPosition: '-200% 0' },
         },
         glare: {
-          '0%': { transform: 'translateX(-100%)' },
-          '100%': { transform: 'translateX(100%)' },
+          '0%': { left: '-40%' },
+          '60%': { left: '100%' },
+          '100%': { left: '100%' },
         },
       },
       animation: {
-        glare: 'glare 2s ease-in-out infinite',
+        glare: 'glare 0.7s ease-in-out infinite',
       },
       colors: {
         primary: {

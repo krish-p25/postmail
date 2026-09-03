@@ -48,5 +48,5 @@ export default function GmailCallback() {
     );
   }
 
-  return <LoadingScreen message="Connecting Gmail..." />;
+  return <LoadingScreen visible message="Connecting Gmail..." />;
 }
