@@ -295,57 +295,6 @@ const FEATURE_SECTIONS = [
   },
 ];
 
-function FeatureVisual({ type }: { type: string }) {
-  return (
-    <div className="relative h-[300px] w-full overflow-hidden rounded-2xl shadow-2xl shadow-orange-100 ring-1 ring-gray-100 sm:h-[350px] md:h-[400px]">
-      {type === 'flow' ? (
-        <Suspense fallback={<div className="flex h-full items-center justify-center bg-gray-50"><div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-orange-500" /></div>}>
-          <FlowField mode="light" hue={25} saturation={0.8} brightness={1.1} className="h-full w-full" />
-        </Suspense>
-      ) : (
-        <div className="relative h-full w-full" style={{ background: C.gray50 }}>
-          {type === 'connectivity' && (
-            <>
-              <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 30% 40%, ${C.orangePastel} 0%, transparent 50%), radial-gradient(circle at 70% 60%, rgba(249,115,22,0.08) 0%, transparent 50%)` }} />
-              {[{ x: 20, y: 25 }, { x: 50, y: 50 }, { x: 80, y: 30 }, { x: 35, y: 70 }, { x: 65, y: 75 }].map((p, i) => (
-                <div key={i} className="absolute h-3 w-3 rounded-full" style={{ left: `${p.x}%`, top: `${p.y}%`, background: C.orange, opacity: 0.6 + i * 0.08, boxShadow: `0 0 20px ${C.orangeLight}` }} />
-              ))}
-              <svg className="absolute inset-0 h-full w-full" style={{ opacity: 0.15 }}>
-                <line x1="20%" y1="25%" x2="50%" y2="50%" stroke={C.orange} strokeWidth="1.5" />
-                <line x1="50%" y1="50%" x2="80%" y2="30%" stroke={C.orange} strokeWidth="1.5" />
-                <line x1="50%" y1="50%" x2="35%" y2="70%" stroke={C.orange} strokeWidth="1.5" />
-                <line x1="50%" y1="50%" x2="65%" y2="75%" stroke={C.orange} strokeWidth="1.5" />
-                <line x1="35%" y1="70%" x2="65%" y2="75%" stroke={C.orange} strokeWidth="1.5" />
-              </svg>
-            </>
-          )}
-          {type === 'interface' && (
-            <div className="absolute inset-0" style={{
-              background: `repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(249,115,22,0.06) 39px, rgba(249,115,22,0.06) 40px), repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(249,115,22,0.06) 39px, rgba(249,115,22,0.06) 40px)`,
-            }}>
-              <div className="absolute left-[15%] top-[20%] h-16 w-32 rounded-lg border" style={{ borderColor: C.orangeLight, opacity: 0.4 }} />
-              <div className="absolute right-[20%] top-[35%] h-12 w-48 rounded-lg border" style={{ borderColor: C.orangeLight, opacity: 0.3 }} />
-              <div className="absolute bottom-[25%] left-[25%] h-20 w-40 rounded-lg border" style={{ borderColor: C.orangeLight, opacity: 0.35 }} />
-              <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 50%, rgba(249,115,22,0.06) 0%, transparent 60%)` }} />
-            </div>
-          )}
-          {type === 'predictive' && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 50%, ${C.orangePastel} 0%, transparent 60%)` }} />
-              <svg className="h-3/4 w-3/4" viewBox="0 0 200 200" style={{ opacity: 0.5 }}>
-                <circle cx="100" cy="100" r="80" fill="none" stroke={C.orangeLight} strokeWidth="1" strokeDasharray="4 4" />
-                <circle cx="100" cy="100" r="55" fill="none" stroke={C.orangeLight} strokeWidth="1" strokeDasharray="4 4" />
-                <circle cx="100" cy="100" r="30" fill="none" stroke={C.orange} strokeWidth="1.5" strokeDasharray="4 4" />
-                <path d="M 30 140 Q 70 80 100 90 T 170 60" fill="none" stroke={C.orange} strokeWidth="2" opacity="0.6" />
-              </svg>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function Features() {
   return (
     <section id="features" className="py-12 sm:py-16" style={{ background: C.white }}>
