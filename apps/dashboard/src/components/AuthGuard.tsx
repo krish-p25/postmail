@@ -9,13 +9,14 @@ import LoadingScreen from './LoadingScreen';
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return <LoadingScreen />;
-  }
-
-  if (!user) {
+  if (!loading && !user) {
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {!loading && user && children}
+      <LoadingScreen visible={loading} />
+    </>
+  );
 }

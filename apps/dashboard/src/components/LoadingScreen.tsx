@@ -1,19 +1,41 @@
+import { useState, useEffect, useRef } from 'react';
+
 /**
  * Full-page loading screen with PostMail logo and glare animation.
- * Accepts an optional `message` prop for contextual loading text.
- * Use `inline` prop for in-page loading (no min-h-screen).
+ * Fades out over 0.5s when `visible` changes to false, then unmounts.
  */
-export default function LoadingScreen({ message, inline }: { message?: string; inline?: boolean }) {
+export default function LoadingScreen({ message, visible = true }: { message?: string; visible?: boolean }) {
+  const [mounted, setMounted] = useState(true);
+  const [fading, setFading] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!visible && !fading) {
+      setFading(true);
+      timerRef.current = setTimeout(() => setMounted(false), 500);
+    }
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [visible]);
+
+  if (!mounted) return null;
+
   return (
-    <div className={`flex items-center justify-center ${inline ? 'mt-12' : 'min-h-screen bg-gray-50'}`}>
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-gray-50 transition-opacity duration-500 ${fading ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+    >
       <div className="text-center">
-        <div className="relative inline-block overflow-hidden">
+        <div className="relative inline-block overflow-hidden rounded px-1">
           <span className="text-3xl font-extrabold tracking-tight text-gray-900">
             Post<span className="text-primary-500">Mail</span>
           </span>
-          <div className="pointer-events-none absolute inset-0 animate-glare">
-            <div className="h-full w-1/2 bg-gradient-to-r from-transparent via-white/60 to-transparent" />
-          </div>
+          <div
+            className="pointer-events-none absolute top-0 h-full w-full animate-glare"
+            style={{
+              background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255), transparent)',
+            }}
+          />
         </div>
         {message && <p className="mt-3 text-sm text-gray-500">{message}</p>}
       </div>
