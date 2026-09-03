@@ -4,7 +4,8 @@ import '@designcodeio/threeui/style.css';
 
 // Lazy-load ThreeUI components for code splitting
 const FlowField = lazy(() => import('@designcodeio/threeui/components/FlowField').then(m => ({ default: m.FlowField })));
-const TopologyField = lazy(() => import('@designcodeio/threeui/components/TopologyField').then(m => ({ default: m.TopologyField })));
+
+
 
 /* ─── Utility: animate elements on scroll ─── */
 function useInView(threshold = 0.15) {
@@ -36,6 +37,46 @@ const C = {
   gray800: '#1F2937',
   gray900: '#111827',
 };
+
+/* ─── Bubble overlay for CTA buttons ─── */
+function BubbleOverlay() {
+  const bubbles = useRef(
+    Array.from({ length: 12 }, (_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      size: 3 + Math.random() * 5,
+      duration: 1.5 + Math.random() * 2,
+      delay: Math.random() * 3,
+      opacity: 0.25 + Math.random() * 0.35,
+    }))
+  ).current;
+
+  return (
+    <span className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
+      {bubbles.map(b => (
+        <span
+          key={b.id}
+          className="absolute rounded-full bg-white"
+          style={{
+            width: b.size,
+            height: b.size,
+            left: `${b.left}%`,
+            bottom: -b.size,
+            opacity: b.opacity,
+            animation: `bubbleRise ${b.duration}s ${b.delay}s ease-in infinite`,
+          }}
+        />
+      ))}
+      <style>{`
+        @keyframes bubbleRise {
+          0% { transform: translateY(0); opacity: 0; }
+          10% { opacity: var(--bubble-opacity, 0.3); }
+          100% { transform: translateY(-50px); opacity: 0; }
+        }
+      `}</style>
+    </span>
+  );
+}
 
 /* ════════════════════════════════════════════════════════════════════════════
    NAVBAR
@@ -70,8 +111,9 @@ function Navbar() {
           <button onClick={() => scrollTo('#integrations')} className="transition hover:text-orange-500" style={{ color: C.gray500 }}>Integrations</button>
           <button onClick={() => scrollTo('#pricing')} className="transition hover:text-orange-500" style={{ color: C.gray500 }}>Pricing</button>
           <Link to="/login" className="transition hover:text-orange-500" style={{ color: C.gray500 }}>Login</Link>
-          <Link to="/signup" className="rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:shadow-orange-300" style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeNeon})` }}>
-            Get Started Free
+          <Link to="/signup" className="group relative overflow-hidden rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:shadow-orange-300" style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeNeon})` }}>
+            <BubbleOverlay />
+            <span className="relative z-10">Get Started Now</span>
           </Link>
         </div>
 
@@ -148,11 +190,14 @@ function Hero() {
 
         {/* CTA row */}
         <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-          <Link to="/signup" className="group relative inline-flex items-center gap-2 rounded-full px-8 py-4 text-lg font-bold text-white shadow-xl shadow-orange-200 transition-all hover:shadow-2xl hover:shadow-orange-300" style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeNeon})` }}>
-            Start Tracking Free
-            <svg className="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-            </svg>
+          <Link to="/signup" className="group relative inline-flex items-center gap-2 overflow-hidden rounded-full px-8 py-4 text-lg font-bold text-white shadow-xl shadow-orange-200 transition-all hover:shadow-2xl hover:shadow-orange-300" style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeNeon})` }}>
+            <BubbleOverlay />
+            <span className="relative z-10 flex items-center gap-2">
+              Start Tracking Free
+              <svg className="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
+            </span>
           </Link>
           <button onClick={() => document.querySelector('#how-it-works')?.scrollIntoView({ behavior: 'smooth' })} className="inline-flex items-center gap-2 rounded-full border px-6 py-4 text-base font-medium transition hover:bg-gray-50" style={{ borderColor: C.gray700, color: C.gray700 }}>
             See How It Works
@@ -809,13 +854,7 @@ const TIERS = [
 function Pricing() {
   const anim = useInView();
   return (
-    <section id="pricing" className="relative overflow-hidden py-12 sm:py-16" style={{ background: C.gray50 }}>
-      <div className="pointer-events-none absolute inset-0 opacity-15">
-        <Suspense fallback={null}>
-          <TopologyField mode="light" hue={25} saturation={0.5} className="h-full w-full" />
-        </Suspense>
-      </div>
-
+    <section id="pricing" className="relative overflow-hidden py-12 sm:py-16" style={{ background: `linear-gradient(180deg, ${C.white} 0%, ${C.orangePastel} 40%, ${C.orangePastel} 60%, ${C.white} 100%)` }}>
       <div ref={anim.ref} className="relative z-10 mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-sm font-bold uppercase tracking-widest" style={{ color: C.orange }}>Pricing</p>
@@ -863,7 +902,7 @@ function Pricing() {
               </ul>
               <Link
                 to="/signup"
-                className={`mt-8 block w-full rounded-xl py-3.5 text-center text-sm font-bold transition ${
+                className={`relative mt-8 block w-full overflow-hidden rounded-xl py-3.5 text-center text-sm font-bold transition ${
                   tier.highlighted
                     ? 'text-white shadow-lg shadow-orange-200 hover:shadow-orange-300'
                     : 'hover:bg-gray-50'
@@ -873,7 +912,8 @@ function Pricing() {
                   : { border: `1px solid ${C.gray200}`, color: C.gray700 }
                 }
               >
-                {tier.cta}
+                {tier.highlighted && <BubbleOverlay />}
+                <span className="relative z-10">{tier.cta}</span>
               </Link>
             </div>
           ))}
