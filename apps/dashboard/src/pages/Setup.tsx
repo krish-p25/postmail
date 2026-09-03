@@ -99,25 +99,47 @@ export default function Setup() {
 
       {/* Progress bar */}
       <div className="mt-6">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-medium text-gray-700">
-            {completedCount} of {steps.length} steps complete
-          </span>
-          {allDone && (
-            <span className="font-medium text-green-600">All set!</span>
-          )}
-        </div>
-        <div className="mt-2 h-2 w-full rounded-full bg-gray-200">
-          <div
-            className="h-2 rounded-full bg-primary-600 transition-all duration-500"
-            style={{ width: `${(completedCount / steps.length) * 100}%` }}
-          />
-        </div>
+        {loading ? (
+          <>
+            <div className="h-4 w-44 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+            <div className="mt-2 h-2 w-full rounded-full bg-gray-200" />
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium text-gray-700">
+                {completedCount} of {steps.length} steps complete
+              </span>
+              {allDone && (
+                <span className="font-medium text-green-600">All set!</span>
+              )}
+            </div>
+            <div className="mt-2 h-2 w-full rounded-full bg-gray-200">
+              <div
+                className="h-2 rounded-full bg-primary-600 transition-all duration-500"
+                style={{ width: `${(completedCount / steps.length) * 100}%` }}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {loading ? (
-        <div className="mt-8 flex justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-primary-600" />
+        <div className="mt-8 space-y-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200"
+            >
+              <div className="flex items-start gap-4">
+                <div className="h-8 w-8 shrink-0 animate-[shimmer_1.5s_infinite] rounded-full bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: `${i * 0.15}s` }} />
+                <div className="flex-1">
+                  <div className="h-4 w-48 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: `${i * 0.15 + 0.05}s` }} />
+                  <div className="mt-2 h-3 w-72 max-w-full animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: `${i * 0.15 + 0.1}s` }} />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="mt-8 space-y-4">

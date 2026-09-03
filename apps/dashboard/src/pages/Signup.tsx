@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../services/auth';
 import { PasswordInput, PasswordStrengthMeter, getPasswordStrength } from '../components/PasswordInput';
 import VerifyCodeForm from '../components/VerifyCodeForm';
+import LoadingScreen from '../components/LoadingScreen';
 
 export default function Signup() {
   const { user, loading, setUser } = useAuth();
@@ -17,11 +18,7 @@ export default function Signup() {
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (user) {

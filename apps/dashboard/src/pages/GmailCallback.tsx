@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../services/api';
+import LoadingScreen from '../components/LoadingScreen';
 
 export default function GmailCallback() {
   const navigate = useNavigate();
@@ -47,12 +48,5 @@ export default function GmailCallback() {
     );
   }
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
-        <p className="mt-4 text-sm text-gray-500">Connecting Gmail...</p>
-      </div>
-    </div>
-  );
+  return <LoadingScreen message="Connecting Gmail..." />;
 }
