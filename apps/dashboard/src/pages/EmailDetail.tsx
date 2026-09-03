@@ -157,17 +157,12 @@ function parseUserAgent(ua: string | null): string {
   return 'Email client';
 }
 
-function isGmailProxy(ua: string | null): boolean {
-  if (!ua) return false;
-  return ua.includes('GoogleImageProxy') || ua.includes('Googlebot');
-}
-
 function OpensTimeline({ tracking, onDismiss }: { tracking: TrackingData; onDismiss: (openId: string) => void }) {
   const sorted = [...tracking.opens].sort(
     (a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime(),
   );
-  const activeOpens = sorted.filter((o) => !o.dismissed && !isGmailProxy(o.user_agent));
-  const dismissedOrProxy = sorted.filter((o) => o.dismissed || isGmailProxy(o.user_agent));
+  const activeOpens = sorted.filter((o) => !o.dismissed);
+  const dismissedOpens = sorted.filter((o) => o.dismissed);
   const [showDismissed, setShowDismissed] = useState(false);
 
   if (tracking.opens.length === 0) {
@@ -180,15 +175,14 @@ function OpensTimeline({ tracking, onDismiss }: { tracking: TrackingData; onDism
   }
 
   function renderOpen(open: TrackingOpen, idx: number, list: TrackingOpen[], isDimmed: boolean) {
-    const proxy = isGmailProxy(open.user_agent);
     return (
       <div key={open.id} className={`flex items-start gap-3 ${isDimmed ? 'opacity-50' : ''}`}>
         <div className="relative flex flex-col items-center">
           <div className={`flex h-6 w-6 items-center justify-center rounded-full ${
-            proxy ? 'bg-gray-100' : isDimmed ? 'bg-gray-100' : 'bg-blue-100'
+            isDimmed ? 'bg-gray-100' : 'bg-primary-100'
           }`}>
             <svg className={`h-3.5 w-3.5 ${
-              proxy ? 'text-gray-400' : isDimmed ? 'text-gray-400' : 'text-blue-600'
+              isDimmed ? 'text-gray-400' : 'text-primary-600'
             }`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178Z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
@@ -205,11 +199,6 @@ function OpensTimeline({ tracking, onDismiss }: { tracking: TrackingData; onDism
                 <p className="text-sm font-medium text-gray-900">
                   {formatDate(open.opened_at)}
                 </p>
-                {proxy && (
-                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
-                    Gmail proxy
-                  </span>
-                )}
                 {open.dismissed && (
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
                     Dismissed
@@ -221,7 +210,7 @@ function OpensTimeline({ tracking, onDismiss }: { tracking: TrackingData; onDism
                 {open.ip_address && ` · ${open.ip_address}`}
               </p>
             </div>
-            {!open.dismissed && !proxy && (
+            {!open.dismissed && (
               <button
                 onClick={() => onDismiss(open.id)}
                 className="shrink-0 inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
@@ -244,14 +233,14 @@ function OpensTimeline({ tracking, onDismiss }: { tracking: TrackingData; onDism
         Opens ({activeOpens.length})
       </h3>
       {activeOpens.length === 0 && (
-        <p className="mt-2 text-sm text-gray-500">No opens recorded yet (some were filtered).</p>
+        <p className="mt-2 text-sm text-gray-500">No opens recorded yet.</p>
       )}
       {activeOpens.length > 0 && (
         <div className="mt-4 space-y-3">
           {activeOpens.map((open, idx) => renderOpen(open, idx, activeOpens, false))}
         </div>
       )}
-      {dismissedOrProxy.length > 0 && (
+      {dismissedOpens.length > 0 && (
         <div className="mt-3 border-t border-gray-100 pt-3">
           <button
             onClick={() => setShowDismissed(!showDismissed)}
@@ -263,11 +252,11 @@ function OpensTimeline({ tracking, onDismiss }: { tracking: TrackingData; onDism
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
             </svg>
-            {dismissedOrProxy.length} filtered {dismissedOrProxy.length === 1 ? 'open' : 'opens'}
+            {dismissedOpens.length} dismissed {dismissedOpens.length === 1 ? 'open' : 'opens'}
           </button>
           {showDismissed && (
             <div className="mt-3 space-y-3">
-              {dismissedOrProxy.map((open, idx) => renderOpen(open, idx, dismissedOrProxy, true))}
+              {dismissedOpens.map((open, idx) => renderOpen(open, idx, dismissedOpens, true))}
             </div>
           )}
         </div>

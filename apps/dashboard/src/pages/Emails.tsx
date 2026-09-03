@@ -105,11 +105,6 @@ function formatRecipients(recipients: string[]): string {
   return `${first} +${recipients.length - 1}`;
 }
 
-function isProxyOpen(ua: string | null): boolean {
-  if (!ua) return false;
-  return ua.includes('GoogleImageProxy') || ua.includes('Googlebot');
-}
-
 function mergeEmails(sentEmails: MailEmail[], trackedEmails: TrackedEmailData[]): MergedEmail[] {
   const merged: MergedEmail[] = sentEmails.map((email) => {
     // Try to match against tracked emails:
@@ -134,7 +129,7 @@ function mergeEmails(sentEmails: MailEmail[], trackedEmails: TrackedEmailData[])
 
     if (match) {
       const activeOpens = match.opens.filter(
-        (o) => !o.dismissed && !isProxyOpen(o.user_agent),
+        (o) => !o.dismissed,
       );
       const openCount = activeOpens.length;
       let trackingStatus: MergedEmail['trackingStatus'] = 'tracked';
