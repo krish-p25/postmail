@@ -9,8 +9,8 @@ COPY apps/api/package.json ./apps/api/
 COPY apps/dashboard/package.json ./apps/dashboard/
 COPY apps/extension/package.json ./apps/extension/
 
-# Install all dependencies (full workspace install for correct lockfile resolution)
-RUN npm ci
+# Install all dependencies (cache npm store between builds)
+RUN --mount=type=cache,target=/root/.npm npm install
 
 # Copy source
 COPY packages/shared/ ./packages/shared/
@@ -36,9 +36,8 @@ COPY apps/api/package.json ./apps/api/
 COPY apps/dashboard/package.json ./apps/dashboard/
 COPY apps/extension/package.json ./apps/extension/
 
-RUN npm ci --omit=dev
+RUN --mount=type=cache,target=/root/.npm npm install --omit=dev --ignore-scripts
 
-COPY .env ./
 COPY packages/shared/ ./packages/shared/
 COPY --from=build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=build /app/apps/api/dist ./apps/api/dist
