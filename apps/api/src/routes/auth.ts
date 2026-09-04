@@ -6,6 +6,7 @@ import { config } from '../config/env';
 import { User, UserSetting } from '../db/models';
 import { createVerification, verifyCode } from '../services/verification';
 import { sendVerificationEmail } from '../services/email';
+import { withRLS } from '../middleware/rls';
 
 const router = Router();
 
@@ -21,6 +22,37 @@ function signToken(user: { id: string; email: string }): string {
   return jwt.sign({ sub: user.id, email: user.email }, config.jwtSecret, {
     expiresIn: '7d',
   });
+}
+
+/**
+ * Store Outlook tokens on the user and auto-connect their mailbox
+ * if no mailbox is currently connected.
+ */
+async function storeOutlookTokensAndConnect(
+  user: User,
+  tokens: { accessToken: string; refreshToken: string | null; tokenExpiry: Date | null },
+  mailboxEmail: string,
+) {
+  await user.update({
+    outlookAccessToken: tokens.accessToken,
+    outlookRefreshToken: tokens.refreshToken,
+    outlookTokenExpiry: tokens.tokenExpiry,
+  });
+
+  const settings = await UserSetting.findOne({ where: { userId: user.id } });
+  if (settings && !settings.mailboxConnected) {
+    await withRLS(user.id, async (transaction) => {
+      await UserSetting.update(
+        {
+          mailboxConnected: true,
+          mailboxProvider: 'outlook',
+          mailboxEmail,
+          mailboxConnectedAt: new Date(),
+        },
+        { where: { userId: user.id }, transaction },
+      );
+    });
+  }
 }
 
 /**
@@ -130,9 +162,18 @@ router.post('/verify', async (req: Request, res: Response) => {
       const token = signToken(user);
       res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
     } else if (type === 'microsoft-link') {
-      const { microsoftId: storedMicrosoftId, displayName: storedDisplayName } = result.data as {
+      const {
+        microsoftId: storedMicrosoftId,
+        displayName: storedDisplayName,
+        accessToken: storedAccessToken,
+        refreshToken: storedRefreshToken,
+        tokenExpiry: storedTokenExpiry,
+      } = result.data as {
         microsoftId: string;
         displayName: string | null;
+        accessToken: string;
+        refreshToken: string | null;
+        tokenExpiry: string | null;
       };
 
       const user = await User.findOne({ where: { email } });
@@ -142,6 +183,15 @@ router.post('/verify', async (req: Request, res: Response) => {
       }
 
       await user.update({ microsoftId: storedMicrosoftId, displayName: storedDisplayName || user.displayName });
+      await storeOutlookTokensAndConnect(
+        user,
+        {
+          accessToken: storedAccessToken,
+          refreshToken: storedRefreshToken,
+          tokenExpiry: storedTokenExpiry ? new Date(storedTokenExpiry) : null,
+        },
+        email,
+      );
 
       const token = signToken(user);
       res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
@@ -337,7 +387,7 @@ router.post('/microsoft', async (req: Request, res: Response) => {
         code,
         redirect_uri: redirectUri,
         grant_type: 'authorization_code',
-        scope: 'openid email profile User.Read',
+        scope: 'openid email profile User.Read Mail.Read offline_access',
       }),
     });
 
@@ -350,6 +400,10 @@ router.post('/microsoft', async (req: Request, res: Response) => {
     }
 
     const accessToken = tokenData.access_token;
+    const refreshToken = tokenData.refresh_token || null;
+    const tokenExpiry = tokenData.expires_in
+      ? new Date(Date.now() + tokenData.expires_in * 1000)
+      : null;
 
     // Call Graph API to get user profile
     const profileRes = await fetch('https://graph.microsoft.com/v1.0/me', {
@@ -382,18 +436,34 @@ router.post('/microsoft', async (req: Request, res: Response) => {
       if (user) {
         if (user.passwordHash) {
           // Existing password account — require password confirmation to link
-          res.json({ requiresPassword: true, email, accessToken });
+          res.json({ requiresPassword: true, email, accessToken, refreshToken, tokenExpiry: tokenExpiry?.toISOString() || null });
           return;
         }
         // No password set — safe to auto-link
         await user.update({ microsoftId, displayName: displayName || user.displayName });
+        await storeOutlookTokensAndConnect(user, { accessToken, refreshToken, tokenExpiry }, email);
       } else {
-        // Create new user
-        user = await User.create({ email, microsoftId, displayName });
-        await UserSetting.create({ userId: user.id });
+        // Create new user with Outlook tokens
+        user = await User.create({
+          email, microsoftId, displayName,
+          outlookAccessToken: accessToken,
+          outlookRefreshToken: refreshToken,
+          outlookTokenExpiry: tokenExpiry,
+        });
+        await UserSetting.create({
+          userId: user.id,
+          mailboxConnected: true,
+          mailboxProvider: 'outlook',
+          mailboxEmail: email,
+          mailboxConnectedAt: new Date(),
+        });
       }
-    } else if (displayName && user.displayName !== displayName) {
-      await user.update({ displayName });
+    } else {
+      // Returning user — refresh tokens and display name
+      if (displayName && user.displayName !== displayName) {
+        await user.update({ displayName });
+      }
+      await storeOutlookTokensAndConnect(user, { accessToken, refreshToken, tokenExpiry }, email);
     }
 
     const token = signToken(user);
@@ -413,7 +483,7 @@ router.post('/microsoft', async (req: Request, res: Response) => {
  */
 router.post('/microsoft/link', async (req: Request, res: Response) => {
   try {
-    const { accessToken, password } = req.body;
+    const { accessToken, password, refreshToken, tokenExpiry } = req.body;
 
     if (!accessToken || !password) {
       res.status(400).json({ error: 'Access token and password are required' });
@@ -452,6 +522,9 @@ router.post('/microsoft/link', async (req: Request, res: Response) => {
     const code = createVerification(email, 'microsoft-link', {
       microsoftId: profile.id,
       displayName: profile.displayName || null,
+      accessToken,
+      refreshToken: refreshToken || null,
+      tokenExpiry: tokenExpiry || null,
     });
     await sendVerificationEmail(email, code);
 

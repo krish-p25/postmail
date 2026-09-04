@@ -9,7 +9,7 @@ export default function MicrosoftAuthCallback() {
   const navigate = useNavigate();
   const { setUser } = useAuth();
   const [error, setError] = useState<string | null>(null);
-  const [linkState, setLinkState] = useState<{ email: string; accessToken: string } | null>(null);
+  const [linkState, setLinkState] = useState<{ email: string; accessToken: string; refreshToken: string | null; tokenExpiry: string | null } | null>(null);
   const [password, setPassword] = useState('');
   const [linking, setLinking] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
@@ -51,7 +51,7 @@ export default function MicrosoftAuthCallback() {
       .then((data) => {
         if ('requiresPassword' in data) {
           console.log('[Microsoft OAuth] Account exists, requires password to link');
-          setLinkState({ email: data.email, accessToken: data.accessToken });
+          setLinkState({ email: data.email, accessToken: data.accessToken, refreshToken: data.refreshToken, tokenExpiry: data.tokenExpiry });
         } else {
           console.log('[Microsoft OAuth] Login successful, redirecting to dashboard');
           setUser(data.user);
@@ -70,7 +70,7 @@ export default function MicrosoftAuthCallback() {
     setError(null);
     setLinking(true);
     try {
-      await auth.microsoftLink(linkState.accessToken, password);
+      await auth.microsoftLink(linkState.accessToken, password, linkState.refreshToken, linkState.tokenExpiry);
       setVerifyEmail(linkState.email);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to link account');
