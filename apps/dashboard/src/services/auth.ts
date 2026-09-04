@@ -92,7 +92,7 @@ export const auth = {
   },
 
   /** Exchange Microsoft authorization code for user info via API. */
-  async microsoftLogin(code: string): Promise<AuthResponse | { requiresPassword: true; email: string; accessToken: string }> {
+  async microsoftLogin(code: string): Promise<AuthResponse | { requiresPassword: true; email: string; accessToken: string; refreshToken: string | null; tokenExpiry: string | null }> {
     const res = await fetch(`${API_URL}/auth/microsoft`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -101,17 +101,17 @@ export const auth = {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Microsoft sign-in failed');
     if (data.requiresPassword) {
-      return { requiresPassword: true, email: data.email, accessToken: data.accessToken };
+      return { requiresPassword: true, email: data.email, accessToken: data.accessToken, refreshToken: data.refreshToken || null, tokenExpiry: data.tokenExpiry || null };
     }
     localStorage.setItem(TOKEN_KEY, data.token);
     return data;
   },
 
-  async microsoftLink(accessToken: string, password: string): Promise<VerificationRequired> {
+  async microsoftLink(accessToken: string, password: string, refreshToken?: string | null, tokenExpiry?: string | null): Promise<VerificationRequired> {
     const res = await fetch(`${API_URL}/auth/microsoft/link`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accessToken, password }),
+      body: JSON.stringify({ accessToken, password, refreshToken, tokenExpiry }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to link Microsoft account');
@@ -138,7 +138,7 @@ export const auth = {
   redirectToMicrosoft(): void {
     const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID;
     const redirectUri = encodeURIComponent(window.location.origin + '/microsoft/callback');
-    const scope = encodeURIComponent('openid email profile User.Read');
+    const scope = encodeURIComponent('openid email profile User.Read Mail.Read offline_access');
     const url =
       `https://login.microsoftonline.com/common/oauth2/v2.0/authorize` +
       `?client_id=${clientId}` +
