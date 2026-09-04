@@ -3,6 +3,7 @@ import TrackedEmail from './TrackedEmail';
 import EmailOpen from './EmailOpen';
 import EmailClick from './EmailClick';
 import UserSetting from './UserSetting';
+import LinkedMailbox from './LinkedMailbox';
 
 // Associations — use camelCase attribute names (not snake_case column names)
 // to avoid Sequelize creating duplicate attributes on the model instances.
@@ -18,4 +19,7 @@ EmailClick.belongsTo(TrackedEmail, { foreignKey: 'trackedEmailId', as: 'trackedE
 User.hasOne(UserSetting, { foreignKey: 'userId', as: 'settings' });
 UserSetting.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
-export { User, TrackedEmail, EmailOpen, EmailClick, UserSetting };
+User.hasMany(LinkedMailbox, { foreignKey: 'userId', as: 'linkedMailboxes' });
+LinkedMailbox.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+export { User, TrackedEmail, EmailOpen, EmailClick, UserSetting, LinkedMailbox };
