@@ -3,7 +3,7 @@ import crypto from 'crypto';
 interface PendingVerification {
   code: string;
   expiresAt: number;
-  type: 'register' | 'google-link';
+  type: 'register' | 'google-link' | 'microsoft-link';
   data: Record<string, unknown>;
   attempts: number;
 }
@@ -26,7 +26,7 @@ function cleanExpired(): void {
 
 export function createVerification(
   email: string,
-  type: 'register' | 'google-link',
+  type: 'register' | 'google-link' | 'microsoft-link',
   data: Record<string, unknown>,
 ): string {
   cleanExpired();
@@ -44,7 +44,7 @@ export function createVerification(
 export function verifyCode(
   email: string,
   code: string,
-  expectedType: 'register' | 'google-link',
+  expectedType: 'register' | 'google-link' | 'microsoft-link',
 ): { valid: true; data: Record<string, unknown> } | { valid: false; error: string } {
   const key = email.toLowerCase();
   const entry = store.get(key);

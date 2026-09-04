@@ -6,6 +6,7 @@ interface UserAttributes {
   email: string;
   passwordHash: string | null;
   googleId: string | null;
+  microsoftId: string | null;
   displayName: string | null;
   gmailAccessToken: string | null;
   gmailRefreshToken: string | null;
@@ -17,13 +18,14 @@ interface UserAttributes {
   updatedAt: Date;
 }
 
-interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'passwordHash' | 'googleId' | 'displayName' | 'gmailAccessToken' | 'gmailRefreshToken' | 'gmailTokenExpiry' | 'outlookAccessToken' | 'outlookRefreshToken' | 'outlookTokenExpiry' | 'createdAt' | 'updatedAt'> {}
+interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'passwordHash' | 'googleId' | 'microsoftId' | 'displayName' | 'gmailAccessToken' | 'gmailRefreshToken' | 'gmailTokenExpiry' | 'outlookAccessToken' | 'outlookRefreshToken' | 'outlookTokenExpiry' | 'createdAt' | 'updatedAt'> {}
 
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   declare id: string;
   declare email: string;
   declare passwordHash: string | null;
   declare googleId: string | null;
+  declare microsoftId: string | null;
   declare displayName: string | null;
   declare gmailAccessToken: string | null;
   declare gmailRefreshToken: string | null;
@@ -57,6 +59,12 @@ User.init(
       allowNull: true,
       unique: true,
       field: 'google_id',
+    },
+    microsoftId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      unique: true,
+      field: 'microsoft_id',
     },
     displayName: {
       type: DataTypes.STRING,

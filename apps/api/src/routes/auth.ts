@@ -129,6 +129,22 @@ router.post('/verify', async (req: Request, res: Response) => {
 
       const token = signToken(user);
       res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+    } else if (type === 'microsoft-link') {
+      const { microsoftId: storedMicrosoftId, displayName: storedDisplayName } = result.data as {
+        microsoftId: string;
+        displayName: string | null;
+      };
+
+      const user = await User.findOne({ where: { email } });
+      if (!user) {
+        res.status(404).json({ error: 'Account not found' });
+        return;
+      }
+
+      await user.update({ microsoftId: storedMicrosoftId, displayName: storedDisplayName || user.displayName });
+
+      const token = signToken(user);
+      res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
     } else {
       res.status(400).json({ error: 'Invalid verification type' });
     }
@@ -289,6 +305,160 @@ router.post('/google/link', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[PostMail API] Google link error:', error);
     res.status(500).json({ error: 'Failed to link Google account' });
+  }
+});
+
+/**
+ * POST /auth/microsoft
+ * Body: { code }
+ *
+ * Exchanges a Microsoft OAuth authorization code for tokens,
+ * calls Graph API to get user info, finds or creates the local user,
+ * and returns a JWT.
+ */
+router.post('/microsoft', async (req: Request, res: Response) => {
+  try {
+    const { code } = req.body;
+
+    if (!code) {
+      res.status(400).json({ error: 'Authorization code is required' });
+      return;
+    }
+
+    const redirectUri = config.dashboardUrl + '/microsoft/callback';
+
+    // Exchange authorization code for tokens
+    const tokenRes = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: config.microsoftClientId,
+        client_secret: config.microsoftClientSecret,
+        code,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+        scope: 'openid email profile User.Read',
+      }),
+    });
+
+    const tokenData = await tokenRes.json();
+
+    if (!tokenRes.ok) {
+      console.error('[PostMail API] Microsoft token exchange failed:', tokenData);
+      res.status(400).json({ error: tokenData.error_description || 'Failed to exchange Microsoft authorization code' });
+      return;
+    }
+
+    const accessToken = tokenData.access_token;
+
+    // Call Graph API to get user profile
+    const profileRes = await fetch('https://graph.microsoft.com/v1.0/me', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!profileRes.ok) {
+      const profileError = await profileRes.text();
+      console.error('[PostMail API] Microsoft Graph /me failed:', profileError);
+      res.status(400).json({ error: 'Failed to get user info from Microsoft' });
+      return;
+    }
+
+    const profile = await profileRes.json();
+    const microsoftId = profile.id;
+    const email: string = (profile.mail || profile.userPrincipalName || '').toLowerCase();
+    const displayName: string | null = profile.displayName || null;
+
+    if (!email) {
+      res.status(400).json({ error: 'Could not retrieve email from Microsoft account' });
+      return;
+    }
+
+    // Find by microsoftId first, then by email
+    let user = await User.findOne({ where: { microsoftId } });
+
+    if (!user) {
+      user = await User.findOne({ where: { email } });
+
+      if (user) {
+        if (user.passwordHash) {
+          // Existing password account — require password confirmation to link
+          res.json({ requiresPassword: true, email, accessToken });
+          return;
+        }
+        // No password set — safe to auto-link
+        await user.update({ microsoftId, displayName: displayName || user.displayName });
+      } else {
+        // Create new user
+        user = await User.create({ email, microsoftId, displayName });
+        await UserSetting.create({ userId: user.id });
+      }
+    } else if (displayName && user.displayName !== displayName) {
+      await user.update({ displayName });
+    }
+
+    const token = signToken(user);
+    res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+  } catch (error) {
+    console.error('[PostMail API] Microsoft auth error:', error);
+    res.status(500).json({ error: 'Microsoft authentication failed' });
+  }
+});
+
+/**
+ * POST /auth/microsoft/link
+ * Body: { accessToken, password }
+ *
+ * Validates the password using a previously obtained access token,
+ * then sends a verification code.
+ */
+router.post('/microsoft/link', async (req: Request, res: Response) => {
+  try {
+    const { accessToken, password } = req.body;
+
+    if (!accessToken || !password) {
+      res.status(400).json({ error: 'Access token and password are required' });
+      return;
+    }
+
+    const profileRes = await fetch('https://graph.microsoft.com/v1.0/me', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!profileRes.ok) {
+      res.status(400).json({ error: 'Microsoft token expired. Please try again.' });
+      return;
+    }
+
+    const profile = await profileRes.json();
+    const email: string = (profile.mail || profile.userPrincipalName || '').toLowerCase();
+
+    if (!email) {
+      res.status(400).json({ error: 'Could not retrieve email from Microsoft account' });
+      return;
+    }
+
+    const user = await User.findOne({ where: { email } });
+    if (!user || !user.passwordHash) {
+      res.status(401).json({ error: 'Account not found' });
+      return;
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: 'Incorrect password' });
+      return;
+    }
+
+    const code = createVerification(email, 'microsoft-link', {
+      microsoftId: profile.id,
+      displayName: profile.displayName || null,
+    });
+    await sendVerificationEmail(email, code);
+
+    res.json({ requiresVerification: true, email });
+  } catch (error) {
+    console.error('[PostMail API] Microsoft link error:', error);
+    res.status(500).json({ error: 'Failed to link Microsoft account' });
   }
 });
 

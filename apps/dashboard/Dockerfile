@@ -9,8 +9,8 @@ COPY apps/api/package.json ./apps/api/
 COPY apps/dashboard/package.json ./apps/dashboard/
 COPY apps/extension/package.json ./apps/extension/
 
-# Install all dependencies (full workspace install for correct lockfile resolution)
-RUN npm ci
+# Install all dependencies (cache npm store between builds)
+RUN --mount=type=cache,target=/root/.npm npm install
 
 # Copy source
 COPY packages/shared/ ./packages/shared/
@@ -29,6 +29,7 @@ FROM node:20-alpine
 RUN npm install -g serve
 
 COPY --from=build /app/apps/dashboard/dist /app/dist
+COPY .well-known /app/dist/.well-known
 
 EXPOSE 3006
 
