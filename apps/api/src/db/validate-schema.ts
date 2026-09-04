@@ -11,6 +11,7 @@ const EXPECTED_SCHEMA: Record<string, string[]> = {
   email_opens: ['id', 'tracked_email_id', 'user_id', 'opened_at', 'user_agent', 'ip_address', 'dismissed', 'created_at'],
   email_clicks: ['id', 'tracked_email_id', 'user_id', 'url', 'clicked_at', 'user_agent', 'ip_address', 'created_at'],
   user_settings: ['id', 'user_id', 'discord_webhook_url', 'mailbox_connected', 'mailbox_provider', 'mailbox_email', 'mailbox_connected_at', 'created_at', 'updated_at'],
+  linked_mailboxes: ['id', 'user_id', 'provider', 'email', 'access_token', 'refresh_token', 'token_expiry', 'created_at', 'updated_at'],
 };
 
 /**
