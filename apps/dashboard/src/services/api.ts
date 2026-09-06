@@ -55,6 +55,7 @@ export const api = {
       displayName: string | null;
       hasPassword: boolean;
       hasGoogle: boolean;
+      hasMicrosoft: boolean;
     }>;
   },
 
