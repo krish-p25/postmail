@@ -1,6 +1,14 @@
 import { ComposeTracker } from '../compose-tracker';
 import { ComposeTrackingState, TRACKING_PIXEL_ATTR } from '@postmail/shared';
 
+function findBody(compose: HTMLElement): HTMLElement | null {
+  return compose.querySelector('div[role="textbox"]');
+}
+
+function findSubject(_compose: HTMLElement): string {
+  return '';
+}
+
 function createMockComposeWithBody(): HTMLElement {
   const compose = document.createElement('div');
   const body = document.createElement('div');
@@ -12,103 +20,54 @@ function createMockComposeWithBody(): HTMLElement {
 }
 
 describe('ComposeTracker', () => {
-  it('starts in WAITING_FOR_RECIPIENT state', () => {
+  it('generates token immediately and injects pixel when tracking enabled', () => {
     const compose = createMockComposeWithBody();
-    const tracker = new ComposeTracker('c1', compose, true);
+    const tracker = new ComposeTracker('c1', compose, true, findBody, findSubject);
     const info = tracker.getInfo();
 
-    expect(info.state).toBe(ComposeTrackingState.WAITING_FOR_RECIPIENT);
-    expect(info.trackingToken).toBe('');
-    expect(info.recipients).toEqual([]);
-    expect(info.injected).toBe(false);
-  });
-
-  it('generates token and injects pixel when recipients appear', () => {
-    const compose = createMockComposeWithBody();
-    const tracker = new ComposeTracker('c1', compose, true);
-
-    tracker.handleRecipientChange(['alice@example.com']);
-
-    const info = tracker.getInfo();
     expect(info.state).toBe(ComposeTrackingState.PIXEL_INJECTED);
     expect(info.trackingToken).toBeTruthy();
     expect(info.trackingToken).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
-    expect(info.recipients).toEqual(['alice@example.com']);
     expect(info.injected).toBe(true);
+    expect(info.recipients).toEqual([]);
   });
 
-  it('regenerates token when recipients change', () => {
+  it('tracks recipient changes', () => {
     const compose = createMockComposeWithBody();
-    const tracker = new ComposeTracker('c1', compose, true);
+    const tracker = new ComposeTracker('c1', compose, true, findBody, findSubject);
 
     tracker.handleRecipientChange(['alice@example.com']);
-    const firstToken = tracker.getInfo().trackingToken;
 
-    tracker.handleRecipientChange(['bob@example.com']);
-    const secondToken = tracker.getInfo().trackingToken;
-
-    expect(secondToken).toBeTruthy();
-    expect(secondToken).not.toBe(firstToken);
-    expect(tracker.getInfo().recipients).toEqual(['bob@example.com']);
-  });
-
-  it('regenerates token when recipients are added', () => {
-    const compose = createMockComposeWithBody();
-    const tracker = new ComposeTracker('c1', compose, true);
-
-    tracker.handleRecipientChange(['alice@example.com']);
-    const firstToken = tracker.getInfo().trackingToken;
-
-    tracker.handleRecipientChange(['alice@example.com', 'bob@example.com']);
-    const secondToken = tracker.getInfo().trackingToken;
-
-    expect(secondToken).not.toBe(firstToken);
-  });
-
-  it('reverts to WAITING_FOR_RECIPIENT when all recipients removed', () => {
-    const compose = createMockComposeWithBody();
-    const tracker = new ComposeTracker('c1', compose, true);
-
-    tracker.handleRecipientChange(['alice@example.com']);
-    expect(tracker.getInfo().state).toBe(ComposeTrackingState.PIXEL_INJECTED);
-
-    tracker.handleRecipientChange([]);
     const info = tracker.getInfo();
-    expect(info.state).toBe(ComposeTrackingState.WAITING_FOR_RECIPIENT);
-    expect(info.trackingToken).toBe('');
-    expect(info.injected).toBe(false);
+    expect(info.recipients).toEqual(['alice@example.com']);
   });
 
-  it('removes pixel from DOM when recipients are cleared', () => {
+  it('updates recipients when they change', () => {
     const compose = createMockComposeWithBody();
-    const tracker = new ComposeTracker('c1', compose, true);
+    const tracker = new ComposeTracker('c1', compose, true, findBody, findSubject);
 
     tracker.handleRecipientChange(['alice@example.com']);
-    expect(compose.querySelector(`img[${TRACKING_PIXEL_ATTR}]`)).not.toBeNull();
+    tracker.handleRecipientChange(['bob@example.com']);
 
-    tracker.handleRecipientChange([]);
-    expect(compose.querySelector(`img[${TRACKING_PIXEL_ATTR}]`)).toBeNull();
+    expect(tracker.getInfo().recipients).toEqual(['bob@example.com']);
   });
 
   it('does not inject pixel when tracking is disabled', () => {
     const compose = createMockComposeWithBody();
-    const tracker = new ComposeTracker('c1', compose, false); // disabled
-
-    tracker.handleRecipientChange(['alice@example.com']);
+    const tracker = new ComposeTracker('c1', compose, false, findBody, findSubject);
 
     const info = tracker.getInfo();
     expect(info.state).toBe(ComposeTrackingState.WAITING_FOR_RECIPIENT);
-    expect(info.trackingToken).toBe('');
+    expect(info.trackingToken).toBeTruthy(); // token is always generated
     expect(info.injected).toBe(false);
   });
 
   it('cleans up pixel on cleanup()', () => {
     const compose = createMockComposeWithBody();
-    const tracker = new ComposeTracker('c1', compose, true);
+    const tracker = new ComposeTracker('c1', compose, true, findBody, findSubject);
 
-    tracker.handleRecipientChange(['alice@example.com']);
     expect(tracker.getInfo().injected).toBe(true);
 
     tracker.cleanup();
@@ -118,20 +77,36 @@ describe('ComposeTracker', () => {
 
   it('handles missing compose body gracefully', () => {
     const compose = document.createElement('div'); // No body element
-    const tracker = new ComposeTracker('c1', compose, true);
-
-    tracker.handleRecipientChange(['alice@example.com']);
+    const tracker = new ComposeTracker('c1', compose, true, findBody, findSubject);
 
     const info = tracker.getInfo();
-    // Token generated but injection failed
-    expect(info.state).toBe(ComposeTrackingState.TRACKING_INITIALIZED);
+    // Token generated but injection failed — stays in WAITING_FOR_RECIPIENT
     expect(info.trackingToken).toBeTruthy();
     expect(info.injected).toBe(false);
   });
 
   it('includes composeId in info', () => {
     const compose = createMockComposeWithBody();
-    const tracker = new ComposeTracker('my-compose-42', compose, true);
+    const tracker = new ComposeTracker('my-compose-42', compose, true, findBody, findSubject);
     expect(tracker.getInfo().composeId).toBe('my-compose-42');
+  });
+
+  it('cancels tracking and removes pixel', () => {
+    const compose = createMockComposeWithBody();
+    const tracker = new ComposeTracker('c1', compose, true, findBody, findSubject);
+
+    expect(tracker.isPixelInjected()).toBe(true);
+
+    tracker.cancelTracking();
+    expect(tracker.isCancelled()).toBe(true);
+    expect(compose.querySelector(`img[${TRACKING_PIXEL_ATTR}]`)).toBeNull();
+  });
+
+  it('uses findSubject to read subject', () => {
+    const compose = createMockComposeWithBody();
+    const customFindSubject = (_el: HTMLElement) => 'Test Subject';
+    const tracker = new ComposeTracker('c1', compose, true, findBody, customFindSubject);
+
+    expect(tracker.getSubject()).toBe('Test Subject');
   });
 });

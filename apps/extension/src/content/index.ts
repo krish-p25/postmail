@@ -1,26 +1,63 @@
-import { ComposeManager } from './gmail/compose-manager';
+import { ComposeManager, ComposeManagerConfig } from './compose-manager';
 import { TrackingToast } from './gmail/tracking-toast';
 import { ExtensionMessage } from '../shared/messaging';
+
+// Gmail imports
+import { ComposeDetector as GmailComposeDetector } from './gmail/compose-detector';
+import { RecipientReader as GmailRecipientReader } from './gmail/recipient-reader';
+import { findComposeBody as gmailFindBody } from './gmail/selectors';
+
+// Outlook imports
+import { OutlookComposeDetector } from './outlook/compose-detector';
+import { OutlookRecipientReader } from './outlook/recipient-reader';
+import { findComposeBody as outlookFindBody, findComposeSubject as outlookFindSubject } from './outlook/selectors';
 
 /**
  * PostMail content script entry point.
  *
- * Runs on mail.google.com. Starts the ComposeManager which handles
- * all compose detection, recipient tracking, and pixel injection.
- *
- * On load, runs an auth preflight check against the API. If the JWT
- * is missing or invalid, shows a persistent "Setup required" toast
- * so the user knows before they compose anything.
+ * Runs on Gmail and Outlook Web. Detects the mail provider from the hostname,
+ * starts the ComposeManager with the appropriate provider config, and handles
+ * auth preflight and tracking state messages from the background/popup.
  */
 
+const OUTLOOK_HOSTS = ['outlook.office.com', 'outlook.live.com', 'outlook.office365.com'];
+
+function getProvider(): 'gmail' | 'outlook' | null {
+  const host = window.location.hostname;
+  if (host === 'mail.google.com') return 'gmail';
+  if (OUTLOOK_HOSTS.includes(host)) return 'outlook';
+  return null;
+}
+
+function buildGmailConfig(): ComposeManagerConfig {
+  return {
+    createDetector: (callbacks) => new GmailComposeDetector(callbacks),
+    createRecipientReader: (element) => new GmailRecipientReader(element),
+    findBody: (composeElement) => gmailFindBody(composeElement),
+    findSubject: (composeElement) => {
+      const input = composeElement.querySelector('input[name="subjectbox"]') as HTMLInputElement;
+      return input?.value || '';
+    },
+  };
+}
+
+function buildOutlookConfig(): ComposeManagerConfig {
+  return {
+    createDetector: (callbacks) => new OutlookComposeDetector(callbacks),
+    createRecipientReader: (element) => new OutlookRecipientReader(element),
+    findBody: (composeElement) => outlookFindBody(composeElement),
+    findSubject: (composeElement) => outlookFindSubject(composeElement),
+  };
+}
+
 function init(): void {
-  if (window.location.hostname !== 'mail.google.com') {
-    return;
-  }
+  const provider = getProvider();
+  if (!provider) return;
 
-  console.log('[PostMail] Content script loaded on Gmail');
+  console.log(`[PostMail] Content script loaded on ${provider}`);
 
-  const manager = new ComposeManager();
+  const config = provider === 'gmail' ? buildGmailConfig() : buildOutlookConfig();
+  const manager = new ComposeManager(config);
 
   // Load initial tracking state
   try {
@@ -73,5 +110,4 @@ function runAuthPreflight(): void {
   }
 }
 
-// Gmail loads content dynamically, so document_idle is fine
 init();

@@ -1,9 +1,11 @@
 import { ComposeTrackingState, TrackingInfo, buildTrackingUrl } from '@postmail/shared';
 import { generateTrackingToken } from './token-generator';
-import { PixelInjector } from './pixel-injector';
+import { PixelInjector, BodyFinder } from './pixel-injector';
+
+export type SubjectFinder = (composeElement: HTMLElement) => string;
 
 /**
- * Manages the tracking lifecycle for a single Gmail compose window.
+ * Manages the tracking lifecycle for a single compose window.
  *
  * Injects the tracking pixel immediately on creation (when compose is detected).
  * Recipients are tracked separately and sent to the API when available.
@@ -18,15 +20,19 @@ export class ComposeTracker {
   private composeElement: HTMLElement;
   private registered = false;
   private cancelled = false;
+  private findSubject: SubjectFinder;
 
   constructor(
     private composeId: string,
     element: HTMLElement,
     trackingEnabled: boolean,
+    findBody: BodyFinder,
+    findSubject: SubjectFinder,
   ) {
     this.trackingEnabled = trackingEnabled;
     this.composeElement = element;
-    this.injector = new PixelInjector(element);
+    this.findSubject = findSubject;
+    this.injector = new PixelInjector(element, findBody);
 
     // Generate token immediately
     this.trackingToken = generateTrackingToken();
@@ -83,8 +89,7 @@ export class ComposeTracker {
   }
 
   getSubject(): string {
-    const subjectInput = this.composeElement.querySelector('input[name="subjectbox"]') as HTMLInputElement;
-    const subject = subjectInput?.value || '';
+    const subject = this.findSubject(this.composeElement);
     console.log(`[PostMail][Tracker:${this.composeId}] Read subject: "${subject}"`);
     return subject;
   }

@@ -1,5 +1,20 @@
-import { ComposeManager } from '../compose-manager';
+import { ComposeManager, ComposeManagerConfig } from '../../compose-manager';
+import { ComposeDetector } from '../compose-detector';
+import { RecipientReader } from '../recipient-reader';
+import { findComposeBody } from '../selectors';
 import { ComposeTrackingState, TRACKING_PIXEL_ATTR } from '@postmail/shared';
+
+function buildGmailConfig(): ComposeManagerConfig {
+  return {
+    createDetector: (callbacks) => new ComposeDetector(callbacks),
+    createRecipientReader: (element) => new RecipientReader(element),
+    findBody: (composeElement) => findComposeBody(composeElement),
+    findSubject: (composeElement) => {
+      const input = composeElement.querySelector('input[name="subjectbox"]') as HTMLInputElement;
+      return input?.value || '';
+    },
+  };
+}
 
 function createFullComposeDialog(recipients: string[] = []): HTMLElement {
   const dialog = document.createElement('div');
@@ -45,7 +60,7 @@ describe('ComposeManager', () => {
 
   beforeEach(() => {
     document.body.innerHTML = '';
-    manager = new ComposeManager();
+    manager = new ComposeManager(buildGmailConfig());
   });
 
   afterEach(() => {

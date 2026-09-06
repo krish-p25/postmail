@@ -288,11 +288,21 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
 
-    if (!msgRes.ok) {
-      if (msgRes.status === 401) {
+    let msgData = msgRes;
+    if (!msgData.ok) {
+      if (msgData.status === 401) {
         accessToken = await refreshAccessToken(user);
         if (!accessToken) {
           res.status(401).json({ error: 'Outlook session expired. Please reconnect.' });
+          return;
+        }
+        // Retry with refreshed token
+        msgData = await fetch(
+          `${MS_GRAPH_URL}/me/messages/${req.params.id}?$select=id,conversationId,subject,from,toRecipients,ccRecipients,sentDateTime,body`,
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+        if (!msgData.ok) {
+          res.status(500).json({ error: 'Failed to fetch email details after token refresh' });
           return;
         }
       } else {
@@ -301,22 +311,48 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
       }
     }
 
-    const message = await msgRes.json();
+    const message = await msgData.json();
     const conversationId = message.conversationId;
 
-    // Fetch all messages in the conversation
-    const convRes = await fetch(
-      `${MS_GRAPH_URL}/me/messages?$filter=conversationId eq '${conversationId}'&$select=id,subject,from,toRecipients,ccRecipients,sentDateTime,body,hasAttachments&$orderby=sentDateTime asc`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
+    // Fetch all messages in the conversation.
+    // Graph rejects $filter on conversationId combined with $orderby
+    // ("InefficientFilter"), so we filter without sorting and sort in JS.
+    const escapedConvId = conversationId?.replace(/'/g, "''") || '';
+    const convParams = new URLSearchParams({
+      $filter: `conversationId eq '${escapedConvId}'`,
+      $select: 'id,subject,from,toRecipients,ccRecipients,sentDateTime,body,hasAttachments',
+    });
+    const convUrl = `${MS_GRAPH_URL}/me/messages?${convParams.toString()}`;
 
-    if (!convRes.ok) {
-      res.status(500).json({ error: 'Failed to fetch conversation' });
-      return;
+    let convRes = await fetch(convUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    // Retry on 401
+    if (convRes.status === 401) {
+      accessToken = await refreshAccessToken(user);
+      if (accessToken) {
+        convRes = await fetch(convUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+      }
     }
 
-    const convData = await convRes.json();
-    const messages = await Promise.all((convData.value || []).map(async (msg: {
+    // If conversation filter still fails, fall back to just the single message
+    let convMessages: any[];
+    if (!convRes.ok) {
+      console.warn(`[PostMail API] Outlook conversation fetch failed (${convRes.status}), falling back to single message`);
+      convMessages = [message];
+    } else {
+      const convData = await convRes.json();
+      convMessages = convData.value || [message];
+      // Sort by sentDateTime ascending (since we can't use $orderby with $filter on conversationId)
+      convMessages.sort((a: any, b: any) =>
+        new Date(a.sentDateTime || 0).getTime() - new Date(b.sentDateTime || 0).getTime(),
+      );
+    }
+
+    const messages = await Promise.all(convMessages.map(async (msg: {
       id: string;
       subject: string | null;
       from: { emailAddress: { name?: string; address: string } };
