@@ -21,6 +21,7 @@ export default function Settings() {
   // Account security state
   const [hasPassword, setHasPassword] = useState(false);
   const [hasGoogle, setHasGoogle] = useState(false);
+  const [hasMicrosoft, setHasMicrosoft] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -40,6 +41,7 @@ export default function Settings() {
         setMailboxEmail(settings.mailboxEmail ?? null);
         setHasPassword(me.hasPassword);
         setHasGoogle(me.hasGoogle);
+        setHasMicrosoft(me.hasMicrosoft);
       })
       .catch(() => {
         setMessage({ type: 'error', text: 'Failed to load settings.' });
@@ -165,6 +167,18 @@ export default function Settings() {
                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                   </svg>
                   <p className="text-sm text-gray-700">Logged in through Google</p>
+                </div>
+              )}
+
+              {hasMicrosoft && (
+                <div className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-3 sm:px-4">
+                  <svg className="h-5 w-5 shrink-0" viewBox="0 0 21 21">
+                    <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+                    <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+                    <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+                    <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+                  </svg>
+                  <p className="text-sm text-gray-700">Logged in through Microsoft</p>
                 </div>
               )}
 

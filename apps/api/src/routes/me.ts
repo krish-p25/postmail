@@ -24,6 +24,7 @@ router.get('/', async (req: Request, res: Response) => {
       displayName: user.displayName,
       hasPassword: !!user.passwordHash,
       hasGoogle: !!user.googleId,
+      hasMicrosoft: !!user.microsoftId,
     });
   } catch (error) {
     console.error('[PostMail API] Error in GET /me:', error);
