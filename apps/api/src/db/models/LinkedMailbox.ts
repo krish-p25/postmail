@@ -76,6 +76,13 @@ LinkedMailbox.init(
     sequelize,
     tableName: 'linked_mailboxes',
     underscored: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ['user_id', 'email'],
+        name: 'linked_mailboxes_user_id_email_unique',
+      },
+    ],
   },
 );
 

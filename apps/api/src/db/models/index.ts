@@ -22,4 +22,7 @@ UserSetting.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 User.hasMany(LinkedMailbox, { foreignKey: 'userId', as: 'linkedMailboxes' });
 LinkedMailbox.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
+TrackedEmail.belongsTo(LinkedMailbox, { foreignKey: 'mailboxId', as: 'linkedMailbox' });
+LinkedMailbox.hasMany(TrackedEmail, { foreignKey: 'mailboxId', as: 'trackedEmails' });
+
 export { User, TrackedEmail, EmailOpen, EmailClick, UserSetting, LinkedMailbox };
