@@ -1,10 +1,11 @@
-import { findComposeBody } from '../gmail/selectors';
 import { TRACKING_PIXEL_ATTR } from '@postmail/shared';
+
+export type BodyFinder = (composeElement: HTMLElement) => HTMLElement | null;
 
 const PIXEL_SELECTOR = `img[${TRACKING_PIXEL_ATTR}]`;
 
 /**
- * Manages injection and removal of a tracking pixel in a Gmail compose body.
+ * Manages injection and removal of a tracking pixel in a compose body.
  *
  * The pixel is a 1x1 hidden image with a data attribute marker.
  * Only one pixel per compose is maintained — injecting a new URL replaces the old one.
@@ -12,9 +13,11 @@ const PIXEL_SELECTOR = `img[${TRACKING_PIXEL_ATTR}]`;
  */
 export class PixelInjector {
   private composeElement: HTMLElement;
+  private findBody: BodyFinder;
 
-  constructor(composeElement: HTMLElement) {
+  constructor(composeElement: HTMLElement, findBody: BodyFinder) {
     this.composeElement = composeElement;
+    this.findBody = findBody;
   }
 
   /**
@@ -24,7 +27,7 @@ export class PixelInjector {
    */
   inject(trackingUrl: string): boolean {
     try {
-      const body = findComposeBody(this.composeElement);
+      const body = this.findBody(this.composeElement);
       if (!body) {
         console.warn('[PostMail][Pixel] Compose body not found, cannot inject');
         return false;

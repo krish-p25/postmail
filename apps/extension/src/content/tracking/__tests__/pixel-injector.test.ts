@@ -1,6 +1,10 @@
 import { PixelInjector } from '../pixel-injector';
 import { TRACKING_PIXEL_ATTR } from '@postmail/shared';
 
+function findBody(compose: HTMLElement): HTMLElement | null {
+  return compose.querySelector('div[role="textbox"]');
+}
+
 function createMockComposeWithBody(): { compose: HTMLElement; body: HTMLElement } {
   const compose = document.createElement('div');
   const body = document.createElement('div');
@@ -14,7 +18,7 @@ function createMockComposeWithBody(): { compose: HTMLElement; body: HTMLElement 
 describe('PixelInjector', () => {
   it('injects a 1x1 hidden image into the compose body', () => {
     const { compose, body } = createMockComposeWithBody();
-    const injector = new PixelInjector(compose);
+    const injector = new PixelInjector(compose, findBody);
 
     const result = injector.inject('https://track.example.com/o/test-token');
 
@@ -31,7 +35,7 @@ describe('PixelInjector', () => {
 
   it('reports injected status correctly', () => {
     const { compose } = createMockComposeWithBody();
-    const injector = new PixelInjector(compose);
+    const injector = new PixelInjector(compose, findBody);
 
     expect(injector.isInjected()).toBe(false);
 
@@ -42,7 +46,7 @@ describe('PixelInjector', () => {
 
   it('removes existing pixel before injecting a new one', () => {
     const { compose, body } = createMockComposeWithBody();
-    const injector = new PixelInjector(compose);
+    const injector = new PixelInjector(compose, findBody);
 
     injector.inject('https://track.example.com/o/token-1');
     injector.inject('https://track.example.com/o/token-2');
@@ -54,7 +58,7 @@ describe('PixelInjector', () => {
 
   it('does not inject duplicate pixels', () => {
     const { compose, body } = createMockComposeWithBody();
-    const injector = new PixelInjector(compose);
+    const injector = new PixelInjector(compose, findBody);
 
     injector.inject('https://track.example.com/o/same-token');
     injector.inject('https://track.example.com/o/same-token');
@@ -65,7 +69,7 @@ describe('PixelInjector', () => {
 
   it('removes the pixel element from DOM', () => {
     const { compose, body } = createMockComposeWithBody();
-    const injector = new PixelInjector(compose);
+    const injector = new PixelInjector(compose, findBody);
 
     injector.inject('https://track.example.com/o/test-token');
     expect(body.querySelector('img')).not.toBeNull();
@@ -78,7 +82,7 @@ describe('PixelInjector', () => {
 
   it('returns false when compose body cannot be found', () => {
     const compose = document.createElement('div'); // No body child
-    const injector = new PixelInjector(compose);
+    const injector = new PixelInjector(compose, findBody);
 
     const result = injector.inject('https://track.example.com/o/test-token');
 
@@ -89,7 +93,7 @@ describe('PixelInjector', () => {
   it('does not affect other content in the compose body', () => {
     const { compose, body } = createMockComposeWithBody();
     body.innerHTML = '<p>Hello, this is my email content.</p>';
-    const injector = new PixelInjector(compose);
+    const injector = new PixelInjector(compose, findBody);
 
     injector.inject('https://track.example.com/o/test-token');
 

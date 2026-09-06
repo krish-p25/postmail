@@ -138,7 +138,7 @@ export class TrackingToast {
       bottom: '24px',
       right: '24px',
       width: `${TOAST_WIDTH}px`,
-      zIndex: '9999',
+      zIndex: '2147483647',
       fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       background: '#ffffff',
       borderRadius: '12px',

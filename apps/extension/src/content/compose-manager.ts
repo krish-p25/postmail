@@ -1,34 +1,60 @@
 import { TrackingInfo } from '@postmail/shared';
-import { ComposeDetector } from './compose-detector';
-import { RecipientReader } from './recipient-reader';
-import { ComposeTracker } from '../tracking/compose-tracker';
-import { TrackingToast } from './tracking-toast';
+import { ComposeTracker } from './tracking/compose-tracker';
+import { TrackingToast } from './gmail/tracking-toast';
+import { BodyFinder } from './tracking/pixel-injector';
+import { SubjectFinder } from './tracking/compose-tracker';
+
+export interface ComposeDetectorCallbacks {
+  onComposeDetected: (element: HTMLElement) => void;
+  onComposeRemoved: (element: HTMLElement) => void;
+}
+
+export interface ComposeDetectorLike {
+  start(): void;
+  stop(): void;
+}
+
+export interface RecipientReaderLike {
+  onChange(callback: (recipients: string[]) => void): void;
+  start(): void;
+  stop(): void;
+  readRecipients(): string[];
+}
+
+export interface ComposeManagerConfig {
+  createDetector: (callbacks: ComposeDetectorCallbacks) => ComposeDetectorLike;
+  createRecipientReader: (element: HTMLElement) => RecipientReaderLike;
+  findBody: BodyFinder;
+  findSubject: SubjectFinder;
+}
 
 interface ComposeInstance {
   id: string;
   element: HTMLElement;
   tracker: ComposeTracker;
-  recipientReader: RecipientReader;
+  recipientReader: RecipientReaderLike;
   toast: TrackingToast;
 }
 
 /**
- * Orchestrates multiple Gmail compose window lifecycles.
+ * Orchestrates multiple compose window lifecycles for any mail provider.
  *
  * Flow:
- *   1. Compose detected → inject pixel immediately → show "Tracking" toast with "Don't track" button
+ *   1. Compose detected → inject pixel immediately → show "Tracking" toast
  *   2. Recipients added → register/update tracking with API
  *   3. "Don't track" clicked → remove pixel, cancel tracking, dismiss toast
  *   4. Compose removed → verify sent status → show result toast
  */
 export class ComposeManager {
   private composes = new Map<HTMLElement, ComposeInstance>();
-  private detector: ComposeDetector;
+  private detector: ComposeDetectorLike;
+  private config: ComposeManagerConfig;
   private nextId = 0;
   private trackingEnabled = true;
 
-  constructor() {
-    this.detector = new ComposeDetector({
+  constructor(config: ComposeManagerConfig) {
+    this.config = config;
+    this.detector = config.createDetector({
       onComposeDetected: (el) => this.handleComposeDetected(el),
       onComposeRemoved: (el) => this.handleComposeRemoved(el),
     });
@@ -71,8 +97,8 @@ export class ComposeManager {
     const id = `compose-${++this.nextId}`;
     console.log(`[PostMail][Manager] Compose DETECTED: ${id}`);
 
-    const tracker = new ComposeTracker(id, element, this.trackingEnabled);
-    const recipientReader = new RecipientReader(element);
+    const tracker = new ComposeTracker(id, element, this.trackingEnabled, this.config.findBody, this.config.findSubject);
+    const recipientReader = this.config.createRecipientReader(element);
     const toast = new TrackingToast();
 
     // Show "Tracking" toast immediately with "Don't track" button
@@ -199,7 +225,7 @@ export class ComposeManager {
             return;
           }
 
-          // Retry once after 2s — Gmail may have latency indexing the message
+          // Retry once after 2s — mail provider may have latency indexing the message
           console.log(`[PostMail][Manager] Email not found yet, retrying in 2s for ${tokenPreview}`);
           setTimeout(() => {
             try {

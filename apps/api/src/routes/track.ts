@@ -4,8 +4,51 @@ import { google } from 'googleapis';
 import { config } from '../config/env';
 import TrackedEmail from '../db/models/TrackedEmail';
 import User from '../db/models/User';
+import { UserSetting } from '../db/models';
 
 const router = Router();
+
+const MS_TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
+const MS_GRAPH_URL = 'https://graph.microsoft.com/v1.0';
+
+/** Refresh Outlook access token using stored refresh token. */
+async function refreshOutlookToken(user: User): Promise<string | null> {
+  if (!user.outlookRefreshToken) return null;
+
+  const tokenRes = await fetch(MS_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: config.microsoftClientId,
+      client_secret: config.microsoftClientSecret,
+      refresh_token: user.outlookRefreshToken,
+      grant_type: 'refresh_token',
+      scope: 'offline_access Mail.Read User.Read',
+    }),
+  });
+
+  if (!tokenRes.ok) return null;
+
+  const tokens = await tokenRes.json();
+  await user.update({
+    outlookAccessToken: tokens.access_token,
+    outlookRefreshToken: tokens.refresh_token || user.outlookRefreshToken,
+    outlookTokenExpiry: tokens.expires_in
+      ? new Date(Date.now() + tokens.expires_in * 1000)
+      : null,
+  });
+
+  return tokens.access_token;
+}
+
+/** Get a valid Outlook access token, refreshing if needed. */
+async function getOutlookAccessToken(user: User): Promise<string | null> {
+  let accessToken = user.outlookAccessToken;
+  if (!accessToken || (user.outlookTokenExpiry && user.outlookTokenExpiry.getTime() < Date.now())) {
+    accessToken = await refreshOutlookToken(user);
+  }
+  return accessToken || null;
+}
 
 /**
  * GET /api/track/preflight
@@ -160,12 +203,8 @@ router.post('/discard', async (req: Request, res: Response) => {
 
 /**
  * POST /api/track/verify-sent
- * Uses the user's Gmail OAuth tokens to check if the tracked email was sent.
- *
- * Strategy: Gmail search does NOT index content inside HTML attributes (like
- * <img src="...token...">), so searching for the tracking token text won't
- * work. Instead we fetch recent sent messages and inspect their raw source
- * for the tracking token string.
+ * Checks whether the tracked email was actually sent by searching the
+ * user's sent-mail folder via the appropriate provider API.
  */
 router.post('/verify-sent', async (req: Request, res: Response) => {
   try {
@@ -181,88 +220,169 @@ router.post('/verify-sent', async (req: Request, res: Response) => {
     });
 
     const user = await User.findByPk(req.user!.id);
-    if (!user?.gmailAccessToken) {
-      res.status(400).json({ error: 'Gmail not connected' });
+    if (!user) {
+      res.json({ found: false });
       return;
     }
 
-    const oauth2Client = new OAuth2Client(
-      config.gmailClientId,
-      config.gmailClientSecret,
-      config.gmailRedirectUri,
-    );
-    oauth2Client.setCredentials({
-      access_token: user.gmailAccessToken,
-      refresh_token: user.gmailRefreshToken,
-      expiry_date: user.gmailTokenExpiry?.getTime(),
-    });
+    // Determine which provider to verify with
+    const settings = await UserSetting.findOne({ where: { userId: user.id } });
 
-    // Persist refreshed tokens
-    oauth2Client.on('tokens', async (tokens) => {
-      const updates: Record<string, unknown> = {};
-      if (tokens.access_token) updates.gmailAccessToken = tokens.access_token;
-      if (tokens.expiry_date) updates.gmailTokenExpiry = new Date(tokens.expiry_date);
-      if (Object.keys(updates).length) {
-        await User.update(updates, { where: { id: user.id } });
-      }
-    });
-
-    const gmail = google.gmail({ version: 'v1', auth: oauth2Client as any });
-
-    // Build a targeted search: use subject if we have a tracked email record
-    const subject = trackedEmail?.subject;
-    const q = subject
-      ? `in:sent subject:(${subject}) newer_than:1h`
-      : `in:sent newer_than:1h`;
-
-    console.log(`[PostMail API] verify-sent: searching Gmail with q="${q}" for token ${trackingToken.substring(0, 8)}...`);
-
-    const searchRes = await gmail.users.messages.list({
-      userId: 'me',
-      q,
-      maxResults: 10,
-    });
-
-    let found = false;
-
-    if (searchRes.data.messages && searchRes.data.messages.length > 0) {
-      // Check each message's raw source for the tracking token
-      for (const msg of searchRes.data.messages) {
-        const full = await gmail.users.messages.get({
-          userId: 'me',
-          id: msg.id!,
-          format: 'raw',
-        });
-        const raw = full.data.raw || '';
-        if (raw.includes(trackingToken)) {
-          found = true;
-          break;
-        }
-        // Also check base64url-decoded content (the token is a UUID, so it
-        // won't be split across encoded boundaries in practice)
-        try {
-          const decoded = Buffer.from(raw, 'base64url').toString('utf-8');
-          if (decoded.includes(trackingToken)) {
-            found = true;
-            break;
-          }
-        } catch {
-          // Ignore decode errors
-        }
-      }
+    if (settings?.mailboxProvider === 'outlook' && user.outlookRefreshToken) {
+      await verifyViaOutlook(user, trackingToken, trackedEmail, res);
+    } else if (user.gmailAccessToken) {
+      await verifyViaGmail(user, trackingToken, trackedEmail, res);
+    } else {
+      // No mailbox connected — can't verify, but don't error
+      res.json({ found: false });
     }
-
-    console.log(`[PostMail API] verify-sent: found=${found} for token ${trackingToken.substring(0, 8)}...`);
-
-    if (found && trackedEmail && trackedEmail.status === 'pending') {
-      await trackedEmail.update({ status: 'sent', sentAt: new Date() });
-    }
-
-    res.json({ found });
   } catch (error) {
     console.error('[PostMail API] Error in POST /api/track/verify-sent:', error);
     res.status(500).json({ error: 'Failed to verify sent email' });
   }
 });
+
+/**
+ * Verify via Outlook: fetch recent sent messages from Microsoft Graph
+ * and check their HTML body for the tracking token.
+ */
+async function verifyViaOutlook(
+  user: User,
+  trackingToken: string,
+  trackedEmail: TrackedEmail | null,
+  res: Response,
+): Promise<void> {
+  const accessToken = await getOutlookAccessToken(user);
+  if (!accessToken) {
+    res.json({ found: false, authError: true });
+    return;
+  }
+
+  const graphUrl = `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=10&$orderby=sentDateTime desc&$select=body`;
+
+  console.log(`[PostMail API] verify-sent (Outlook): searching for token ${trackingToken.substring(0, 8)}...`);
+
+  let graphRes = await fetch(graphUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  // If 401, refresh and retry once
+  if (graphRes.status === 401) {
+    const refreshed = await refreshOutlookToken(user);
+    if (!refreshed) {
+      res.json({ found: false, authError: true });
+      return;
+    }
+    graphRes = await fetch(graphUrl, {
+      headers: { Authorization: `Bearer ${refreshed}` },
+    });
+  }
+
+  if (!graphRes.ok) {
+    console.error(`[PostMail API] verify-sent (Outlook): Graph API returned ${graphRes.status}`);
+    res.json({ found: false });
+    return;
+  }
+
+  const data = await graphRes.json();
+  let found = false;
+
+  for (const msg of (data.value || [])) {
+    const bodyContent: string = msg.body?.content || '';
+    if (bodyContent.includes(trackingToken)) {
+      found = true;
+      break;
+    }
+  }
+
+  console.log(`[PostMail API] verify-sent (Outlook): found=${found} for token ${trackingToken.substring(0, 8)}...`);
+
+  if (found && trackedEmail && trackedEmail.status === 'pending') {
+    await trackedEmail.update({ status: 'sent', sentAt: new Date() });
+  }
+
+  res.json({ found });
+}
+
+/**
+ * Verify via Gmail: fetch recent sent messages and inspect their raw
+ * source for the tracking token string.
+ */
+async function verifyViaGmail(
+  user: User,
+  trackingToken: string,
+  trackedEmail: TrackedEmail | null,
+  res: Response,
+): Promise<void> {
+  const oauth2Client = new OAuth2Client(
+    config.gmailClientId,
+    config.gmailClientSecret,
+    config.gmailRedirectUri,
+  );
+  oauth2Client.setCredentials({
+    access_token: user.gmailAccessToken,
+    refresh_token: user.gmailRefreshToken,
+    expiry_date: user.gmailTokenExpiry?.getTime(),
+  });
+
+  // Persist refreshed tokens
+  oauth2Client.on('tokens', async (tokens) => {
+    const updates: Record<string, unknown> = {};
+    if (tokens.access_token) updates.gmailAccessToken = tokens.access_token;
+    if (tokens.expiry_date) updates.gmailTokenExpiry = new Date(tokens.expiry_date);
+    if (Object.keys(updates).length) {
+      await User.update(updates, { where: { id: user.id } });
+    }
+  });
+
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client as any });
+
+  const subject = trackedEmail?.subject;
+  const q = subject
+    ? `in:sent subject:(${subject}) newer_than:1h`
+    : `in:sent newer_than:1h`;
+
+  console.log(`[PostMail API] verify-sent (Gmail): searching with q="${q}" for token ${trackingToken.substring(0, 8)}...`);
+
+  const searchRes = await gmail.users.messages.list({
+    userId: 'me',
+    q,
+    maxResults: 10,
+  });
+
+  let found = false;
+
+  if (searchRes.data.messages && searchRes.data.messages.length > 0) {
+    for (const msg of searchRes.data.messages) {
+      const full = await gmail.users.messages.get({
+        userId: 'me',
+        id: msg.id!,
+        format: 'raw',
+      });
+      const raw = full.data.raw || '';
+      if (raw.includes(trackingToken)) {
+        found = true;
+        break;
+      }
+      try {
+        const decoded = Buffer.from(raw, 'base64url').toString('utf-8');
+        if (decoded.includes(trackingToken)) {
+          found = true;
+          break;
+        }
+      } catch {
+        // Ignore decode errors
+      }
+    }
+  }
+
+  console.log(`[PostMail API] verify-sent (Gmail): found=${found} for token ${trackingToken.substring(0, 8)}...`);
+
+  if (found && trackedEmail && trackedEmail.status === 'pending') {
+    await trackedEmail.update({ status: 'sent', sentAt: new Date() });
+  }
+
+  res.json({ found });
+}
 
 export default router;

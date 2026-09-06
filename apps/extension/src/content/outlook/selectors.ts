@@ -1,0 +1,169 @@
+/**
+ * Centralized Outlook Web DOM selectors.
+ *
+ * Outlook Web (outlook.office.com, outlook.live.com, outlook.office365.com)
+ * uses React with obfuscated class names. These selectors prefer role/aria
+ * attributes which are more stable across UI updates.
+ *
+ * Multiple selector candidates are tried in order of specificity.
+ */
+
+/** Subject input candidates — tried in order, first match wins. */
+export const SUBJECT_SELECTORS = [
+  'input[aria-label*="subject" i]',
+  'input[placeholder*="subject" i]',
+  'input[aria-label*="Subject"]',
+  'input[placeholder*="Subject"]',
+] as const;
+
+/** Body textbox candidates — tried in order, first match wins. */
+export const BODY_SELECTORS = [
+  'div[role="textbox"][aria-label*="Message body" i]',
+  'div[role="textbox"][aria-label*="body" i]',
+  'div[role="textbox"][aria-multiline="true"]',
+  'div[contenteditable="true"][role="textbox"]',
+] as const;
+
+/** To-field candidates — tried in order. */
+export const TO_FIELD_SELECTORS = [
+  'div[aria-label="To"]',
+  'div[aria-label*="To" i][role="list"]',
+  'div[aria-label*="To" i]',
+  'input[aria-label*="To" i][role="combobox"]',
+] as const;
+
+/** Find the first element matching any of the given selectors within root. */
+function queryFirst(root: Element, selectors: readonly string[]): HTMLElement | null {
+  for (const sel of selectors) {
+    const el = root.querySelector(sel) as HTMLElement | null;
+    if (el) return el;
+  }
+  return null;
+}
+
+/** Find all elements matching any of the given selectors within root. */
+function queryAllFirst(root: Element | Document, selectors: readonly string[]): NodeListOf<Element> | null {
+  for (const sel of selectors) {
+    const els = root.querySelectorAll(sel);
+    if (els.length > 0) return els;
+  }
+  return null;
+}
+
+/** Find subject inputs in the document. */
+export function findSubjectInputs(): NodeListOf<Element> | null {
+  return queryAllFirst(document, SUBJECT_SELECTORS);
+}
+
+/**
+ * Find the compose container by walking up from a subject input
+ * to the nearest ancestor that also contains the message body.
+ */
+export function findComposeContainer(subjectInput: HTMLElement): HTMLElement | null {
+  let el: HTMLElement | null = subjectInput.parentElement;
+  while (el && el !== document.body) {
+    if (queryFirst(el, BODY_SELECTORS)) {
+      return el;
+    }
+    el = el.parentElement;
+  }
+  return null;
+}
+
+/** Find the editable message body inside a compose container. */
+export function findComposeBody(composeElement: Element): HTMLElement | null {
+  return queryFirst(composeElement, BODY_SELECTORS);
+}
+
+/** Read the subject value from a compose container. */
+export function findComposeSubject(composeElement: Element): string {
+  const input = queryFirst(composeElement, SUBJECT_SELECTORS) as HTMLInputElement | null;
+  return input?.value || '';
+}
+
+/**
+ * Extract recipient email addresses from an Outlook compose container.
+ */
+export function findRecipientEmails(composeElement: Element): string[] {
+  const emails: string[] = [];
+  const EMAIL_RE = /[\w.+-]+@[\w.-]+\.\w+/;
+
+  const toField = queryFirst(composeElement, TO_FIELD_SELECTORS);
+  const searchRoot = toField ?? composeElement;
+
+  // Strategy 1: persona pills with title="user@example.com"
+  searchRoot.querySelectorAll('[title]').forEach((el) => {
+    const title = el.getAttribute('title') || '';
+    const match = title.match(EMAIL_RE);
+    if (match) emails.push(match[0].toLowerCase());
+  });
+
+  // Strategy 2: aria-label containing an email
+  if (emails.length === 0) {
+    searchRoot.querySelectorAll('[aria-label*="@"]').forEach((el) => {
+      const label = el.getAttribute('aria-label') || '';
+      const match = label.match(EMAIL_RE);
+      if (match) emails.push(match[0].toLowerCase());
+    });
+  }
+
+  // Strategy 3: data-lpc-hover-target-id
+  if (emails.length === 0) {
+    searchRoot.querySelectorAll('[data-lpc-hover-target-id]').forEach((el) => {
+      const id = el.getAttribute('data-lpc-hover-target-id') || '';
+      if (id.includes('@')) emails.push(id.toLowerCase());
+    });
+  }
+
+  // Strategy 4: text scan for email-like strings
+  if (emails.length === 0 && toField) {
+    toField.querySelectorAll('span, div').forEach((el) => {
+      const text = (el as HTMLElement).innerText?.trim() || '';
+      const match = text.match(EMAIL_RE);
+      if (match) emails.push(match[0].toLowerCase());
+    });
+  }
+
+  return [...new Set(emails)];
+}
+
+/**
+ * Debug: log all inputs and textboxes on the page to help identify
+ * the right selectors. Call this once from the compose detector.
+ */
+export function debugLogDomElements(): void {
+  console.log('[PostMail][Outlook:Debug] === DOM Scan ===');
+
+  const inputs = document.querySelectorAll('input');
+  console.log(`[PostMail][Outlook:Debug] Found ${inputs.length} <input> elements`);
+  inputs.forEach((input, i) => {
+    const label = input.getAttribute('aria-label');
+    const placeholder = input.getAttribute('placeholder');
+    const role = input.getAttribute('role');
+    const type = input.getAttribute('type');
+    if (label || placeholder) {
+      console.log(`[PostMail][Outlook:Debug]   input[${i}]: aria-label="${label}", placeholder="${placeholder}", role="${role}", type="${type}"`);
+    }
+  });
+
+  const textboxes = document.querySelectorAll('[role="textbox"]');
+  console.log(`[PostMail][Outlook:Debug] Found ${textboxes.length} [role="textbox"] elements`);
+  textboxes.forEach((tb, i) => {
+    const label = tb.getAttribute('aria-label');
+    const editable = tb.getAttribute('contenteditable');
+    const multiline = tb.getAttribute('aria-multiline');
+    const tag = tb.tagName.toLowerCase();
+    console.log(`[PostMail][Outlook:Debug]   textbox[${i}]: <${tag}> aria-label="${label}", contenteditable="${editable}", aria-multiline="${multiline}"`);
+  });
+
+  const editables = document.querySelectorAll('[contenteditable="true"]');
+  console.log(`[PostMail][Outlook:Debug] Found ${editables.length} [contenteditable="true"] elements`);
+  editables.forEach((el, i) => {
+    const label = el.getAttribute('aria-label');
+    const role = el.getAttribute('role');
+    const tag = el.tagName.toLowerCase();
+    console.log(`[PostMail][Outlook:Debug]   editable[${i}]: <${tag}> aria-label="${label}", role="${role}"`);
+  });
+
+  console.log('[PostMail][Outlook:Debug] === End DOM Scan ===');
+}
