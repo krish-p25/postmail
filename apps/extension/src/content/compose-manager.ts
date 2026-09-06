@@ -205,6 +205,21 @@ export class ComposeManager {
     data: { subject: string; recipient: string },
   ): void {
     const tokenPreview = trackingToken.substring(0, 8) + '...';
+
+    // Delay the first check by 2s to give the mail provider time to index
+    console.log(`[PostMail][Manager] Will verify sent status in 2s for token ${tokenPreview}`);
+    setTimeout(() => {
+      this.doVerifyAttempt(trackingToken, toast, data, tokenPreview, true);
+    }, 2000);
+  }
+
+  private doVerifyAttempt(
+    trackingToken: string,
+    toast: TrackingToast,
+    data: { subject: string; recipient: string },
+    tokenPreview: string,
+    canRetry: boolean,
+  ): void {
     console.log(`[PostMail][Manager] Verifying sent status for token ${tokenPreview}`);
 
     try {
@@ -225,35 +240,15 @@ export class ComposeManager {
             return;
           }
 
-          // Retry once after 2s — mail provider may have latency indexing the message
-          console.log(`[PostMail][Manager] Email not found yet, retrying in 2s for ${tokenPreview}`);
-          setTimeout(() => {
-            try {
-              chrome.runtime.sendMessage(
-                { type: 'VERIFY_EMAIL_SENT', trackingToken },
-                (retryResponse) => {
-                  if (chrome.runtime.lastError) {
-                    console.error('[PostMail][Manager] Retry verify failed:', chrome.runtime.lastError.message);
-                    toast.update('error', data);
-                    return;
-                  }
-
-                  console.log(`[PostMail][Manager] Retry response:`, retryResponse);
-
-                  if (retryResponse?.found) {
-                    console.log(`[PostMail][Manager] Email confirmed SENT on retry for ${tokenPreview}`);
-                    toast.update('success', data);
-                  } else {
-                    console.log(`[PostMail][Manager] Email not found after retry — marking as DRAFT for ${tokenPreview}`);
-                    toast.update('draft', data);
-                  }
-                },
-              );
-            } catch (err) {
-              console.error('[PostMail][Manager] Retry sendMessage threw (extension context invalidated?):', err);
-              toast.update('error', data);
-            }
-          }, 2000);
+          if (canRetry) {
+            console.log(`[PostMail][Manager] Email not found yet, retrying in 2s for ${tokenPreview}`);
+            setTimeout(() => {
+              this.doVerifyAttempt(trackingToken, toast, data, tokenPreview, false);
+            }, 2000);
+          } else {
+            console.log(`[PostMail][Manager] Email not found after retry — marking as DRAFT for ${tokenPreview}`);
+            toast.update('draft', data);
+          }
         },
       );
     } catch (err) {

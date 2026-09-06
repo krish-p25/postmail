@@ -21,6 +21,8 @@ export class ComposeTracker {
   private registered = false;
   private cancelled = false;
   private findSubject: SubjectFinder;
+  private findBody: BodyFinder;
+  private pixelGuard: MutationObserver | null = null;
 
   constructor(
     private composeId: string,
@@ -32,6 +34,7 @@ export class ComposeTracker {
     this.trackingEnabled = trackingEnabled;
     this.composeElement = element;
     this.findSubject = findSubject;
+    this.findBody = findBody;
     this.injector = new PixelInjector(element, findBody);
 
     // Generate token immediately
@@ -51,6 +54,7 @@ export class ComposeTracker {
 
     if (success) {
       this.state = ComposeTrackingState.PIXEL_INJECTED;
+      this.startPixelGuard();
     } else {
       // Body might not be ready yet — retry after a short delay
       console.log(`[PostMail][Tracker:${this.composeId}] Retrying pixel injection in 500ms...`);
@@ -60,8 +64,37 @@ export class ComposeTracker {
         console.log(`[PostMail][Tracker:${this.composeId}] Retry pixel injection: ${retrySuccess ? 'SUCCESS' : 'FAILED'}`);
         if (retrySuccess) {
           this.state = ComposeTrackingState.PIXEL_INJECTED;
+          this.startPixelGuard();
         }
       }, 500);
+    }
+  }
+
+  /**
+   * Watch the compose body for mutations and re-inject the tracking pixel
+   * if the user accidentally deletes it (e.g. Ctrl+A → Backspace).
+   */
+  private startPixelGuard(): void {
+    const body = this.findBody(this.composeElement);
+    if (!body) return;
+
+    this.pixelGuard = new MutationObserver(() => {
+      if (this.cancelled || this.state === ComposeTrackingState.CLEANED_UP) return;
+      if (!this.injector.isInjected()) {
+        console.log(`[PostMail][Tracker:${this.composeId}] Pixel was removed, re-injecting`);
+        this.injector.inject(this.trackingUrl);
+      }
+    });
+
+    this.pixelGuard.observe(body, { childList: true, subtree: true });
+    console.log(`[PostMail][Tracker:${this.composeId}] Pixel guard started`);
+  }
+
+  private stopPixelGuard(): void {
+    if (this.pixelGuard) {
+      this.pixelGuard.disconnect();
+      this.pixelGuard = null;
+      console.log(`[PostMail][Tracker:${this.composeId}] Pixel guard stopped`);
     }
   }
 
@@ -106,6 +139,7 @@ export class ComposeTracker {
   cancelTracking(): void {
     console.log(`[PostMail][Tracker:${this.composeId}] Tracking CANCELLED`);
     this.cancelled = true;
+    this.stopPixelGuard();
     this.injector.remove();
 
     // Discard on the API if we registered
@@ -129,6 +163,7 @@ export class ComposeTracker {
 
   cleanup(): void {
     console.log(`[PostMail][Tracker:${this.composeId}] Cleanup`);
+    this.stopPixelGuard();
     this.injector.remove();
     this.state = ComposeTrackingState.CLEANED_UP;
   }
