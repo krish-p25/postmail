@@ -161,7 +161,13 @@ export class TrackingToast {
 
   update(state: ToastState, data: ToastData): void {
     console.log(`[PostMail][Toast] update(${state})`, data);
-    if (!this.el) return;
+    if (!this.el) {
+      // Toast was dismissed — re-show for non-tracking states (verification results)
+      if (state !== 'tracking') {
+        this.show(state, data);
+      }
+      return;
+    }
     this.currentState = state;
 
     const content = this.el.querySelector('[data-postmail-toast-content]') as HTMLElement;
