@@ -74,13 +74,17 @@ async function getAccessToken(mailbox: LinkedMailbox): Promise<string | null> {
  */
 router.get('/connect', async (_req: Request, res: Response) => {
   try {
+    // Use the same redirect URI as sign-in (/microsoft/callback) with state=connect-mailbox
+    // so only one redirect URI needs to be registered in Azure.
+    const redirectUri = config.dashboardUrl + '/microsoft/callback';
     const params = new URLSearchParams({
       client_id: config.microsoftClientId,
       response_type: 'code',
-      redirect_uri: config.outlookMailboxRedirectUri,
+      redirect_uri: redirectUri,
       scope: SCOPES,
       response_mode: 'query',
       prompt: 'consent',
+      state: 'connect-mailbox',
     });
     res.json({ url: `${MS_AUTH_URL}?${params.toString()}` });
   } catch (error) {
@@ -103,6 +107,8 @@ router.post('/callback', async (req: Request, res: Response) => {
       return;
     }
 
+    // Must match the redirect_uri used in /connect (the sign-in callback URL)
+    const redirectUri = config.dashboardUrl + '/microsoft/callback';
     const tokenRes = await fetch(MS_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -110,7 +116,7 @@ router.post('/callback', async (req: Request, res: Response) => {
         client_id: config.microsoftClientId,
         client_secret: config.microsoftClientSecret,
         code,
-        redirect_uri: config.outlookMailboxRedirectUri,
+        redirect_uri: redirectUri,
         grant_type: 'authorization_code',
         scope: SCOPES,
       }),

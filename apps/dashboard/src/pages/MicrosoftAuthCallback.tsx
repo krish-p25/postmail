@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../services/auth';
+import { api } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import VerifyCodeForm from '../components/VerifyCodeForm';
 import LoadingScreen from '../components/LoadingScreen';
@@ -45,6 +46,23 @@ export default function MicrosoftAuthCallback() {
       return;
     }
 
+    const state = params.get('state');
+
+    // If state=connect-mailbox, this is a mailbox linking flow (from Settings "Connect Outlook")
+    if (state === 'connect-mailbox') {
+      console.log('[Microsoft OAuth] Mailbox connect flow — calling outlookCallback');
+      api
+        .outlookCallback(code)
+        .then(() => {
+          navigate('/dashboard/emails', { replace: true });
+        })
+        .catch((err) => {
+          setError(err instanceof Error ? err.message : 'Failed to connect Outlook');
+        });
+      return;
+    }
+
+    // Otherwise, this is a sign-in flow
     console.log('[Microsoft OAuth] Exchanging code with API...');
     auth
       .microsoftLogin(code)
