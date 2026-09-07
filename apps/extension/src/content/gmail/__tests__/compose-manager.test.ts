@@ -13,6 +13,8 @@ function buildGmailConfig(): ComposeManagerConfig {
       const input = composeElement.querySelector('input[name="subjectbox"]') as HTMLInputElement;
       return input?.value || '';
     },
+    getSenderEmail: () => null,
+    provider: 'gmail',
   };
 }
 

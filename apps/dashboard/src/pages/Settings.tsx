@@ -6,9 +6,6 @@ import { PasswordInput, PasswordStrengthMeter, getPasswordStrength } from '../co
 
 export default function Settings() {
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
-  const [mailboxConnected, setMailboxConnected] = useState(false);
-  const [mailboxProvider, setMailboxProvider] = useState<string | null>(null);
-  const [mailboxEmail, setMailboxEmail] = useState<string | null>(null);
   const [linkedMailboxes, setLinkedMailboxes] = useState<LinkedMailboxInfo[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -37,9 +34,6 @@ export default function Settings() {
     Promise.all([api.getSettings(), api.getMe()])
       .then(([settings, me]) => {
         setDiscordWebhookUrl(settings.discordWebhookUrl ?? '');
-        setMailboxConnected(settings.mailboxConnected ?? false);
-        setMailboxProvider(settings.mailboxProvider ?? null);
-        setMailboxEmail(settings.mailboxEmail ?? null);
         setLinkedMailboxes(settings.linkedMailboxes || []);
         setHasPassword(me.hasPassword);
         setHasGoogle(me.hasGoogle);
@@ -371,11 +365,6 @@ export default function Settings() {
             loading={loading}
             onDisconnect={(mailboxId) => {
               setLinkedMailboxes((prev) => prev.filter((m) => m.id !== mailboxId));
-              if (linkedMailboxes.length <= 1) {
-                setMailboxConnected(false);
-                setMailboxProvider(null);
-                setMailboxEmail(null);
-              }
             }}
           />
         </div>
