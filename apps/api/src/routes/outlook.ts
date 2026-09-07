@@ -1,8 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { config } from '../config/env';
-import User from '../db/models/User';
-import { UserSetting } from '../db/models';
-import { withRLS } from '../middleware/rls';
+import { LinkedMailbox } from '../db/models';
 
 const router = Router();
 
@@ -10,6 +8,65 @@ const MS_AUTH_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/author
 const MS_TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
 const MS_GRAPH_URL = 'https://graph.microsoft.com/v1.0';
 const SCOPES = 'offline_access Mail.Read User.Read';
+
+/**
+ * Find the Outlook LinkedMailbox — by mailboxId if provided, otherwise first Outlook mailbox for the user.
+ */
+async function findOutlookMailbox(userId: string, mailboxId?: string): Promise<LinkedMailbox | null> {
+  if (mailboxId) {
+    return LinkedMailbox.findOne({
+      where: { id: mailboxId, userId, provider: 'outlook' },
+    });
+  }
+  return LinkedMailbox.findOne({
+    where: { userId, provider: 'outlook' },
+    order: [['createdAt', 'ASC']],
+  });
+}
+
+/**
+ * Refresh the access token using the stored refresh token on a LinkedMailbox.
+ */
+async function refreshAccessToken(mailbox: LinkedMailbox): Promise<string | null> {
+  if (!mailbox.refreshToken) return null;
+
+  const tokenRes = await fetch(MS_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: config.microsoftClientId,
+      client_secret: config.microsoftClientSecret,
+      refresh_token: mailbox.refreshToken,
+      grant_type: 'refresh_token',
+      scope: SCOPES,
+    }),
+  });
+
+  if (!tokenRes.ok) return null;
+
+  const tokens = await tokenRes.json();
+
+  await mailbox.update({
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token || mailbox.refreshToken,
+    tokenExpiry: tokens.expires_in
+      ? new Date(Date.now() + tokens.expires_in * 1000)
+      : null,
+  });
+
+  return tokens.access_token;
+}
+
+/**
+ * Get a valid access token for a LinkedMailbox, refreshing if needed.
+ */
+async function getAccessToken(mailbox: LinkedMailbox): Promise<string | null> {
+  let accessToken = mailbox.accessToken;
+  if (!accessToken || (mailbox.tokenExpiry && mailbox.tokenExpiry.getTime() < Date.now())) {
+    accessToken = await refreshAccessToken(mailbox);
+  }
+  return accessToken || null;
+}
 
 /**
  * GET /api/outlook/connect
@@ -35,7 +92,7 @@ router.get('/connect', async (_req: Request, res: Response) => {
 /**
  * POST /api/outlook/callback
  * Body: { code }
- * Exchanges the authorization code for tokens and stores them.
+ * Exchanges the authorization code for tokens and creates/updates a LinkedMailbox.
  */
 router.post('/callback', async (req: Request, res: Response) => {
   try {
@@ -46,7 +103,6 @@ router.post('/callback', async (req: Request, res: Response) => {
       return;
     }
 
-    // Exchange code for tokens
     const tokenRes = await fetch(MS_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -74,21 +130,7 @@ router.post('/callback', async (req: Request, res: Response) => {
       return;
     }
 
-    const user = await User.findByPk(req.user!.id);
-    if (!user) {
-      res.status(404).json({ error: 'User not found' });
-      return;
-    }
-
-    await user.update({
-      outlookAccessToken: tokens.access_token,
-      outlookRefreshToken: tokens.refresh_token,
-      outlookTokenExpiry: tokens.expires_in
-        ? new Date(Date.now() + tokens.expires_in * 1000)
-        : null,
-    });
-
-    // Fetch the connected Outlook email address
+    // Fetch the Outlook email address
     let mailboxEmail: string | null = null;
     try {
       const profileRes = await fetch(`${MS_GRAPH_URL}/me?$select=mail,userPrincipalName`, {
@@ -102,18 +144,37 @@ router.post('/callback', async (req: Request, res: Response) => {
       console.error('[PostMail API] Failed to fetch Outlook profile email:', err);
     }
 
-    await withRLS(req.user!.id, async (transaction) => {
-      await UserSetting.update(
-        {
-          mailboxConnected: true,
-          mailboxProvider: 'outlook',
-          mailboxEmail,
-          mailboxConnectedAt: new Date(),
-        },
-        { where: { userId: req.user!.id }, transaction },
-      );
+    if (!mailboxEmail) {
+      res.status(400).json({ error: 'Could not determine Outlook email address' });
+      return;
+    }
+
+    // Create or update LinkedMailbox
+    const [mailbox, created] = await LinkedMailbox.findOrCreate({
+      where: { userId: req.user!.id, email: mailboxEmail },
+      defaults: {
+        userId: req.user!.id,
+        provider: 'outlook',
+        email: mailboxEmail,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        tokenExpiry: tokens.expires_in
+          ? new Date(Date.now() + tokens.expires_in * 1000)
+          : null,
+      },
     });
 
+    if (!created) {
+      await mailbox.update({
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        tokenExpiry: tokens.expires_in
+          ? new Date(Date.now() + tokens.expires_in * 1000)
+          : null,
+      });
+    }
+
+    console.log(`[PostMail API] Outlook mailbox ${created ? 'created' : 'updated'}: ${mailboxEmail} for user ${req.user!.id}`);
     res.json({ success: true });
   } catch (error) {
     console.error('[PostMail API] Outlook callback error:', error);
@@ -122,60 +183,23 @@ router.post('/callback', async (req: Request, res: Response) => {
 });
 
 /**
- * Refresh the access token using the stored refresh token.
- * Returns the new access token or null on failure.
- */
-async function refreshAccessToken(user: User): Promise<string | null> {
-  if (!user.outlookRefreshToken) return null;
-
-  const tokenRes = await fetch(MS_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: config.microsoftClientId,
-      client_secret: config.microsoftClientSecret,
-      refresh_token: user.outlookRefreshToken,
-      grant_type: 'refresh_token',
-      scope: SCOPES,
-    }),
-  });
-
-  if (!tokenRes.ok) return null;
-
-  const tokens = await tokenRes.json();
-
-  await user.update({
-    outlookAccessToken: tokens.access_token,
-    outlookRefreshToken: tokens.refresh_token || user.outlookRefreshToken,
-    outlookTokenExpiry: tokens.expires_in
-      ? new Date(Date.now() + tokens.expires_in * 1000)
-      : null,
-  });
-
-  return tokens.access_token;
-}
-
-/**
  * GET /api/outlook/emails
  * Fetches sent emails from the user's Outlook via Microsoft Graph.
+ * Accepts ?mailboxId= to scope to a specific mailbox.
  */
 router.get('/emails', async (req: Request, res: Response) => {
   try {
-    const user = await User.findByPk(req.user!.id);
+    const mailbox = await findOutlookMailbox(req.user!.id, req.query.mailboxId as string | undefined);
 
-    if (!user || !user.outlookRefreshToken) {
+    if (!mailbox || !mailbox.refreshToken) {
       res.status(400).json({ error: 'Outlook not connected' });
       return;
     }
 
-    // Refresh token if expired
-    let accessToken = user.outlookAccessToken;
-    if (!accessToken || (user.outlookTokenExpiry && user.outlookTokenExpiry.getTime() < Date.now())) {
-      accessToken = await refreshAccessToken(user);
-      if (!accessToken) {
-        res.status(401).json({ error: 'Failed to refresh Outlook token. Please reconnect.' });
-        return;
-      }
+    let accessToken = await getAccessToken(mailbox);
+    if (!accessToken) {
+      res.status(401).json({ error: 'Failed to refresh Outlook token. Please reconnect.' });
+      return;
     }
 
     const pageSize = 20;
@@ -188,7 +212,6 @@ router.get('/emails', async (req: Request, res: Response) => {
       $skip: String(skip),
       $select: 'id,subject,toRecipients,sentDateTime,hasAttachments',
     });
-    // $search and $orderby cannot be combined in Microsoft Graph
     if (searchQuery) {
       params.set('$search', `"${searchQuery}"`);
     } else {
@@ -197,15 +220,13 @@ router.get('/emails', async (req: Request, res: Response) => {
 
     const graphUrl = `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?${params.toString()}`;
 
-    // Fetch sent emails from Microsoft Graph
-    const graphRes = await fetch(graphUrl, {
+    let graphRes = await fetch(graphUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     if (!graphRes.ok) {
-      // If 401, try refresh once
       if (graphRes.status === 401) {
-        accessToken = await refreshAccessToken(user);
+        accessToken = await refreshAccessToken(mailbox);
         if (!accessToken) {
           res.status(401).json({ error: 'Outlook session expired. Please reconnect.' });
           return;
@@ -263,23 +284,21 @@ function formatMessages(messages: GraphMessage[]) {
 /**
  * GET /api/outlook/emails/:id
  * Fetches the full conversation thread for a specific email.
+ * Accepts ?mailboxId= to scope to a specific mailbox.
  */
 router.get('/emails/:id', async (req: Request, res: Response) => {
   try {
-    const user = await User.findByPk(req.user!.id);
+    const mailbox = await findOutlookMailbox(req.user!.id, req.query.mailboxId as string | undefined);
 
-    if (!user || !user.outlookRefreshToken) {
+    if (!mailbox || !mailbox.refreshToken) {
       res.status(400).json({ error: 'Outlook not connected' });
       return;
     }
 
-    let accessToken = user.outlookAccessToken;
-    if (!accessToken || (user.outlookTokenExpiry && user.outlookTokenExpiry.getTime() < Date.now())) {
-      accessToken = await refreshAccessToken(user);
-      if (!accessToken) {
-        res.status(401).json({ error: 'Failed to refresh Outlook token. Please reconnect.' });
-        return;
-      }
+    let accessToken = await getAccessToken(mailbox);
+    if (!accessToken) {
+      res.status(401).json({ error: 'Failed to refresh Outlook token. Please reconnect.' });
+      return;
     }
 
     // First get the message to find its conversationId
@@ -291,12 +310,11 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
     let msgData = msgRes;
     if (!msgData.ok) {
       if (msgData.status === 401) {
-        accessToken = await refreshAccessToken(user);
+        accessToken = await refreshAccessToken(mailbox);
         if (!accessToken) {
           res.status(401).json({ error: 'Outlook session expired. Please reconnect.' });
           return;
         }
-        // Retry with refreshed token
         msgData = await fetch(
           `${MS_GRAPH_URL}/me/messages/${req.params.id}?$select=id,conversationId,subject,from,toRecipients,ccRecipients,sentDateTime,body`,
           { headers: { Authorization: `Bearer ${accessToken}` } },
@@ -314,9 +332,7 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
     const message = await msgData.json();
     const conversationId = message.conversationId;
 
-    // Fetch all messages in the conversation.
-    // Graph rejects $filter on conversationId combined with $orderby
-    // ("InefficientFilter"), so we filter without sorting and sort in JS.
+    // Fetch all messages in the conversation
     const escapedConvId = conversationId?.replace(/'/g, "''") || '';
     const convParams = new URLSearchParams({
       $filter: `conversationId eq '${escapedConvId}'`,
@@ -328,9 +344,8 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
-    // Retry on 401
     if (convRes.status === 401) {
-      accessToken = await refreshAccessToken(user);
+      accessToken = await refreshAccessToken(mailbox);
       if (accessToken) {
         convRes = await fetch(convUrl, {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -338,7 +353,6 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
       }
     }
 
-    // If conversation filter still fails, fall back to just the single message
     let convMessages: any[];
     if (!convRes.ok) {
       console.warn(`[PostMail API] Outlook conversation fetch failed (${convRes.status}), falling back to single message`);
@@ -346,7 +360,6 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
     } else {
       const convData = await convRes.json();
       convMessages = convData.value || [message];
-      // Sort by sentDateTime ascending (since we can't use $orderby with $filter on conversationId)
       convMessages.sort((a: any, b: any) =>
         new Date(a.sentDateTime || 0).getTime() - new Date(b.sentDateTime || 0).getTime(),
       );
@@ -364,24 +377,16 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
     }) => {
       let bodyContent = msg.body?.content || '';
 
-      // Strip Outlook quoted replies
       if (msg.body?.contentType === 'html') {
-        // Outlook uses <div id="appendonsend"> to mark the boundary
         bodyContent = bodyContent.replace(/<div[^>]*id="appendonsend"[^>]*>[\s\S]*$/i, '');
-        // <hr> followed by "From:" reply headers
         bodyContent = bodyContent.replace(/<hr[^>]*>\s*<div[^>]*id="divRplyFwdMsg"[^>]*>[\s\S]*$/i, '');
-        // border-top separator used in reply chains
         bodyContent = bodyContent.replace(/<div[^>]*style="[^"]*border-top:\s*solid[^"]*"[^>]*>[\s\S]*$/i, '');
-        // Forwarded message marker
         bodyContent = bodyContent.replace(/<div[^>]*>-{5,}\s*Forwarded message\s*-{5,}[\s\S]*$/i, '');
-        // Outlook blockquote with cite
         bodyContent = bodyContent.replace(/<blockquote[^>]*(?:type="cite"|style="[^"]*border-left[^"]*")[^>]*>[\s\S]*$/i, '');
-        // "From: ... Sent: ... To: ... Subject: ..." header block (plain-style quoting)
         bodyContent = bodyContent.replace(/<p[^>]*>\s*<b>From:<\/b>[\s\S]*$/i, '');
         bodyContent = bodyContent.replace(/<div[^>]*>\s*<b>From:<\/b>[\s\S]*$/i, '');
       }
 
-      // Fetch attachments if present
       let attachments: Array<{ attachmentId: string; messageId: string; filename: string; mimeType: string; size: number }> = [];
       if (msg.hasAttachments) {
         try {
@@ -444,23 +449,21 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
 /**
  * GET /api/outlook/emails/:messageId/attachments/:attachmentId
  * Downloads a specific attachment.
+ * Accepts ?mailboxId= to scope to a specific mailbox.
  */
 router.get('/emails/:messageId/attachments/:attachmentId', async (req: Request, res: Response) => {
   try {
-    const user = await User.findByPk(req.user!.id);
+    const mailbox = await findOutlookMailbox(req.user!.id, req.query.mailboxId as string | undefined);
 
-    if (!user || !user.outlookRefreshToken) {
+    if (!mailbox || !mailbox.refreshToken) {
       res.status(400).json({ error: 'Outlook not connected' });
       return;
     }
 
-    let accessToken = user.outlookAccessToken;
-    if (!accessToken || (user.outlookTokenExpiry && user.outlookTokenExpiry.getTime() < Date.now())) {
-      accessToken = await refreshAccessToken(user);
-      if (!accessToken) {
-        res.status(401).json({ error: 'Failed to refresh Outlook token.' });
-        return;
-      }
+    let accessToken = await getAccessToken(mailbox);
+    if (!accessToken) {
+      res.status(401).json({ error: 'Failed to refresh Outlook token.' });
+      return;
     }
 
     const attRes = await fetch(
@@ -487,33 +490,18 @@ router.get('/emails/:messageId/attachments/:attachmentId', async (req: Request, 
 
 /**
  * POST /api/outlook/disconnect
- * Removes stored Outlook tokens and marks mailbox as disconnected.
+ * Removes all Outlook LinkedMailboxes for this user.
+ * Kept for backward compatibility — prefer DELETE /api/mailboxes/:id.
  */
 router.post('/disconnect', async (req: Request, res: Response) => {
   try {
-    const user = await User.findByPk(req.user!.id);
-    if (!user) {
-      res.status(404).json({ error: 'User not found' });
-      return;
+    const mailboxes = await LinkedMailbox.findAll({
+      where: { userId: req.user!.id, provider: 'outlook' },
+    });
+
+    for (const mailbox of mailboxes) {
+      await mailbox.destroy();
     }
-
-    await user.update({
-      outlookAccessToken: null,
-      outlookRefreshToken: null,
-      outlookTokenExpiry: null,
-    });
-
-    await withRLS(req.user!.id, async (transaction) => {
-      await UserSetting.update(
-        {
-          mailboxConnected: false,
-          mailboxProvider: null,
-          mailboxEmail: null,
-          mailboxConnectedAt: null,
-        },
-        { where: { userId: req.user!.id }, transaction },
-      );
-    });
 
     res.json({ success: true });
   } catch (error) {
