@@ -1,14 +1,12 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api } from '../services/api';
+import { api, LinkedMailboxInfo } from '../services/api';
 import ConnectMailboxCard from '../components/ConnectMailboxCard';
 import { PasswordInput, PasswordStrengthMeter, getPasswordStrength } from '../components/PasswordInput';
 
 export default function Settings() {
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
-  const [mailboxConnected, setMailboxConnected] = useState(false);
-  const [mailboxProvider, setMailboxProvider] = useState<string | null>(null);
-  const [mailboxEmail, setMailboxEmail] = useState<string | null>(null);
+  const [linkedMailboxes, setLinkedMailboxes] = useState<LinkedMailboxInfo[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -36,9 +34,7 @@ export default function Settings() {
     Promise.all([api.getSettings(), api.getMe()])
       .then(([settings, me]) => {
         setDiscordWebhookUrl(settings.discordWebhookUrl ?? '');
-        setMailboxConnected(settings.mailboxConnected ?? false);
-        setMailboxProvider(settings.mailboxProvider ?? null);
-        setMailboxEmail(settings.mailboxEmail ?? null);
+        setLinkedMailboxes(settings.linkedMailboxes || []);
         setHasPassword(me.hasPassword);
         setHasGoogle(me.hasGoogle);
         setHasMicrosoft(me.hasMicrosoft);
@@ -365,14 +361,10 @@ export default function Settings() {
             </>
           )}
           <ConnectMailboxCard
-            connected={mailboxConnected}
-            provider={mailboxProvider}
-            email={mailboxEmail}
+            linkedMailboxes={linkedMailboxes}
             loading={loading}
-            onDisconnect={() => {
-              setMailboxConnected(false);
-              setMailboxProvider(null);
-              setMailboxEmail(null);
+            onDisconnect={(mailboxId) => {
+              setLinkedMailboxes((prev) => prev.filter((m) => m.id !== mailboxId));
             }}
           />
         </div>

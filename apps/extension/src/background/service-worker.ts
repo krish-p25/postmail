@@ -44,7 +44,7 @@ chrome.runtime.onMessage.addListener(
         recipients: message.recipients,
         subject: message.subject,
       });
-      registerTrackedEmail(message.trackingToken, message.recipients, message.subject)
+      registerTrackedEmail(message.trackingToken, message.recipients, message.subject, message.senderEmail, message.provider)
         .then((res) => {
           console.log(`[PostMail][SW] Registration SUCCESS:`, res);
           sendResponse(res);
@@ -58,7 +58,7 @@ chrome.runtime.onMessage.addListener(
 
     if (message.type === 'UPDATE_TRACKED_EMAIL') {
       console.log(`[PostMail][SW] Updating tracked email: ${message.trackingToken.substring(0, 8)}...`);
-      updateTrackedEmail(message.trackingToken, message.recipients, message.subject)
+      updateTrackedEmail(message.trackingToken, message.recipients, message.subject, message.senderEmail, message.provider)
         .then((res) => {
           console.log(`[PostMail][SW] Update SUCCESS:`, res);
           sendResponse(res);
@@ -72,7 +72,7 @@ chrome.runtime.onMessage.addListener(
 
     if (message.type === 'VERIFY_EMAIL_SENT') {
       console.log(`[PostMail][SW] Verifying email sent for token: ${message.trackingToken.substring(0, 8)}...`);
-      verifyEmailSent(message.trackingToken)
+      verifyEmailSent(message.trackingToken, message.senderEmail, message.provider)
         .then((res) => {
           console.log(`[PostMail][SW] Verify result:`, res);
           sendResponse(res);

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { UserSetting } from '../db/models';
+import { UserSetting, LinkedMailbox } from '../db/models';
 import { withRLS } from '../middleware/rls';
 
 const router = Router();
@@ -7,22 +7,40 @@ const router = Router();
 /**
  * GET /api/settings
  * Returns the authenticated user's settings.
+ * Mailbox state is derived from LinkedMailbox table.
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const settings = await withRLS(req.user!.id, async (transaction) => {
-      return UserSetting.findOne({
+    const [settings, mailboxes] = await Promise.all([
+      withRLS(req.user!.id, async (transaction) => {
+        return UserSetting.findOne({
+          where: { userId: req.user!.id },
+          transaction,
+        });
+      }),
+      LinkedMailbox.findAll({
         where: { userId: req.user!.id },
-        transaction,
-      });
-    });
+        attributes: ['id', 'provider', 'email'],
+        order: [['createdAt', 'ASC']],
+      }),
+    ]);
 
-    const data = settings || {
-      discordWebhookUrl: null,
-      mailboxConnected: false,
-      mailboxProvider: null,
-      mailboxEmail: null,
+    const firstMailbox = mailboxes[0] || null;
+
+    const data = {
+      discordWebhookUrl: settings?.discordWebhookUrl ?? null,
+      // Backward compat: derived from LinkedMailbox
+      mailboxConnected: mailboxes.length > 0,
+      mailboxProvider: firstMailbox?.provider ?? null,
+      mailboxEmail: firstMailbox?.email ?? null,
+      // New: full list
+      linkedMailboxes: mailboxes.map((m) => ({
+        id: m.id,
+        provider: m.provider,
+        email: m.email,
+      })),
     };
+
     res.json(data);
   } catch (error) {
     console.error('[PostMail API] Error in GET /api/settings:', error);
@@ -34,9 +52,6 @@ router.get('/', async (req: Request, res: Response) => {
  * PUT /api/settings
  * Updates the authenticated user's settings.
  * Currently only supports discord_webhook_url.
- *
- * NOTE: mailbox connection will be handled by a separate OAuth flow
- * in the future — NOT through this endpoint.
  */
 router.put('/', async (req: Request, res: Response) => {
   try {

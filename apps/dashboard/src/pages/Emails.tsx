@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { api } from '../services/api';
+import { Link, useNavigate, useSearchParams, useParams } from 'react-router-dom';
+import { api, LinkedMailboxInfo } from '../services/api';
 
 function ExtensionBanner() {
   const [extensionDetected, setExtensionDetected] = useState<boolean | null>(null);
@@ -204,8 +204,117 @@ function StatusBadge({ status, openCount }: { status: MergedEmail['trackingStatu
   }
 }
 
+function AccordionSection({ mailbox }: { mailbox: LinkedMailboxInfo }) {
+  const navigate = useNavigate();
+  const [expanded, setExpanded] = useState(false);
+  const [emails, setEmails] = useState<MergedEmail[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [fetched, setFetched] = useState(false);
+
+  function handleToggle() {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && !fetched) {
+      loadEmails();
+    }
+  }
+
+  function loadEmails() {
+    setLoading(true);
+    const sentPromise =
+      mailbox.provider === 'outlook'
+        ? api.getOutlookEmails(undefined, undefined, mailbox.id).then((d) => d.emails)
+        : api.getGmailEmails(undefined, undefined, mailbox.id).then((d) => d.emails);
+
+    const trackedPromise = api.getTrackedEmails().then((d) => d.emails);
+
+    Promise.all([sentPromise, trackedPromise])
+      .then(([sent, tracked]) => {
+        setEmails(mergeEmails(sent, tracked));
+        setFetched(true);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200">
+      <button
+        onClick={handleToggle}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-gray-50"
+      >
+        {mailbox.provider === 'outlook' ? (
+          <svg className="h-5 w-5 shrink-0" viewBox="0 0 21 21">
+            <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+            <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+            <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+            <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+          </svg>
+        ) : (
+          <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+          </svg>
+        )}
+        <span className="flex-1 truncate text-sm font-medium text-gray-900">{mailbox.email}</span>
+        <svg
+          className={`h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+          fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+      <div
+        className="overflow-hidden transition-all duration-300 ease-out"
+        style={{ maxHeight: expanded ? '2000px' : '0px' }}
+      >
+        <div className="border-t border-gray-100 px-4 py-3">
+          {loading && (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-12 animate-[shimmer_1.5s_infinite] rounded-lg bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+              ))}
+            </div>
+          )}
+          {!loading && emails.length === 0 && fetched && (
+            <p className="py-4 text-center text-sm text-gray-500">No sent emails found</p>
+          )}
+          {!loading && emails.length > 0 && (
+            <div className="space-y-1">
+              {emails.slice(0, 10).map((email) => (
+                <button
+                  key={email.id}
+                  onClick={() => navigate(`/dashboard/emails/${email.id}?mailboxId=${mailbox.id}`)}
+                  className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-gray-50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-900">{email.subject}</p>
+                    <p className="truncate text-xs text-gray-500">{formatRecipients(email.recipients)} · {formatDate(email.sentAt)}</p>
+                  </div>
+                  <StatusBadge status={email.trackingStatus} openCount={email.openCount} />
+                </button>
+              ))}
+              {emails.length > 10 && (
+                <button
+                  onClick={() => navigate(`/dashboard/emails/mailbox/${mailbox.id}`)}
+                  className="mt-1 w-full rounded-lg py-2 text-center text-xs font-medium text-primary-600 transition hover:bg-primary-50"
+                >
+                  View all {emails.length} emails
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Emails() {
   const navigate = useNavigate();
+  const { mailboxId: routeMailboxId } = useParams<{ mailboxId?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const initialQuery = searchParams.get('q') || '';
@@ -219,6 +328,9 @@ export default function Emails() {
   const [emails, setEmails] = useState<MergedEmail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [linkedMailboxes, setLinkedMailboxes] = useState<LinkedMailboxInfo[]>([]);
+  const isMultiMailbox = linkedMailboxes.length > 1 && !routeMailboxId;
 
   // Pagination
   const [page, setPage] = useState(initialPage);
@@ -247,7 +359,7 @@ export default function Emails() {
     return p;
   }
 
-  function fetchPage(prov: string, gmailPageToken?: string, outlookPage?: number, q?: string) {
+  function fetchPage(prov: string, gmailPageToken?: string, outlookPage?: number, q?: string, mbId?: string) {
     setLoading(true);
     setError(null);
 
@@ -255,11 +367,11 @@ export default function Emails() {
 
     const sentPromise =
       prov === 'outlook'
-        ? api.getOutlookEmails(outlookPage, search || undefined).then((data) => {
+        ? api.getOutlookEmails(outlookPage, search || undefined, mbId).then((data) => {
             setHasMore(data.hasMore);
             return data.emails;
           })
-        : api.getGmailEmails(gmailPageToken, search || undefined).then((data) => {
+        : api.getGmailEmails(gmailPageToken, search || undefined, mbId).then((data) => {
             setGmailNextToken(data.nextPageToken);
             setHasMore(!!data.nextPageToken);
             return data.emails;
@@ -285,13 +397,28 @@ export default function Emails() {
       .getSettings()
       .then((settings) => {
         setMailboxConnected(settings.mailboxConnected ?? false);
-        const prov = settings.mailboxProvider || 'gmail';
+        setLinkedMailboxes(settings.linkedMailboxes || []);
+
+        let prov: string;
+        let mbId: string | undefined;
+
+        if (routeMailboxId) {
+          const mb = (settings.linkedMailboxes || []).find((m) => m.id === routeMailboxId);
+          prov = mb?.provider || 'gmail';
+          mbId = routeMailboxId;
+        } else if (settings.linkedMailboxes?.length > 1) {
+          setLoading(false);
+          return;
+        } else {
+          prov = settings.mailboxProvider || 'gmail';
+        }
+
         setProvider(prov);
         setMailboxEmail(settings.mailboxEmail ?? null);
         if (settings.mailboxConnected) {
           const gmailToken = initialPageToken || undefined;
           const outlookPage = initialPage > 1 ? initialPage : undefined;
-          fetchPage(prov, gmailToken, outlookPage, initialQuery || undefined);
+          fetchPage(prov, gmailToken, outlookPage, initialQuery || undefined, mbId);
         } else {
           setLoading(false);
         }
@@ -512,7 +639,15 @@ export default function Emails() {
         </div>
       )}
 
-      {!loading && !error && mailboxConnected === false && (
+      {!loading && !error && isMultiMailbox && (
+        <div className="mt-6 space-y-3">
+          {linkedMailboxes.map((mb) => (
+            <AccordionSection key={mb.id} mailbox={mb} />
+          ))}
+        </div>
+      )}
+
+      {!loading && !error && !isMultiMailbox && mailboxConnected === false && (
         <div className="mt-8 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-4 py-12 sm:mt-12 sm:py-16">
           <svg className="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
@@ -525,7 +660,7 @@ export default function Emails() {
         </div>
       )}
 
-      {!loading && !error && mailboxConnected && filteredEmails.length === 0 && !activeQuery && (
+      {!loading && !error && !isMultiMailbox && mailboxConnected && filteredEmails.length === 0 && !activeQuery && (
         <div className="mt-8 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-4 py-12 sm:mt-12 sm:py-16">
           <svg className="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
@@ -541,7 +676,7 @@ export default function Emails() {
         </div>
       )}
 
-      {!loading && !error && mailboxConnected && activeQuery && filteredEmails.length === 0 && (
+      {!loading && !error && !isMultiMailbox && mailboxConnected && activeQuery && filteredEmails.length === 0 && (
         <div className="mt-8 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-4 py-12 sm:mt-12 sm:py-16">
           <svg className="h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
@@ -553,7 +688,7 @@ export default function Emails() {
         </div>
       )}
 
-      {!loading && !error && mailboxConnected && filteredEmails.length > 0 && (
+      {!loading && !error && !isMultiMailbox && mailboxConnected && filteredEmails.length > 0 && (
         <>
           {/* Mobile — card layout */}
           <div className="mt-6 space-y-3 sm:hidden">

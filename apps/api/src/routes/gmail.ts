@@ -2,9 +2,7 @@ import { Router, Request, Response } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import { google } from 'googleapis';
 import { config } from '../config/env';
-import User from '../db/models/User';
-import { UserSetting } from '../db/models';
-import { withRLS } from '../middleware/rls';
+import { LinkedMailbox } from '../db/models';
 
 const router = Router();
 
@@ -82,6 +80,44 @@ function createOAuth2Client(): OAuth2Client {
 }
 
 /**
+ * Find the Gmail LinkedMailbox — by mailboxId if provided, otherwise first Gmail mailbox for the user.
+ */
+async function findGmailMailbox(userId: string, mailboxId?: string): Promise<LinkedMailbox | null> {
+  if (mailboxId) {
+    return LinkedMailbox.findOne({
+      where: { id: mailboxId, userId, provider: 'gmail' },
+    });
+  }
+  return LinkedMailbox.findOne({
+    where: { userId, provider: 'gmail' },
+    order: [['createdAt', 'ASC']],
+  });
+}
+
+/**
+ * Create an OAuth2Client with credentials from a LinkedMailbox and auto-persist refreshed tokens.
+ */
+function createAuthenticatedClient(mailbox: LinkedMailbox): OAuth2Client {
+  const client = createOAuth2Client();
+  client.setCredentials({
+    access_token: mailbox.accessToken,
+    refresh_token: mailbox.refreshToken,
+    expiry_date: mailbox.tokenExpiry ? mailbox.tokenExpiry.getTime() : undefined,
+  });
+
+  client.on('tokens', async (tokens) => {
+    const updates: Partial<{ accessToken: string; tokenExpiry: Date }> = {};
+    if (tokens.access_token) updates.accessToken = tokens.access_token;
+    if (tokens.expiry_date) updates.tokenExpiry = new Date(tokens.expiry_date);
+    if (Object.keys(updates).length > 0) {
+      await LinkedMailbox.update(updates, { where: { id: mailbox.id } });
+    }
+  });
+
+  return client;
+}
+
+/**
  * GET /api/gmail/connect
  * Returns the Google OAuth consent URL for Gmail access.
  */
@@ -103,7 +139,7 @@ router.get('/connect', async (_req: Request, res: Response) => {
 /**
  * POST /api/gmail/callback
  * Body: { code }
- * Exchanges the authorization code for tokens and stores them.
+ * Exchanges the authorization code for tokens and creates/updates a LinkedMailbox.
  */
 router.post('/callback', async (req: Request, res: Response) => {
   try {
@@ -122,19 +158,6 @@ router.post('/callback', async (req: Request, res: Response) => {
       return;
     }
 
-    // Store tokens on user (users table is NOT RLS-protected)
-    const user = await User.findByPk(req.user!.id);
-    if (!user) {
-      res.status(404).json({ error: 'User not found' });
-      return;
-    }
-
-    await user.update({
-      gmailAccessToken: tokens.access_token,
-      gmailRefreshToken: tokens.refresh_token,
-      gmailTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-    });
-
     // Fetch the connected Gmail address
     let mailboxEmail: string | null = null;
     try {
@@ -146,19 +169,33 @@ router.post('/callback', async (req: Request, res: Response) => {
       console.error('[PostMail API] Failed to fetch Gmail profile email:', err);
     }
 
-    // Update user_settings (RLS-protected)
-    await withRLS(req.user!.id, async (transaction) => {
-      await UserSetting.update(
-        {
-          mailboxConnected: true,
-          mailboxProvider: 'gmail',
-          mailboxEmail,
-          mailboxConnectedAt: new Date(),
-        },
-        { where: { userId: req.user!.id }, transaction },
-      );
+    if (!mailboxEmail) {
+      res.status(400).json({ error: 'Could not determine Gmail email address' });
+      return;
+    }
+
+    // Create or update LinkedMailbox
+    const [mailbox, created] = await LinkedMailbox.findOrCreate({
+      where: { userId: req.user!.id, email: mailboxEmail },
+      defaults: {
+        userId: req.user!.id,
+        provider: 'gmail',
+        email: mailboxEmail,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+      },
     });
 
+    if (!created) {
+      await mailbox.update({
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+      });
+    }
+
+    console.log(`[PostMail API] Gmail mailbox ${created ? 'created' : 'updated'}: ${mailboxEmail} for user ${req.user!.id}`);
     res.json({ success: true });
   } catch (error) {
     console.error('[PostMail API] Gmail callback error:', error);
@@ -169,40 +206,24 @@ router.post('/callback', async (req: Request, res: Response) => {
 /**
  * GET /api/gmail/emails
  * Fetches sent emails from the user's Gmail.
+ * Accepts ?mailboxId= to scope to a specific mailbox.
  */
 router.get('/emails', async (req: Request, res: Response) => {
   try {
-    const user = await User.findByPk(req.user!.id);
+    const mailbox = await findGmailMailbox(req.user!.id, req.query.mailboxId as string | undefined);
 
-    if (!user || !user.gmailRefreshToken) {
+    if (!mailbox || !mailbox.refreshToken) {
       res.status(400).json({ error: 'Gmail not connected' });
       return;
     }
 
-    const client = createOAuth2Client();
-    client.setCredentials({
-      access_token: user.gmailAccessToken,
-      refresh_token: user.gmailRefreshToken,
-      expiry_date: user.gmailTokenExpiry ? user.gmailTokenExpiry.getTime() : undefined,
-    });
-
-    // Persist refreshed tokens when they occur
-    client.on('tokens', async (tokens) => {
-      const updates: Partial<{ gmailAccessToken: string; gmailTokenExpiry: Date }> = {};
-      if (tokens.access_token) updates.gmailAccessToken = tokens.access_token;
-      if (tokens.expiry_date) updates.gmailTokenExpiry = new Date(tokens.expiry_date);
-      if (Object.keys(updates).length > 0) {
-        await User.update(updates, { where: { id: user.id } });
-      }
-    });
-
+    const client = createAuthenticatedClient(mailbox);
     const gmail = google.gmail({ version: 'v1', auth: client as any });
 
     const pageSize = 20;
     const pageToken = (req.query.pageToken as string) || undefined;
     const searchQuery = (req.query.q as string) || '';
 
-    // List sent messages
     const listRes = await gmail.users.messages.list({
       userId: 'me',
       labelIds: ['SENT'],
@@ -219,7 +240,6 @@ router.get('/emails', async (req: Request, res: Response) => {
       return;
     }
 
-    // Fetch metadata for each message in parallel
     const emails = await Promise.all(
       messageIds.map(async (msg) => {
         const detail = await gmail.users.messages.get({
@@ -234,13 +254,11 @@ router.get('/emails', async (req: Request, res: Response) => {
         const to = headers.find((h) => h.name === 'To')?.value || '';
         const date = headers.find((h) => h.name === 'Date')?.value || '';
 
-        // Parse recipients from To header (e.g. "Name <email>, Name2 <email2>")
         const recipients = to
           .split(',')
           .map((r) => r.trim())
           .filter(Boolean);
 
-        // Check for attachments in payload parts
         const hasAttachments = checkForAttachments(detail.data.payload);
 
         return {
@@ -264,35 +282,20 @@ router.get('/emails', async (req: Request, res: Response) => {
 /**
  * GET /api/gmail/emails/:id
  * Fetches the full thread for a specific email.
+ * Accepts ?mailboxId= to scope to a specific mailbox.
  */
 router.get('/emails/:id', async (req: Request, res: Response) => {
   try {
-    const user = await User.findByPk(req.user!.id);
+    const mailbox = await findGmailMailbox(req.user!.id, req.query.mailboxId as string | undefined);
 
-    if (!user || !user.gmailRefreshToken) {
+    if (!mailbox || !mailbox.refreshToken) {
       res.status(400).json({ error: 'Gmail not connected' });
       return;
     }
 
-    const client = createOAuth2Client();
-    client.setCredentials({
-      access_token: user.gmailAccessToken,
-      refresh_token: user.gmailRefreshToken,
-      expiry_date: user.gmailTokenExpiry ? user.gmailTokenExpiry.getTime() : undefined,
-    });
-
-    client.on('tokens', async (tokens) => {
-      const updates: Partial<{ gmailAccessToken: string; gmailTokenExpiry: Date }> = {};
-      if (tokens.access_token) updates.gmailAccessToken = tokens.access_token;
-      if (tokens.expiry_date) updates.gmailTokenExpiry = new Date(tokens.expiry_date);
-      if (Object.keys(updates).length > 0) {
-        await User.update(updates, { where: { id: user.id } });
-      }
-    });
-
+    const client = createAuthenticatedClient(mailbox);
     const gmail = google.gmail({ version: 'v1', auth: client as any });
 
-    // Get the message to find its threadId and subject
     const msgRes = await gmail.users.messages.get({
       userId: 'me',
       id: req.params.id,
@@ -302,7 +305,6 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
 
     const threadId = msgRes.data.threadId;
 
-    // Fetch the full thread
     const threadRes = await gmail.users.threads.get({
       userId: 'me',
       id: threadId!,
@@ -315,7 +317,6 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
       const headers = msg.payload?.headers || [];
       const getHeader = (name: string) => headers.find((h) => h.name === name)?.value || '';
 
-      // Extract body from parts
       let htmlBody = '';
       let plainBody = '';
       function extractBody(part: typeof msg.payload): void {
@@ -338,7 +339,6 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
       if (htmlBody) {
         body = stripGmailQuotes(htmlBody);
       } else if (plainBody) {
-        // Strip plain-text quoted replies (lines starting with >)
         const lines = plainBody.split('\n');
         const cleaned: string[] = [];
         for (const line of lines) {
@@ -348,7 +348,6 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
         body = cleaned.join('\n').replace(/\n/g, '<br>');
       }
 
-      // Extract attachments
       const attachments = extractAttachments(msg.payload, msg.id!);
 
       return {
@@ -375,32 +374,18 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
 /**
  * GET /api/gmail/emails/:messageId/attachments/:attachmentId
  * Downloads a specific attachment.
+ * Accepts ?mailboxId= to scope to a specific mailbox.
  */
 router.get('/emails/:messageId/attachments/:attachmentId', async (req: Request, res: Response) => {
   try {
-    const user = await User.findByPk(req.user!.id);
+    const mailbox = await findGmailMailbox(req.user!.id, req.query.mailboxId as string | undefined);
 
-    if (!user || !user.gmailRefreshToken) {
+    if (!mailbox || !mailbox.refreshToken) {
       res.status(400).json({ error: 'Gmail not connected' });
       return;
     }
 
-    const client = createOAuth2Client();
-    client.setCredentials({
-      access_token: user.gmailAccessToken,
-      refresh_token: user.gmailRefreshToken,
-      expiry_date: user.gmailTokenExpiry ? user.gmailTokenExpiry.getTime() : undefined,
-    });
-
-    client.on('tokens', async (tokens) => {
-      const updates: Partial<{ gmailAccessToken: string; gmailTokenExpiry: Date }> = {};
-      if (tokens.access_token) updates.gmailAccessToken = tokens.access_token;
-      if (tokens.expiry_date) updates.gmailTokenExpiry = new Date(tokens.expiry_date);
-      if (Object.keys(updates).length > 0) {
-        await User.update(updates, { where: { id: user.id } });
-      }
-    });
-
+    const client = createAuthenticatedClient(mailbox);
     const gmail = google.gmail({ version: 'v1', auth: client as any });
 
     const attachment = await gmail.users.messages.attachments.get({
@@ -414,7 +399,6 @@ router.get('/emails/:messageId/attachments/:attachmentId', async (req: Request, 
       return;
     }
 
-    // Get filename from the message metadata
     const msgDetail = await gmail.users.messages.get({
       userId: 'me',
       id: req.params.messageId,
@@ -436,45 +420,26 @@ router.get('/emails/:messageId/attachments/:attachmentId', async (req: Request, 
 
 /**
  * POST /api/gmail/disconnect
- * Removes stored Gmail tokens and marks mailbox as disconnected.
+ * Removes all Gmail LinkedMailboxes for this user.
+ * Kept for backward compatibility — prefer DELETE /api/mailboxes/:id.
  */
 router.post('/disconnect', async (req: Request, res: Response) => {
   try {
-    const user = await User.findByPk(req.user!.id);
-    if (!user) {
-      res.status(404).json({ error: 'User not found' });
-      return;
-    }
+    const mailboxes = await LinkedMailbox.findAll({
+      where: { userId: req.user!.id, provider: 'gmail' },
+    });
 
-    // Revoke token (best effort)
-    if (user.gmailRefreshToken) {
-      try {
-        const client = createOAuth2Client();
-        await client.revokeToken(user.gmailRefreshToken);
-      } catch {
-        // Revocation failure is non-critical
+    for (const mailbox of mailboxes) {
+      if (mailbox.refreshToken) {
+        try {
+          const client = createOAuth2Client();
+          await client.revokeToken(mailbox.refreshToken);
+        } catch {
+          // Revocation failure is non-critical
+        }
       }
+      await mailbox.destroy();
     }
-
-    // Clear tokens (users table is NOT RLS-protected)
-    await user.update({
-      gmailAccessToken: null,
-      gmailRefreshToken: null,
-      gmailTokenExpiry: null,
-    });
-
-    // Update user_settings (RLS-protected)
-    await withRLS(req.user!.id, async (transaction) => {
-      await UserSetting.update(
-        {
-          mailboxConnected: false,
-          mailboxProvider: null,
-          mailboxEmail: null,
-          mailboxConnectedAt: null,
-        },
-        { where: { userId: req.user!.id }, transaction },
-      );
-    });
 
     res.json({ success: true });
   } catch (error) {

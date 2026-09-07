@@ -1,19 +1,19 @@
 import { useState } from 'react';
-import { api } from '../services/api';
+import { api, LinkedMailboxInfo } from '../services/api';
 
 interface ConnectMailboxCardProps {
-  connected: boolean;
-  provider: string | null;
-  email?: string | null;
+  linkedMailboxes: LinkedMailboxInfo[];
   loading?: boolean;
-  onDisconnect: () => void;
+  onDisconnect: (mailboxId: string) => void;
 }
 
-export default function ConnectMailboxCard({ connected, provider, email, loading, onDisconnect }: ConnectMailboxCardProps) {
+export default function ConnectMailboxCard({ linkedMailboxes, loading, onDisconnect }: ConnectMailboxCardProps) {
   const [connecting, setConnecting] = useState<'gmail' | 'outlook' | null>(null);
-  const [disconnecting, setDisconnecting] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const connected = linkedMailboxes.length > 0;
 
   async function handleConnect(type: 'gmail' | 'outlook') {
     setConnecting(type);
@@ -30,95 +30,99 @@ export default function ConnectMailboxCard({ connected, provider, email, loading
     }
   }
 
-  async function handleDisconnect() {
-    setDisconnecting(true);
+  async function handleDisconnect(mailboxId: string) {
+    setDisconnecting(mailboxId);
     setError(null);
     try {
-      if (provider === 'outlook') {
-        await api.disconnectOutlook();
-      } else {
-        await api.disconnectGmail();
-      }
-      setConfirmOpen(false);
-      onDisconnect();
+      await api.disconnectMailbox(mailboxId);
+      setConfirmId(null);
+      onDisconnect(mailboxId);
     } catch {
       setError('Failed to disconnect. Please try again.');
     } finally {
-      setDisconnecting(false);
+      setDisconnecting(null);
     }
   }
 
-  const providerLabel = provider === 'outlook' ? 'Outlook' : provider === 'gmail' ? 'Gmail' : 'Mailbox';
+  const confirmMailbox = linkedMailboxes.find((m) => m.id === confirmId);
 
   return (
     <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200 sm:p-6">
       <h3 className="text-lg font-medium text-gray-900">
-        Connect your mailbox
+        Connect your mailbox{connected ? 'es' : ''}
       </h3>
       <p className="mt-1 text-sm text-gray-500">
-        Link your email account to view and track your sent emails.
+        Link your email accounts to view and track your sent emails.
       </p>
 
       {error && (
-        <div className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-600">
-          {error}
-        </div>
+        <div className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</div>
       )}
 
       {loading ? (
-        <div className="mt-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 animate-[shimmer_1.5s_infinite] rounded-full bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
-            <div className="h-4 w-32 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
-          </div>
-          <div className="h-8 w-24 animate-[shimmer_1.5s_infinite] rounded-lg bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
-        </div>
-      ) : connected ? (
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="h-2 w-2 shrink-0 rounded-full bg-green-500" />
-            <span className="truncate text-sm font-medium text-gray-700">
-              {providerLabel} connected
-              {email && (
-                <span className="ml-1 font-normal text-gray-500">({email})</span>
-              )}
-            </span>
-          </div>
-          <button
-            onClick={() => setConfirmOpen(true)}
-            className="min-h-[44px] shrink-0 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 sm:min-h-0"
-          >
-            Disconnect
-          </button>
+        <div className="mt-4 space-y-3">
+          <div className="h-12 animate-[shimmer_1.5s_infinite] rounded-lg bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
         </div>
       ) : (
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <button
-            onClick={() => handleConnect('gmail')}
-            disabled={connecting !== null}
-            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12s4.48 10 10 10 10-4.48 10-10zm-10 1.13L4.25 8.28A7.97 7.97 0 0 1 12 4c3.09 0 5.75 1.76 7.08 4.33L12 13.13zM4 12c0-.31.02-.62.06-.92L11 16l1 .55V20c-3.87 0-7-3.13-7-7v-1zm9 7.93V16.5l7-4.1c.04.2.04.4.04.6 0 3.56-2.66 6.5-6.1 6.97l-.94-.04z" />
-            </svg>
-            {connecting === 'gmail' ? 'Connecting...' : 'Connect Gmail'}
-          </button>
-          <button
-            onClick={() => handleConnect('outlook')}
-            disabled={connecting !== null}
-            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10h5v-2h-5c-4.34 0-8-3.66-8-8s3.66-8 8-8 8 3.66 8 8v1.43c0 .79-.71 1.57-1.5 1.57s-1.5-.78-1.5-1.57V12c0-2.76-2.24-5-5-5s-5 2.24-5 5 2.24 5 5 5c1.38 0 2.64-.56 3.54-1.47.65.89 1.77 1.47 2.96 1.47 1.97 0 3.5-1.6 3.5-3.57V12c0-5.52-4.48-10-10-10zm0 13c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" />
-            </svg>
-            {connecting === 'outlook' ? 'Connecting...' : 'Connect Outlook'}
-          </button>
-        </div>
+        <>
+          {/* List of connected mailboxes */}
+          {linkedMailboxes.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {linkedMailboxes.map((mb) => (
+                <div key={mb.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="h-2 w-2 shrink-0 rounded-full bg-green-500" />
+                    {mb.provider === 'outlook' ? (
+                      <svg className="h-4 w-4 shrink-0" viewBox="0 0 21 21">
+                        <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+                        <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+                        <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+                        <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+                      </svg>
+                    ) : (
+                      <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                      </svg>
+                    )}
+                    <span className="truncate text-sm font-medium text-gray-700">{mb.email}</span>
+                  </div>
+                  <button
+                    onClick={() => setConfirmId(mb.id)}
+                    className="shrink-0 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-50"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Connect buttons */}
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <button
+              onClick={() => handleConnect('gmail')}
+              disabled={connecting !== null}
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {connecting === 'gmail' ? 'Connecting...' : `Connect ${connected ? 'another ' : ''}Gmail`}
+            </button>
+            <button
+              onClick={() => handleConnect('outlook')}
+              disabled={connecting !== null}
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {connecting === 'outlook' ? 'Connecting...' : `Connect ${connected ? 'another ' : ''}Outlook`}
+            </button>
+          </div>
+        </>
       )}
 
       {/* Disconnect confirmation modal */}
-      {confirmOpen && (
-        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 px-4 pb-4 sm:items-center sm:pb-0" onClick={() => !disconnecting && setConfirmOpen(false)}>
+      {confirmId && confirmMailbox && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 px-4 pb-4 sm:items-center sm:pb-0" onClick={() => !disconnecting && setConfirmId(null)}>
           <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl sm:p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100">
@@ -127,23 +131,23 @@ export default function ConnectMailboxCard({ connected, provider, email, loading
                 </svg>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-gray-900">Disconnect {providerLabel}?</h3>
+                <h3 className="text-sm font-semibold text-gray-900">Disconnect mailbox?</h3>
                 <p className="mt-0.5 text-sm text-gray-500">
-                  {email ? `${email} will be ` : 'Your mailbox will be '}removed. You can reconnect anytime.
+                  {confirmMailbox.email} will be removed. You can reconnect anytime.
                 </p>
               </div>
             </div>
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
               <button
-                onClick={() => setConfirmOpen(false)}
-                disabled={disconnecting}
+                onClick={() => setConfirmId(null)}
+                disabled={!!disconnecting}
                 className="min-h-[44px] rounded-lg border border-gray-300 px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
-                onClick={handleDisconnect}
-                disabled={disconnecting}
+                onClick={() => handleDisconnect(confirmId)}
+                disabled={!!disconnecting}
                 className="min-h-[44px] rounded-lg bg-red-600 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {disconnecting ? 'Disconnecting...' : 'Disconnect'}

@@ -57,10 +57,12 @@ export async function registerTrackedEmail(
   trackingToken: string,
   recipients: string[],
   subject: string,
+  senderEmail: string | null,
+  provider: string,
 ): Promise<{ id: string; trackingToken: string; status: string; authError?: boolean }> {
   const res = await authFetch('/track/register', {
     method: 'POST',
-    body: JSON.stringify({ trackingToken, recipients, subject }),
+    body: JSON.stringify({ trackingToken, recipients, subject, senderEmail, provider }),
   });
   if (res.status === 401) {
     console.error(`[PostMail][API] Register: 401 — token missing or invalid`);
@@ -93,10 +95,12 @@ export async function updateTrackedEmail(
   trackingToken: string,
   recipients: string[],
   subject: string,
+  senderEmail: string | null,
+  provider: string,
 ): Promise<{ success: boolean }> {
   const res = await authFetch('/track/update', {
     method: 'POST',
-    body: JSON.stringify({ trackingToken, recipients, subject }),
+    body: JSON.stringify({ trackingToken, recipients, subject, senderEmail, provider }),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -123,10 +127,12 @@ export async function discardTrackedEmail(
 
 export async function verifyEmailSent(
   trackingToken: string,
+  senderEmail: string | null,
+  provider: string,
 ): Promise<{ found: boolean; authError?: boolean }> {
   const res = await authFetch('/track/verify-sent', {
     method: 'POST',
-    body: JSON.stringify({ trackingToken }),
+    body: JSON.stringify({ trackingToken, senderEmail, provider }),
   });
   if (res.status === 401) {
     console.error(`[PostMail][API] Verify-sent: 401 — token missing or invalid`);

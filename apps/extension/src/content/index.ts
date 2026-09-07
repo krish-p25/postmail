@@ -5,12 +5,12 @@ import { ExtensionMessage } from '../shared/messaging';
 // Gmail imports
 import { ComposeDetector as GmailComposeDetector } from './gmail/compose-detector';
 import { RecipientReader as GmailRecipientReader } from './gmail/recipient-reader';
-import { findComposeBody as gmailFindBody } from './gmail/selectors';
+import { findComposeBody as gmailFindBody, getSenderEmail as gmailGetSenderEmail } from './gmail/selectors';
 
 // Outlook imports
 import { OutlookComposeDetector } from './outlook/compose-detector';
 import { OutlookRecipientReader } from './outlook/recipient-reader';
-import { findComposeBody as outlookFindBody, findComposeSubject as outlookFindSubject } from './outlook/selectors';
+import { findComposeBody as outlookFindBody, findComposeSubject as outlookFindSubject, getSenderEmail as outlookGetSenderEmail } from './outlook/selectors';
 
 /**
  * PostMail content script entry point.
@@ -38,6 +38,8 @@ function buildGmailConfig(): ComposeManagerConfig {
       const input = composeElement.querySelector('input[name="subjectbox"]') as HTMLInputElement;
       return input?.value || '';
     },
+    getSenderEmail: gmailGetSenderEmail,
+    provider: 'gmail',
   };
 }
 
@@ -47,6 +49,8 @@ function buildOutlookConfig(): ComposeManagerConfig {
     createRecipientReader: (element) => new OutlookRecipientReader(element),
     findBody: (composeElement) => outlookFindBody(composeElement),
     findSubject: (composeElement) => outlookFindSubject(composeElement),
+    getSenderEmail: outlookGetSenderEmail,
+    provider: 'outlook',
   };
 }
 
