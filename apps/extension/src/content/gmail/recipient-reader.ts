@@ -12,6 +12,7 @@ type RecipientChangeCallback = (recipients: string[]) => void;
 export class RecipientReader {
   private composeElement: HTMLElement;
   private observer: MutationObserver | null = null;
+  private pollInterval: ReturnType<typeof setInterval> | null = null;
   private callbacks: RecipientChangeCallback[] = [];
   private lastRecipients: string[] = [];
 
@@ -64,12 +65,19 @@ export class RecipientReader {
       attributes: true,
       attributeFilter: ['email'],
     });
+
+    // Periodic polling as backup for mutations that the observer misses
+    this.pollInterval = setInterval(() => this.readAndNotify(), 3000);
   }
 
   /** Stop observing. */
   stop(): void {
     this.observer?.disconnect();
     this.observer = null;
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
   }
 
   private readAndNotify(): void {

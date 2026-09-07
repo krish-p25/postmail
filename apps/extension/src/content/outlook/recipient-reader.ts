@@ -12,6 +12,7 @@ type RecipientChangeCallback = (recipients: string[]) => void;
 export class OutlookRecipientReader {
   private composeElement: HTMLElement;
   private observer: MutationObserver | null = null;
+  private pollInterval: ReturnType<typeof setInterval> | null = null;
   private callbacks: RecipientChangeCallback[] = [];
   private lastRecipients: string[] = [];
 
@@ -53,12 +54,19 @@ export class OutlookRecipientReader {
       attributes: true,
       attributeFilter: ['title', 'aria-label', 'data-lpc-hover-target-id'],
     });
+
+    // Periodic polling as backup
+    this.pollInterval = setInterval(() => this.readAndNotify(), 3000);
   }
 
   /** Stop observing. */
   stop(): void {
     this.observer?.disconnect();
     this.observer = null;
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
   }
 
   private readAndNotify(): void {

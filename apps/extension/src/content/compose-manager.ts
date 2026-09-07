@@ -26,6 +26,8 @@ export interface ComposeManagerConfig {
   createRecipientReader: (element: HTMLElement) => RecipientReaderLike;
   findBody: BodyFinder;
   findSubject: SubjectFinder;
+  getSenderEmail: () => string | null;
+  provider: 'gmail' | 'outlook';
 }
 
 interface ComposeInstance {
@@ -97,7 +99,7 @@ export class ComposeManager {
     const id = `compose-${++this.nextId}`;
     console.log(`[PostMail][Manager] Compose DETECTED: ${id}`);
 
-    const tracker = new ComposeTracker(id, element, this.trackingEnabled, this.config.findBody, this.config.findSubject);
+    const tracker = new ComposeTracker(id, element, this.trackingEnabled, this.config.findBody, this.config.findSubject, this.config.getSenderEmail, this.config.provider);
     const recipientReader = this.config.createRecipientReader(element);
     const toast = new TrackingToast();
 
@@ -129,16 +131,20 @@ export class ComposeManager {
     const info = instance.tracker.getInfo();
     const subject = instance.tracker.getSubject();
 
-    // Fallback: if the observer didn't pick up recipients, read them now
-    let recipient = info.recipients[0] || '';
-    if (!recipient) {
-      const fallbackRecipients = instance.recipientReader.readRecipients();
-      console.log(`[PostMail][Manager] Fallback recipient read for ${instance.id}:`, fallbackRecipients);
-      recipient = fallbackRecipients[0] || '';
-      if (fallbackRecipients.length > 0) {
-        instance.tracker.handleRecipientChange(fallbackRecipients);
-      }
+    // Always read recipients on compose close for freshest data
+    const freshRecipients = instance.recipientReader.readRecipients();
+    const allRecipients = freshRecipients.length > 0
+      ? freshRecipients
+      : info.recipients.length > 0
+        ? info.recipients
+        : [];
+
+    if (freshRecipients.length > 0 && freshRecipients.length !== info.recipients.length) {
+      instance.tracker.handleRecipientChange(freshRecipients);
     }
+
+    const recipient = allRecipients[0] || '';
+
     console.log(`[PostMail][Manager] Compose REMOVED: ${instance.id}`, {
       state: info.state,
       token: info.trackingToken ? info.trackingToken.substring(0, 8) + '...' : 'none',
@@ -159,12 +165,12 @@ export class ComposeManager {
 
     // Dismiss the "Tracking" toast and show verification flow
     const trackingToken = info.trackingToken;
-    const allRecipients = info.recipients.length > 0 ? info.recipients : (recipient ? [recipient] : []);
+    const finalRecipients = allRecipients.length > 0 ? allRecipients : (recipient ? [recipient] : []);
     if (trackingToken) {
       console.log(`[PostMail][Manager] Starting verification for ${instance.id}`);
 
       // Update tracked email with final subject & recipients (may have changed since registration)
-      this.updateTrackedEmail(trackingToken, allRecipients, subject);
+      this.updateTrackedEmail(trackingToken, finalRecipients, subject);
 
       // Update existing toast to "verifying"
       instance.toast.update('verifying', { subject, recipient });
@@ -181,11 +187,13 @@ export class ComposeManager {
 
   private updateTrackedEmail(trackingToken: string, recipients: string[], subject: string): void {
     const tokenPreview = trackingToken.substring(0, 8) + '...';
-    console.log(`[PostMail][Manager] Updating tracked email ${tokenPreview}`, { recipients, subject });
+    const senderEmail = this.config.getSenderEmail();
+    const provider = this.config.provider;
+    console.log(`[PostMail][Manager] Updating tracked email ${tokenPreview}`, { recipients, subject, senderEmail, provider });
 
     try {
       chrome.runtime.sendMessage(
-        { type: 'UPDATE_TRACKED_EMAIL', trackingToken, recipients, subject },
+        { type: 'UPDATE_TRACKED_EMAIL', trackingToken, recipients, subject, senderEmail, provider },
         (response) => {
           if (chrome.runtime.lastError) {
             console.error('[PostMail][Manager] Update failed:', chrome.runtime.lastError.message);
@@ -220,11 +228,13 @@ export class ComposeManager {
     tokenPreview: string,
     canRetry: boolean,
   ): void {
+    const senderEmail = this.config.getSenderEmail();
+    const provider = this.config.provider;
     console.log(`[PostMail][Manager] Verifying sent status for token ${tokenPreview}`);
 
     try {
       chrome.runtime.sendMessage(
-        { type: 'VERIFY_EMAIL_SENT', trackingToken },
+        { type: 'VERIFY_EMAIL_SENT', trackingToken, senderEmail, provider },
         (response) => {
           if (chrome.runtime.lastError) {
             console.error('[PostMail][Manager] Verify failed:', chrome.runtime.lastError.message);

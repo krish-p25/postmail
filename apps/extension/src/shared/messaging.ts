@@ -3,10 +3,10 @@ export type ExtensionMessage =
   | { type: 'GET_TRACKING_STATE' }
   | { type: 'SET_TRACKING_STATE'; enabled: boolean }
   | { type: 'TRACKING_STATE_CHANGED'; enabled: boolean }
-  | { type: 'REGISTER_TRACKED_EMAIL'; trackingToken: string; recipients: string[]; subject: string }
-  | { type: 'VERIFY_EMAIL_SENT'; trackingToken: string }
+  | { type: 'REGISTER_TRACKED_EMAIL'; trackingToken: string; recipients: string[]; subject: string; senderEmail: string | null; provider: string }
+  | { type: 'VERIFY_EMAIL_SENT'; trackingToken: string; senderEmail: string | null; provider: string }
   | { type: 'DISCARD_TRACKED_EMAIL'; trackingToken: string }
-  | { type: 'UPDATE_TRACKED_EMAIL'; trackingToken: string; recipients: string[]; subject: string }
+  | { type: 'UPDATE_TRACKED_EMAIL'; trackingToken: string; recipients: string[]; subject: string; senderEmail: string | null; provider: string }
   | { type: 'CHECK_AUTH' };
 
 export interface TrackingStateResponse {

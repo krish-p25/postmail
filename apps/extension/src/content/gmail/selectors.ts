@@ -46,3 +46,34 @@ export function findRecipientChips(composeElement: Element): string[] {
 
   return [...new Set(emails)];
 }
+
+/**
+ * Attempt to read the logged-in Gmail address from the page DOM.
+ * Returns null if not found.
+ */
+export function getSenderEmail(): string | null {
+  // Strategy 1: [data-email] on the account/profile element
+  const emailAttr = document.querySelector('[data-email]');
+  if (emailAttr) {
+    const email = emailAttr.getAttribute('data-email');
+    if (email && email.includes('@')) return email;
+  }
+
+  // Strategy 2: aria-label on the account button (e.g. "Google Account: user@gmail.com")
+  const accountBtn = document.querySelector('a[aria-label*="@"][href*="accounts.google.com"]');
+  if (accountBtn) {
+    const label = accountBtn.getAttribute('aria-label') || '';
+    const match = label.match(/[\w.+-]+@[\w.-]+\.\w+/);
+    if (match) return match[0];
+  }
+
+  // Strategy 3: title attribute with email pattern
+  const titled = document.querySelector('[title*="@gmail.com"], [title*="@googlemail.com"]');
+  if (titled) {
+    const title = titled.getAttribute('title') || '';
+    const match = title.match(/[\w.+-]+@[\w.-]+\.\w+/);
+    if (match) return match[0];
+  }
+
+  return null;
+}

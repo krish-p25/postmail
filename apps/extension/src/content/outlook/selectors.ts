@@ -128,6 +128,39 @@ export function findRecipientEmails(composeElement: Element): string[] {
 }
 
 /**
+ * Attempt to read the logged-in Outlook email address from the page DOM.
+ * Returns null if not found.
+ */
+export function getSenderEmail(): string | null {
+  const EMAIL_RE = /[\w.+-]+@[\w.-]+\.\w+/;
+
+  // Strategy 1: aria-label on profile/account elements
+  const profileLabels = document.querySelectorAll('[aria-label*="@"]');
+  for (const el of profileLabels) {
+    const label = el.getAttribute('aria-label') || '';
+    const match = label.match(EMAIL_RE);
+    if (match) return match[0];
+  }
+
+  // Strategy 2: title on profile elements
+  const profileTitles = document.querySelectorAll('button[title*="@"], div[title*="@"]');
+  for (const el of profileTitles) {
+    const title = el.getAttribute('title') || '';
+    const match = title.match(EMAIL_RE);
+    if (match) return match[0];
+  }
+
+  // Strategy 3: data-lpc-hover-target-id containing @
+  const lpcElements = document.querySelectorAll('[data-lpc-hover-target-id*="@"]');
+  for (const el of lpcElements) {
+    const id = el.getAttribute('data-lpc-hover-target-id') || '';
+    if (id.includes('@')) return id;
+  }
+
+  return null;
+}
+
+/**
  * Debug: log all inputs and textboxes on the page to help identify
  * the right selectors. Call this once from the compose detector.
  */

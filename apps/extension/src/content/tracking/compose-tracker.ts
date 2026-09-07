@@ -23,6 +23,8 @@ export class ComposeTracker {
   private findSubject: SubjectFinder;
   private findBody: BodyFinder;
   private pixelGuard: MutationObserver | null = null;
+  private getSenderEmail: () => string | null;
+  private provider: string;
 
   constructor(
     private composeId: string,
@@ -30,11 +32,15 @@ export class ComposeTracker {
     trackingEnabled: boolean,
     findBody: BodyFinder,
     findSubject: SubjectFinder,
+    getSenderEmail: () => string | null,
+    provider: string,
   ) {
     this.trackingEnabled = trackingEnabled;
     this.composeElement = element;
     this.findSubject = findSubject;
     this.findBody = findBody;
+    this.getSenderEmail = getSenderEmail;
+    this.provider = provider;
     this.injector = new PixelInjector(element, findBody);
 
     // Generate token immediately
@@ -170,10 +176,13 @@ export class ComposeTracker {
 
   private registerWithApi(): void {
     const subject = this.getSubject();
+    const senderEmail = this.getSenderEmail();
     console.log(`[PostMail][Tracker:${this.composeId}] Registering with API...`, {
       token: this.trackingToken.substring(0, 8) + '...',
       recipients: this.recipients,
       subject,
+      senderEmail,
+      provider: this.provider,
     });
 
     try {
@@ -183,6 +192,8 @@ export class ComposeTracker {
           trackingToken: this.trackingToken,
           recipients: this.recipients,
           subject,
+          senderEmail,
+          provider: this.provider,
         },
         (response) => {
           if (chrome.runtime.lastError) {
