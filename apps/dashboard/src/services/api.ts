@@ -2,6 +2,12 @@ import { auth } from './auth';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.postmail.krishrp.xyz';
 
+export interface LinkedMailboxInfo {
+  id: string;
+  provider: 'gmail' | 'outlook';
+  email: string;
+}
+
 export interface EmailAttachment {
   attachmentId: string;
   messageId: string;
@@ -98,7 +104,13 @@ export const api = {
   async getSettings() {
     const res = await authFetch('/settings');
     if (!res.ok) throw new Error('Failed to fetch settings');
-    return res.json();
+    return res.json() as Promise<{
+      discordWebhookUrl: string | null;
+      mailboxConnected: boolean;
+      mailboxProvider: string | null;
+      mailboxEmail: string | null;
+      linkedMailboxes: LinkedMailboxInfo[];
+    }>;
   },
 
   async updateSettings(data: { discordWebhookUrl?: string | null }) {
@@ -125,10 +137,11 @@ export const api = {
     return res.json();
   },
 
-  async getGmailEmails(pageToken?: string, q?: string) {
+  async getGmailEmails(pageToken?: string, q?: string, mailboxId?: string) {
     const searchParams = new URLSearchParams();
     if (pageToken) searchParams.set('pageToken', pageToken);
     if (q) searchParams.set('q', q);
+    if (mailboxId) searchParams.set('mailboxId', mailboxId);
     const qs = searchParams.toString();
     const res = await authFetch(`/gmail/emails${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw new Error('Failed to fetch Gmail emails');
@@ -145,8 +158,9 @@ export const api = {
     }>;
   },
 
-  async getGmailEmailDetail(id: string) {
-    const res = await authFetch(`/gmail/emails/${encodeURIComponent(id)}`);
+  async getGmailEmailDetail(id: string, mailboxId?: string) {
+    const params = mailboxId ? `?mailboxId=${encodeURIComponent(mailboxId)}` : '';
+    const res = await authFetch(`/gmail/emails/${encodeURIComponent(id)}${params}`);
     if (!res.ok) throw new Error('Failed to fetch email details');
     return res.json() as Promise<{ messages: EmailMessage[] }>;
   },
@@ -172,10 +186,11 @@ export const api = {
     return res.json();
   },
 
-  async getOutlookEmails(page?: number, q?: string) {
+  async getOutlookEmails(page?: number, q?: string, mailboxId?: string) {
     const searchParams = new URLSearchParams();
     if (page && page > 1) searchParams.set('page', String(page));
     if (q) searchParams.set('q', q);
+    if (mailboxId) searchParams.set('mailboxId', mailboxId);
     const qs = searchParams.toString();
     const res = await authFetch(`/outlook/emails${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw new Error('Failed to fetch Outlook emails');
@@ -193,8 +208,9 @@ export const api = {
     }>;
   },
 
-  async getOutlookEmailDetail(id: string) {
-    const res = await authFetch(`/outlook/emails/${encodeURIComponent(id)}`);
+  async getOutlookEmailDetail(id: string, mailboxId?: string) {
+    const params = mailboxId ? `?mailboxId=${encodeURIComponent(mailboxId)}` : '';
+    const res = await authFetch(`/outlook/emails/${encodeURIComponent(id)}${params}`);
     if (!res.ok) throw new Error('Failed to fetch email details');
     return res.json() as Promise<{ messages: EmailMessage[] }>;
   },
@@ -254,6 +270,23 @@ export const api = {
   async dismissOpen(openId: string) {
     const res = await authFetch(`/emails/opens/${openId}/dismiss`, { method: 'POST' });
     if (!res.ok) throw new Error('Failed to dismiss open');
+    return res.json();
+  },
+
+  async getMailboxes() {
+    const res = await authFetch('/mailboxes');
+    if (!res.ok) throw new Error('Failed to fetch mailboxes');
+    return res.json() as Promise<Array<{
+      id: string;
+      provider: 'gmail' | 'outlook';
+      email: string;
+      connectedAt: string;
+    }>>;
+  },
+
+  async disconnectMailbox(id: string) {
+    const res = await authFetch(`/mailboxes/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to disconnect mailbox');
     return res.json();
   },
 };

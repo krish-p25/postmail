@@ -37,6 +37,7 @@ function App() {
         >
           <Route index element={<Navigate to="emails" replace />} />
           <Route path="emails" element={<Emails />} />
+          <Route path="emails/mailbox/:mailboxId" element={<Emails />} />
           <Route path="emails/:id" element={<EmailDetail />} />
           <Route path="settings" element={<Settings />} />
           <Route path="setup" element={<Setup />} />

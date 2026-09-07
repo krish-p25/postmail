@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, EmailMessage, EmailAttachment } from '../services/api';
 
 function formatDate(iso: string | null): string {
@@ -266,6 +266,8 @@ function OpensTimeline({ tracking, onDismiss }: { tracking: TrackingData; onDism
 
 export default function EmailDetail() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const mailboxId = searchParams.get('mailboxId') || undefined;
   const navigate = useNavigate();
   const [messages, setMessages] = useState<EmailMessage[]>([]);
   const [provider, setProvider] = useState<string | null>(null);
@@ -289,11 +291,16 @@ export default function EmailDetail() {
     api
       .getSettings()
       .then((settings) => {
-        setProvider(settings.mailboxProvider || 'gmail');
+        let prov = settings.mailboxProvider || 'gmail';
+        if (mailboxId && settings.linkedMailboxes) {
+          const mb = settings.linkedMailboxes.find((m) => m.id === mailboxId);
+          if (mb) prov = mb.provider;
+        }
+        setProvider(prov);
         const fetchDetail =
-          settings.mailboxProvider === 'outlook'
-            ? api.getOutlookEmailDetail(id)
-            : api.getGmailEmailDetail(id);
+          prov === 'outlook'
+            ? api.getOutlookEmailDetail(id, mailboxId)
+            : api.getGmailEmailDetail(id, mailboxId);
         return fetchDetail;
       })
       .then((data) => setMessages(data.messages))
@@ -351,7 +358,13 @@ export default function EmailDetail() {
   return (
     <div>
       <button
-        onClick={() => navigate('/dashboard/emails')}
+        onClick={() => {
+          if (mailboxId) {
+            navigate(`/dashboard/emails/mailbox/${mailboxId}`);
+          } else {
+            navigate('/dashboard/emails');
+          }
+        }}
         className="mb-4 inline-flex min-h-[44px] items-center gap-1.5 text-sm font-medium text-gray-600 transition hover:text-gray-900"
       >
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">

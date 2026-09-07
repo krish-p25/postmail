@@ -2,13 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../contexts/AuthContext';
-import { api } from '../services/api';
+import { api, LinkedMailboxInfo } from '../services/api';
 import { auth } from '../services/auth';
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user } = useAuth();
   const [setupIncomplete, setSetupIncomplete] = useState(false);
+  const [linkedMailboxes, setLinkedMailboxes] = useState<LinkedMailboxInfo[]>([]);
 
   const setupChecked = useRef(false);
   useEffect(() => {
@@ -23,13 +24,14 @@ export default function DashboardLayout() {
       .then((settings) => {
         const mailbox = settings.mailboxConnected ?? false;
         setSetupIncomplete(!account || !extension || !token || !mailbox);
+        setLinkedMailboxes(settings.linkedMailboxes || []);
       })
       .catch(() => setSetupIncomplete(true));
   }, [user]);
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} setupIncomplete={setupIncomplete} />
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} setupIncomplete={setupIncomplete} linkedMailboxes={linkedMailboxes} />
 
       <main className="flex-1 overflow-y-auto">
         <div className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-gray-200 bg-white px-4 md:hidden">
