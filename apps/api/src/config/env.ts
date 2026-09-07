@@ -28,7 +28,7 @@ export const config = {
   microsoftClientId: process.env.MICROSOFT_CLIENT_ID || '',
   microsoftClientSecret: process.env.MICROSOFT_CLIENT_SECRET || '',
   microsoftRedirectUri: process.env.MICROSOFT_REDIRECT_URI || 'http://localhost:3006/microsoft/callback',
-  outlookMailboxRedirectUri: process.env.OUTLOOK_MAILBOX_REDIRECT_URI || 'http://localhost:3006/outlook/callback',
+  outlookMailboxRedirectUri: process.env.OUTLOOK_MAILBOX_REDIRECT_URI || (process.env.DASHBOARD_URL || 'http://localhost:3006') + '/outlook/callback',
 
   // Tracking pixel
   trackingBaseUrl: process.env.TRACKING_BASE_URL || 'http://localhost:3005',
