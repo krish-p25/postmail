@@ -3,17 +3,16 @@ import { OAuth2Client } from 'google-auth-library';
 import { google } from 'googleapis';
 import { config } from '../config/env';
 import TrackedEmail from '../db/models/TrackedEmail';
-import User from '../db/models/User';
-import { UserSetting } from '../db/models';
+import { LinkedMailbox } from '../db/models';
 
 const router = Router();
 
 const MS_TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
 const MS_GRAPH_URL = 'https://graph.microsoft.com/v1.0';
 
-/** Refresh Outlook access token using stored refresh token. */
-async function refreshOutlookToken(user: User): Promise<string | null> {
-  if (!user.outlookRefreshToken) return null;
+/** Refresh Outlook access token on a LinkedMailbox. */
+async function refreshOutlookToken(mailbox: LinkedMailbox): Promise<string | null> {
+  if (!mailbox.refreshToken) return null;
 
   const tokenRes = await fetch(MS_TOKEN_URL, {
     method: 'POST',
@@ -21,7 +20,7 @@ async function refreshOutlookToken(user: User): Promise<string | null> {
     body: new URLSearchParams({
       client_id: config.microsoftClientId,
       client_secret: config.microsoftClientSecret,
-      refresh_token: user.outlookRefreshToken,
+      refresh_token: mailbox.refreshToken,
       grant_type: 'refresh_token',
       scope: 'offline_access Mail.Read User.Read',
     }),
@@ -30,10 +29,10 @@ async function refreshOutlookToken(user: User): Promise<string | null> {
   if (!tokenRes.ok) return null;
 
   const tokens = await tokenRes.json();
-  await user.update({
-    outlookAccessToken: tokens.access_token,
-    outlookRefreshToken: tokens.refresh_token || user.outlookRefreshToken,
-    outlookTokenExpiry: tokens.expires_in
+  await mailbox.update({
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token || mailbox.refreshToken,
+    tokenExpiry: tokens.expires_in
       ? new Date(Date.now() + tokens.expires_in * 1000)
       : null,
   });
@@ -41,13 +40,54 @@ async function refreshOutlookToken(user: User): Promise<string | null> {
   return tokens.access_token;
 }
 
-/** Get a valid Outlook access token, refreshing if needed. */
-async function getOutlookAccessToken(user: User): Promise<string | null> {
-  let accessToken = user.outlookAccessToken;
-  if (!accessToken || (user.outlookTokenExpiry && user.outlookTokenExpiry.getTime() < Date.now())) {
-    accessToken = await refreshOutlookToken(user);
+/** Get a valid Outlook access token from a LinkedMailbox, refreshing if needed. */
+async function getOutlookAccessToken(mailbox: LinkedMailbox): Promise<string | null> {
+  let accessToken = mailbox.accessToken;
+  if (!accessToken || (mailbox.tokenExpiry && mailbox.tokenExpiry.getTime() < Date.now())) {
+    accessToken = await refreshOutlookToken(mailbox);
   }
   return accessToken || null;
+}
+
+/**
+ * Resolve the LinkedMailbox for a tracking operation.
+ * Priority: 1) existing mailboxId on TrackedEmail, 2) senderEmail+provider lookup,
+ * 3) first mailbox for the provider, 4) first mailbox for the user.
+ */
+async function resolveMailbox(
+  userId: string,
+  senderEmail?: string,
+  provider?: string,
+  trackedEmail?: TrackedEmail | null,
+): Promise<LinkedMailbox | null> {
+  // 1. If TrackedEmail already has a mailboxId, use it
+  if (trackedEmail?.mailboxId) {
+    const mailbox = await LinkedMailbox.findByPk(trackedEmail.mailboxId);
+    if (mailbox) return mailbox;
+  }
+
+  // 2. If senderEmail is provided, look up by (userId, email)
+  if (senderEmail) {
+    const where: any = { userId, email: senderEmail };
+    if (provider) where.provider = provider;
+    const mailbox = await LinkedMailbox.findOne({ where });
+    if (mailbox) return mailbox;
+  }
+
+  // 3. Fallback: first mailbox matching the provider
+  if (provider) {
+    const mailbox = await LinkedMailbox.findOne({
+      where: { userId, provider },
+      order: [['createdAt', 'ASC']],
+    });
+    if (mailbox) return mailbox;
+  }
+
+  // 4. Fallback: first mailbox for the user
+  return LinkedMailbox.findOne({
+    where: { userId },
+    order: [['createdAt', 'ASC']],
+  });
 }
 
 /**
@@ -61,10 +101,11 @@ router.get('/preflight', (_req: Request, res: Response) => {
 /**
  * POST /api/track/register
  * Register a new tracked email when the extension injects a pixel.
+ * Accepts optional senderEmail and provider for mailbox resolution.
  */
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { trackingToken, recipients, subject } = req.body;
+    const { trackingToken, recipients, subject, senderEmail, provider } = req.body;
 
     if (!trackingToken) {
       res.status(400).json({ error: 'trackingToken is required' });
@@ -75,12 +116,20 @@ router.post('/register', async (req: Request, res: Response) => {
       ? recipients.join(', ')
       : recipients || null;
 
+    // Resolve mailbox
+    let mailboxId: string | null = null;
+    if (senderEmail || provider) {
+      const mailbox = await resolveMailbox(req.user!.id, senderEmail, provider);
+      if (mailbox) mailboxId = mailbox.id;
+    }
+
     const trackedEmail = await TrackedEmail.create({
       userId: req.user!.id,
       trackingToken,
       recipient,
       subject: subject || null,
       status: 'pending',
+      mailboxId,
     });
 
     res.json({
@@ -130,12 +179,12 @@ router.post('/confirm-sent', async (req: Request, res: Response) => {
 
 /**
  * POST /api/track/update
- * Update a tracked email's subject and recipients (called when compose closes
- * since the user may have changed these after initial registration).
+ * Update a tracked email's subject, recipients, and mailboxId.
+ * Accepts optional senderEmail and provider for mailbox resolution.
  */
 router.post('/update', async (req: Request, res: Response) => {
   try {
-    const { trackingToken, recipients, subject } = req.body;
+    const { trackingToken, recipients, subject, senderEmail, provider } = req.body;
 
     if (!trackingToken) {
       res.status(400).json({ error: 'trackingToken is required' });
@@ -157,6 +206,12 @@ router.post('/update', async (req: Request, res: Response) => {
       updates.recipient = Array.isArray(recipients)
         ? recipients.join(', ')
         : recipients;
+    }
+
+    // Resolve mailboxId if not already set
+    if (!trackedEmail.mailboxId && (senderEmail || provider)) {
+      const mailbox = await resolveMailbox(req.user!.id, senderEmail, provider, trackedEmail);
+      if (mailbox) updates.mailboxId = mailbox.id;
     }
 
     if (Object.keys(updates).length > 0) {
@@ -205,10 +260,11 @@ router.post('/discard', async (req: Request, res: Response) => {
  * POST /api/track/verify-sent
  * Checks whether the tracked email was actually sent by searching the
  * user's sent-mail folder via the appropriate provider API.
+ * Accepts optional senderEmail and provider for mailbox resolution.
  */
 router.post('/verify-sent', async (req: Request, res: Response) => {
   try {
-    const { trackingToken } = req.body;
+    const { trackingToken, senderEmail, provider } = req.body;
 
     if (!trackingToken) {
       res.status(400).json({ error: 'trackingToken is required' });
@@ -219,22 +275,23 @@ router.post('/verify-sent', async (req: Request, res: Response) => {
       where: { trackingToken, userId: req.user!.id },
     });
 
-    const user = await User.findByPk(req.user!.id);
-    if (!user) {
+    // Resolve mailbox
+    const mailbox = await resolveMailbox(req.user!.id, senderEmail, provider, trackedEmail);
+
+    if (!mailbox) {
       res.json({ found: false });
       return;
     }
 
-    // Determine which provider to verify with
-    const settings = await UserSetting.findOne({ where: { userId: user.id } });
+    // Update trackedEmail's mailboxId if not set
+    if (trackedEmail && !trackedEmail.mailboxId) {
+      await trackedEmail.update({ mailboxId: mailbox.id });
+    }
 
-    if (settings?.mailboxProvider === 'outlook' && user.outlookRefreshToken) {
-      await verifyViaOutlook(user, trackingToken, trackedEmail, res);
-    } else if (user.gmailAccessToken) {
-      await verifyViaGmail(user, trackingToken, trackedEmail, res);
+    if (mailbox.provider === 'outlook') {
+      await verifyViaOutlook(mailbox, trackingToken, trackedEmail, res);
     } else {
-      // No mailbox connected — can't verify, but don't error
-      res.json({ found: false });
+      await verifyViaGmail(mailbox, trackingToken, trackedEmail, res);
     }
   } catch (error) {
     console.error('[PostMail API] Error in POST /api/track/verify-sent:', error);
@@ -247,12 +304,12 @@ router.post('/verify-sent', async (req: Request, res: Response) => {
  * and check their HTML body for the tracking token.
  */
 async function verifyViaOutlook(
-  user: User,
+  mailbox: LinkedMailbox,
   trackingToken: string,
   trackedEmail: TrackedEmail | null,
   res: Response,
 ): Promise<void> {
-  const accessToken = await getOutlookAccessToken(user);
+  const accessToken = await getOutlookAccessToken(mailbox);
   if (!accessToken) {
     res.json({ found: false, authError: true });
     return;
@@ -266,9 +323,8 @@ async function verifyViaOutlook(
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
-  // If 401, refresh and retry once
   if (graphRes.status === 401) {
-    const refreshed = await refreshOutlookToken(user);
+    const refreshed = await refreshOutlookToken(mailbox);
     if (!refreshed) {
       res.json({ found: false, authError: true });
       return;
@@ -309,7 +365,7 @@ async function verifyViaOutlook(
  * source for the tracking token string.
  */
 async function verifyViaGmail(
-  user: User,
+  mailbox: LinkedMailbox,
   trackingToken: string,
   trackedEmail: TrackedEmail | null,
   res: Response,
@@ -320,18 +376,17 @@ async function verifyViaGmail(
     config.gmailRedirectUri,
   );
   oauth2Client.setCredentials({
-    access_token: user.gmailAccessToken,
-    refresh_token: user.gmailRefreshToken,
-    expiry_date: user.gmailTokenExpiry?.getTime(),
+    access_token: mailbox.accessToken,
+    refresh_token: mailbox.refreshToken,
+    expiry_date: mailbox.tokenExpiry?.getTime(),
   });
 
-  // Persist refreshed tokens
   oauth2Client.on('tokens', async (tokens) => {
     const updates: Record<string, unknown> = {};
-    if (tokens.access_token) updates.gmailAccessToken = tokens.access_token;
-    if (tokens.expiry_date) updates.gmailTokenExpiry = new Date(tokens.expiry_date);
+    if (tokens.access_token) updates.accessToken = tokens.access_token;
+    if (tokens.expiry_date) updates.tokenExpiry = new Date(tokens.expiry_date);
     if (Object.keys(updates).length) {
-      await User.update(updates, { where: { id: user.id } });
+      await LinkedMailbox.update(updates, { where: { id: mailbox.id } });
     }
   });
 
