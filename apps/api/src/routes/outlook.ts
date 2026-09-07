@@ -77,7 +77,7 @@ router.get('/connect', async (_req: Request, res: Response) => {
     const params = new URLSearchParams({
       client_id: config.microsoftClientId,
       response_type: 'code',
-      redirect_uri: config.microsoftRedirectUri,
+      redirect_uri: config.outlookMailboxRedirectUri,
       scope: SCOPES,
       response_mode: 'query',
       prompt: 'consent',
@@ -110,7 +110,7 @@ router.post('/callback', async (req: Request, res: Response) => {
         client_id: config.microsoftClientId,
         client_secret: config.microsoftClientSecret,
         code,
-        redirect_uri: config.microsoftRedirectUri,
+        redirect_uri: config.outlookMailboxRedirectUri,
         grant_type: 'authorization_code',
         scope: SCOPES,
       }),
