@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import { google } from 'googleapis';
+import { Op } from 'sequelize';
 import { config } from '../config/env';
 import TrackedEmail from '../db/models/TrackedEmail';
-import { LinkedMailbox } from '../db/models';
+import { LinkedMailbox, EmailOpen } from '../db/models';
 
 const router = Router();
 
@@ -165,10 +166,9 @@ router.post('/confirm-sent', async (req: Request, res: Response) => {
       return;
     }
 
-    await trackedEmail.update({
-      status: 'sent',
-      sentAt: new Date(),
-    });
+    const sentAt = new Date();
+    await trackedEmail.update({ status: 'sent', sentAt });
+    await purgePreSendOpens(trackedEmail, sentAt);
 
     res.json({ success: true });
   } catch (error) {
@@ -300,6 +300,26 @@ router.post('/verify-sent', async (req: Request, res: Response) => {
 });
 
 /**
+ * Delete any EmailOpen records that were logged before the email was
+ * actually sent.  These are false opens caused by mail-client previews
+ * or image-proxy pre-fetches while the email sat in drafts.
+ */
+async function purgePreSendOpens(trackedEmail: TrackedEmail, sentAt: Date): Promise<number> {
+  const deleted = await EmailOpen.destroy({
+    where: {
+      trackedEmailId: trackedEmail.id,
+      openedAt: { [Op.lt]: sentAt },
+    },
+  });
+  if (deleted > 0) {
+    console.log(
+      `[PostMail API] Purged ${deleted} pre-send open(s) for token ${trackedEmail.trackingToken.substring(0, 8)}...`,
+    );
+  }
+  return deleted;
+}
+
+/**
  * Verify via Outlook: fetch recent sent messages from Microsoft Graph
  * and check their HTML body for the tracking token.
  */
@@ -354,7 +374,9 @@ async function verifyViaOutlook(
   console.log(`[PostMail API] verify-sent (Outlook): found=${found} for token ${trackingToken.substring(0, 8)}...`);
 
   if (found && trackedEmail && trackedEmail.status === 'pending') {
-    await trackedEmail.update({ status: 'sent', sentAt: new Date() });
+    const sentAt = new Date();
+    await trackedEmail.update({ status: 'sent', sentAt });
+    await purgePreSendOpens(trackedEmail, sentAt);
   }
 
   res.json({ found });
@@ -434,7 +456,9 @@ async function verifyViaGmail(
   console.log(`[PostMail API] verify-sent (Gmail): found=${found} for token ${trackingToken.substring(0, 8)}...`);
 
   if (found && trackedEmail && trackedEmail.status === 'pending') {
-    await trackedEmail.update({ status: 'sent', sentAt: new Date() });
+    const sentAt = new Date();
+    await trackedEmail.update({ status: 'sent', sentAt });
+    await purgePreSendOpens(trackedEmail, sentAt);
   }
 
   res.json({ found });
