@@ -1,16 +1,17 @@
-import { findSubjectInputs, findComposeContainer, debugLogDomElements } from './selectors';
+import { findSubjectInputs, findComposeContainer, findAllBodies, findReplyComposeContainer, debugLogDomElements } from './selectors';
 import { ComposeDetectorCallbacks } from '../compose-manager';
 
 /**
- * Detects Outlook Web compose window appearance and removal.
+ * Detects Outlook Web compose window and inline reply/forward appearance and removal.
  *
- * Uses MutationObserver on document.body to watch for subject inputs
- * (the hallmark of a compose window), then walks up to find the compose
- * container that also holds the message body.
+ * Uses MutationObserver on document.body to watch for:
+ *   1. Subject inputs → walk up to find compose container (new compose windows)
+ *   2. Body textboxes without a subject input → walk up to find reply container
+ *      (quick-reply areas in the reading pane)
  */
 export class OutlookComposeDetector {
   private observer: MutationObserver | null = null;
-  private trackedComposes = new Map<HTMLElement, HTMLElement>(); // container → subject input
+  private trackedComposes = new Set<HTMLElement>();
   private callbacks: ComposeDetectorCallbacks;
   private debugDone = false;
 
@@ -37,52 +38,60 @@ export class OutlookComposeDetector {
   }
 
   private scan(): void {
+    const currentComposes = new Set<HTMLElement>();
+
+    // 1. Full compose windows (have a subject input)
     const subjectInputs = findSubjectInputs();
-
-    if (!subjectInputs || subjectInputs.length === 0) {
-      // No subject inputs found — run debug scan once to help identify selectors
-      if (!this.debugDone) {
-        // Delay debug scan slightly to let Outlook finish rendering
-        setTimeout(() => {
-          if (!this.debugDone) {
-            this.debugDone = true;
-            debugLogDomElements();
-          }
-        }, 3000);
-      }
-
-      // Check for removed composes
-      for (const [container] of this.trackedComposes) {
-        if (!document.body.contains(container)) {
-          console.log('[PostMail][Outlook:Detector] Compose window removed');
-          this.trackedComposes.delete(container);
-          this.callbacks.onComposeRemoved(container);
-        }
-      }
-      return;
+    if (subjectInputs) {
+      subjectInputs.forEach((input) => {
+        const container = findComposeContainer(input as HTMLElement);
+        if (!container) return;
+        currentComposes.add(container);
+      });
     }
 
-    const currentContainers = new Set<HTMLElement>();
+    // 2. Inline reply/forward areas (body textbox without a subject input)
+    const bodies = findAllBodies();
+    if (bodies) {
+      bodies.forEach((body) => {
+        const el = body as HTMLElement;
+        // Skip if already inside a tracked full-compose container
+        for (const tracked of currentComposes) {
+          if (tracked.contains(el)) return;
+        }
+        const container = findReplyComposeContainer(el);
+        if (!container) return;
+        if (currentComposes.has(container)) return;
+        currentComposes.add(container);
+      });
+    }
 
-    subjectInputs.forEach((input) => {
-      const container = findComposeContainer(input as HTMLElement);
-      if (!container) {
-        console.log('[PostMail][Outlook:Detector] Subject input found but no compose container (no body textbox ancestor)');
-        return;
-      }
+    // Run debug scan once if nothing found at all
+    if (currentComposes.size === 0 && !this.debugDone) {
+      setTimeout(() => {
+        if (!this.debugDone) {
+          this.debugDone = true;
+          debugLogDomElements();
+        }
+      }, 3000);
+    }
 
-      currentContainers.add(container);
-
+    // Detect new composes
+    for (const container of currentComposes) {
       if (!this.trackedComposes.has(container)) {
-        console.log('[PostMail][Outlook:Detector] New compose window found');
-        this.trackedComposes.set(container, input as HTMLElement);
+        const hasSubject = subjectInputs
+          ? Array.from(subjectInputs).some((inp) => container.contains(inp))
+          : false;
+        console.log(`[PostMail][Outlook:Detector] New ${hasSubject ? 'compose' : 'reply'} detected`);
+        this.trackedComposes.add(container);
         this.callbacks.onComposeDetected(container);
       }
-    });
+    }
 
-    for (const [container] of this.trackedComposes) {
-      if (!currentContainers.has(container) || !document.body.contains(container)) {
-        console.log('[PostMail][Outlook:Detector] Compose window removed');
+    // Detect removed composes
+    for (const container of this.trackedComposes) {
+      if (!currentComposes.has(container) || !document.body.contains(container)) {
+        console.log('[PostMail][Outlook:Detector] Compose removed');
         this.trackedComposes.delete(container);
         this.callbacks.onComposeRemoved(container);
       }

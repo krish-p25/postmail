@@ -109,4 +109,50 @@ describe('ComposeTracker', () => {
 
     expect(tracker.getSubject()).toBe('Test Subject');
   });
+
+  it('re-injects pixel after body content is cleared', async () => {
+    const compose = createMockComposeWithBody();
+    document.body.appendChild(compose);
+    const tracker = new ComposeTracker('c1', compose, true, findBody, findSubject, () => null, 'gmail');
+
+    expect(tracker.getInfo().injected).toBe(true);
+
+    // Simulate Ctrl+A → Backspace: clear all body content
+    const body = compose.querySelector('div[role="textbox"]')!;
+    body.innerHTML = '';
+
+    // MutationObserver fires asynchronously
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(tracker.getInfo().injected).toBe(true);
+    expect(compose.querySelector(`img[${TRACKING_PIXEL_ATTR}]`)).not.toBeNull();
+
+    tracker.cleanup();
+    compose.remove();
+  });
+
+  it('re-injects pixel after body element is replaced', async () => {
+    const compose = createMockComposeWithBody();
+    document.body.appendChild(compose);
+    const tracker = new ComposeTracker('c1', compose, true, findBody, findSubject, () => null, 'outlook');
+
+    expect(tracker.getInfo().injected).toBe(true);
+
+    // Simulate provider replacing the body element entirely
+    const oldBody = compose.querySelector('div[role="textbox"]')!;
+    oldBody.remove();
+    const newBody = document.createElement('div');
+    newBody.setAttribute('role', 'textbox');
+    newBody.setAttribute('contenteditable', 'true');
+    compose.appendChild(newBody);
+
+    // MutationObserver fires asynchronously
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(tracker.getInfo().injected).toBe(true);
+    expect(compose.querySelector(`img[${TRACKING_PIXEL_ATTR}]`)).not.toBeNull();
+
+    tracker.cleanup();
+    compose.remove();
+  });
 });
