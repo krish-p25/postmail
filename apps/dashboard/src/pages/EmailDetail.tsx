@@ -149,6 +149,7 @@ interface TrackedEmailEntry {
   subject: string | null;
   recipient: string | null;
   status: string;
+  sentAt: string | null;
   opens: TrackingOpen[];
 }
 
@@ -194,7 +195,13 @@ function matchTrackingToMessages(
     if (!msg.body) continue;
     for (const te of trackedEmails) {
       if (hasDirectTrackingPixel(msg.body, te.trackingToken)) {
-        map.set(msg.id, { status: te.status, opens: te.opens });
+        // Filter out opens that occurred before the email was actually sent
+        // (draft previews / image-proxy pre-fetches)
+        const sentTime = te.sentAt ? new Date(te.sentAt).getTime() : null;
+        const validOpens = sentTime
+          ? te.opens.filter((o) => new Date(o.opened_at).getTime() >= sentTime)
+          : te.opens;
+        map.set(msg.id, { status: te.status, opens: validOpens });
         break;
       }
     }
@@ -403,7 +410,11 @@ export default function EmailDetail() {
             );
             if (match) {
               const firstMsg = msgs[0];
-              map.set(firstMsg.id, { status: match.status, opens: match.opens });
+              const sentTime = match.sentAt ? new Date(match.sentAt).getTime() : null;
+              const validOpens = sentTime
+                ? match.opens.filter((o) => new Date(o.opened_at).getTime() >= sentTime)
+                : match.opens;
+              map.set(firstMsg.id, { status: match.status, opens: validOpens });
             }
           }
           setMessageTracking(map);
