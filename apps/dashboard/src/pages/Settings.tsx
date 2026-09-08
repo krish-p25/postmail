@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, FormEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, LinkedMailboxInfo } from '../services/api';
 import ConnectMailboxCard from '../components/ConnectMailboxCard';
@@ -25,6 +25,19 @@ export default function Settings() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [accountMessage, setAccountMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const passwordContentRef = useRef<HTMLDivElement>(null);
+  const [passwordHeight, setPasswordHeight] = useState(0);
+
+  const measurePasswordHeight = useCallback(() => {
+    if (passwordContentRef.current) {
+      setPasswordHeight(passwordContentRef.current.scrollHeight);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (passwordOpen) measurePasswordHeight();
+  }, [passwordOpen, newPassword, confirmPassword, currentPassword, passwordSaving, accountMessage, measurePasswordHeight]);
 
   const settingsFetched = useRef(false);
   useEffect(() => {
@@ -179,149 +192,165 @@ export default function Settings() {
               )}
 
               {/* Password section */}
-              <div className="rounded-lg border border-gray-200 px-3 py-3 sm:px-4">
-                <div className="flex items-center gap-3">
+              <div className="overflow-hidden rounded-lg border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setPasswordOpen((prev) => !prev)}
+                  className="flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-gray-50 sm:px-4"
+                >
                   <svg className="h-5 w-5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
                   </svg>
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="flex-1 text-sm font-medium text-gray-900">
                     {hasPassword ? 'Change Password' : 'Create Password'}
                   </p>
+                  <svg
+                    className={`h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 ${passwordOpen ? 'rotate-180' : ''}`}
+                    fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+                <div
+                  className="overflow-hidden transition-[height] duration-300 ease-in-out"
+                  style={{ height: passwordOpen ? `${passwordHeight}px` : '0px' }}
+                >
+                  <div ref={passwordContentRef}>
+                    {/* Create password form (for Google-only users) */}
+                    {!hasPassword && (() => {
+                      const isStrong = getPasswordStrength(newPassword).label === 'Strong';
+                      const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
+                      const showMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
+                      const canSubmit = isStrong && passwordsMatch && !passwordSaving;
+
+                      return (
+                        <form
+                          className="space-y-3 border-t border-gray-100 px-3 py-3 sm:px-4"
+                          onSubmit={async (e: FormEvent) => {
+                            e.preventDefault();
+                            if (!canSubmit) return;
+                            setAccountMessage(null);
+                            setPasswordSaving(true);
+                            try {
+                              await api.setPassword(newPassword);
+                              setHasPassword(true);
+                              setNewPassword('');
+                              setConfirmPassword('');
+                              setAccountMessage({ type: 'success', text: 'Password created successfully.' });
+                            } catch (err) {
+                              setAccountMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to set password.' });
+                            } finally {
+                              setPasswordSaving(false);
+                            }
+                          }}
+                        >
+                          <PasswordInput
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="New password"
+                            className="block w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          />
+                          <PasswordStrengthMeter password={newPassword} />
+                          <PasswordInput
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="Confirm password"
+                            className={`block w-full rounded-lg border px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-1 ${
+                              showMismatch
+                                ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                                : passwordsMatch
+                                  ? 'border-green-300 focus:border-green-500 focus:ring-green-500'
+                                  : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
+                            }`}
+                          />
+                          {showMismatch && (
+                            <p className="text-xs text-red-500 -mt-1">Passwords do not match</p>
+                          )}
+                          {passwordsMatch && (
+                            <p className="text-xs text-green-500 -mt-1">Passwords match</p>
+                          )}
+                          <button
+                            type="submit"
+                            disabled={!canSubmit}
+                            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {passwordSaving ? 'Creating...' : 'Create password'}
+                          </button>
+                        </form>
+                      );
+                    })()}
+
+                    {/* Change password form (for email/password users) */}
+                    {hasPassword && (() => {
+                      const isStrong = getPasswordStrength(newPassword).label === 'Strong';
+                      const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
+                      const showMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
+                      const canSubmit = currentPassword.length > 0 && isStrong && passwordsMatch && !passwordSaving;
+
+                      return (
+                        <form
+                          className="space-y-3 border-t border-gray-100 px-3 py-3 sm:px-4"
+                          onSubmit={async (e: FormEvent) => {
+                            e.preventDefault();
+                            if (!canSubmit) return;
+                            setAccountMessage(null);
+                            setPasswordSaving(true);
+                            try {
+                              await api.changePassword(currentPassword, newPassword);
+                              setCurrentPassword('');
+                              setNewPassword('');
+                              setConfirmPassword('');
+                              setAccountMessage({ type: 'success', text: 'Password changed successfully.' });
+                            } catch (err) {
+                              setAccountMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to change password.' });
+                            } finally {
+                              setPasswordSaving(false);
+                            }
+                          }}
+                        >
+                          <PasswordInput
+                            value={currentPassword}
+                            onChange={(e) => setCurrentPassword(e.target.value)}
+                            placeholder="Current password"
+                            className="block w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          />
+                          <PasswordInput
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="New password"
+                            className="block w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          />
+                          <PasswordStrengthMeter password={newPassword} />
+                          <PasswordInput
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="Confirm new password"
+                            className={`block w-full rounded-lg border px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-1 ${
+                              showMismatch
+                                ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                                : passwordsMatch
+                                  ? 'border-green-300 focus:border-green-500 focus:ring-green-500'
+                                  : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
+                            }`}
+                          />
+                          {showMismatch && (
+                            <p className="text-xs text-red-500 -mt-1">Passwords do not match</p>
+                          )}
+                          {passwordsMatch && (
+                            <p className="text-xs text-green-500 -mt-1">Passwords match</p>
+                          )}
+                          <button
+                            type="submit"
+                            disabled={!canSubmit}
+                            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {passwordSaving ? 'Changing...' : 'Change password'}
+                          </button>
+                        </form>
+                      );
+                    })()}
+                  </div>
                 </div>
-
-                {/* Create password form (for Google-only users) */}
-                {!hasPassword && (() => {
-                  const isStrong = getPasswordStrength(newPassword).label === 'Strong';
-                  const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
-                  const showMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
-                  const canSubmit = isStrong && passwordsMatch && !passwordSaving;
-
-                  return (
-                    <form
-                      className="mt-3 space-y-3 border-t border-gray-100 pt-3"
-                      onSubmit={async (e: FormEvent) => {
-                        e.preventDefault();
-                        if (!canSubmit) return;
-                        setAccountMessage(null);
-                        setPasswordSaving(true);
-                        try {
-                          await api.setPassword(newPassword);
-                          setHasPassword(true);
-                          setNewPassword('');
-                          setConfirmPassword('');
-                          setAccountMessage({ type: 'success', text: 'Password created successfully.' });
-                        } catch (err) {
-                          setAccountMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to set password.' });
-                        } finally {
-                          setPasswordSaving(false);
-                        }
-                      }}
-                    >
-                      <PasswordInput
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="New password"
-                        className="block w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      />
-                      <PasswordStrengthMeter password={newPassword} />
-                      <PasswordInput
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Confirm password"
-                        className={`block w-full rounded-lg border px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-1 ${
-                          showMismatch
-                            ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
-                            : passwordsMatch
-                              ? 'border-green-300 focus:border-green-500 focus:ring-green-500'
-                              : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
-                        }`}
-                      />
-                      {showMismatch && (
-                        <p className="text-xs text-red-500 -mt-1">Passwords do not match</p>
-                      )}
-                      {passwordsMatch && (
-                        <p className="text-xs text-green-500 -mt-1">Passwords match</p>
-                      )}
-                      <button
-                        type="submit"
-                        disabled={!canSubmit}
-                        className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {passwordSaving ? 'Creating...' : 'Create password'}
-                      </button>
-                    </form>
-                  );
-                })()}
-
-                {/* Change password form (for email/password users) */}
-                {hasPassword && (() => {
-                  const isStrong = getPasswordStrength(newPassword).label === 'Strong';
-                  const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
-                  const showMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
-                  const canSubmit = currentPassword.length > 0 && isStrong && passwordsMatch && !passwordSaving;
-
-                  return (
-                    <form
-                      className="mt-3 space-y-3 border-t border-gray-100 pt-3"
-                      onSubmit={async (e: FormEvent) => {
-                        e.preventDefault();
-                        if (!canSubmit) return;
-                        setAccountMessage(null);
-                        setPasswordSaving(true);
-                        try {
-                          await api.changePassword(currentPassword, newPassword);
-                          setCurrentPassword('');
-                          setNewPassword('');
-                          setConfirmPassword('');
-                          setAccountMessage({ type: 'success', text: 'Password changed successfully.' });
-                        } catch (err) {
-                          setAccountMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to change password.' });
-                        } finally {
-                          setPasswordSaving(false);
-                        }
-                      }}
-                    >
-                      <PasswordInput
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        placeholder="Current password"
-                        className="block w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      />
-                      <PasswordInput
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="New password"
-                        className="block w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      />
-                      <PasswordStrengthMeter password={newPassword} />
-                      <PasswordInput
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Confirm new password"
-                        className={`block w-full rounded-lg border px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-1 ${
-                          showMismatch
-                            ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
-                            : passwordsMatch
-                              ? 'border-green-300 focus:border-green-500 focus:ring-green-500'
-                              : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
-                        }`}
-                      />
-                      {showMismatch && (
-                        <p className="text-xs text-red-500 -mt-1">Passwords do not match</p>
-                      )}
-                      {passwordsMatch && (
-                        <p className="text-xs text-green-500 -mt-1">Passwords match</p>
-                      )}
-                      <button
-                        type="submit"
-                        disabled={!canSubmit}
-                        className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {passwordSaving ? 'Changing...' : 'Change password'}
-                      </button>
-                    </form>
-                  );
-                })()}
               </div>
 
               {accountMessage && (
