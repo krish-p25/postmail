@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { api, LinkedMailboxInfo } from '../services/api';
 
@@ -210,6 +210,18 @@ function AccordionSection({ mailbox }: { mailbox: LinkedMailboxInfo }) {
   const [emails, setEmails] = useState<MergedEmail[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetched, setFetched] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState(0);
+
+  const measureHeight = useCallback(() => {
+    if (contentRef.current) {
+      setContentHeight(contentRef.current.scrollHeight);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (expanded) measureHeight();
+  }, [expanded, emails, loading, measureHeight]);
 
   function handleToggle() {
     const next = !expanded;
@@ -267,10 +279,10 @@ function AccordionSection({ mailbox }: { mailbox: LinkedMailboxInfo }) {
         </svg>
       </button>
       <div
-        className="overflow-hidden transition-all duration-300 ease-out"
-        style={{ maxHeight: expanded ? '2000px' : '0px' }}
+        className="overflow-hidden transition-[height] duration-300 ease-in-out"
+        style={{ height: expanded ? `${contentHeight}px` : '0px' }}
       >
-        <div className="border-t border-gray-100 px-4 py-3">
+        <div ref={contentRef} className="border-t border-gray-100 px-4 py-3">
           {loading && (
             <div className="space-y-2">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -389,6 +401,7 @@ export default function Emails() {
   }
 
   const settingsFetched = useRef(false);
+  const settingsCache = useRef<{ mailboxProvider: string | null; mailboxConnected: boolean } | null>(null);
   useEffect(() => {
     if (settingsFetched.current) return;
     settingsFetched.current = true;
@@ -398,6 +411,11 @@ export default function Emails() {
       .then((settings) => {
         setMailboxConnected(settings.mailboxConnected ?? false);
         setLinkedMailboxes(settings.linkedMailboxes || []);
+        setMailboxEmail(settings.mailboxEmail ?? null);
+        settingsCache.current = {
+          mailboxProvider: settings.mailboxProvider ?? null,
+          mailboxConnected: settings.mailboxConnected ?? false,
+        };
 
         let prov: string;
         let mbId: string | undefined;
@@ -414,7 +432,6 @@ export default function Emails() {
         }
 
         setProvider(prov);
-        setMailboxEmail(settings.mailboxEmail ?? null);
         if (settings.mailboxConnected) {
           const gmailToken = initialPageToken || undefined;
           const outlookPage = initialPage > 1 ? initialPage : undefined;
@@ -429,6 +446,45 @@ export default function Emails() {
       });
   }, []);
 
+  // Re-fetch emails when navigating between mailboxes
+  const prevRouteMailboxId = useRef(routeMailboxId);
+  useEffect(() => {
+    if (prevRouteMailboxId.current === routeMailboxId) return;
+    prevRouteMailboxId.current = routeMailboxId;
+
+    // Reset search/pagination state
+    setPage(1);
+    setGmailNextToken(null);
+    setGmailTokenHistory([]);
+    setSearchQuery('');
+    setActiveQuery('');
+    setSearchOpen(false);
+    setFilter('all');
+    setHasMore(false);
+    setSearchParams({}, { replace: true });
+
+    // Multi-mailbox accordion view
+    if (linkedMailboxes.length > 1 && !routeMailboxId) {
+      setEmails([]);
+      setLoading(false);
+      return;
+    }
+
+    // Single mailbox view
+    if (routeMailboxId) {
+      const mb = linkedMailboxes.find((m) => m.id === routeMailboxId);
+      const prov = mb?.provider || 'gmail';
+      setProvider(prov);
+      fetchPage(prov, undefined, undefined, '', routeMailboxId);
+    } else if (settingsCache.current?.mailboxConnected) {
+      const prov = settingsCache.current.mailboxProvider || 'gmail';
+      setProvider(prov);
+      fetchPage(prov, undefined, undefined, '');
+    } else {
+      setLoading(false);
+    }
+  }, [routeMailboxId]);
+
   function handleSearchChange(value: string) {
     setSearchQuery(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -439,7 +495,7 @@ export default function Emails() {
       setGmailTokenHistory([]);
       setSearchParams(buildParams(value, 1, undefined, filter), { replace: true });
       if (provider) {
-        fetchPage(provider, undefined, undefined, value);
+        fetchPage(provider, undefined, undefined, value, routeMailboxId);
       }
     }, 400);
   }
@@ -454,7 +510,7 @@ export default function Emails() {
         setGmailNextToken(null);
         setGmailTokenHistory([]);
         setSearchParams(buildParams('', 1, undefined, filter), { replace: true });
-        if (provider) fetchPage(provider, undefined, undefined, '');
+        if (provider) fetchPage(provider, undefined, undefined, '', routeMailboxId);
       }
     } else {
       setSearchOpen(true);
@@ -473,12 +529,12 @@ export default function Emails() {
     setPage(nextPage);
     if (provider === 'outlook') {
       setSearchParams(buildParams(activeQuery, nextPage, undefined, filter));
-      fetchPage(provider, undefined, nextPage);
+      fetchPage(provider, undefined, nextPage, undefined, routeMailboxId);
     } else {
       if (gmailNextToken) {
         setGmailTokenHistory((prev) => [...prev, gmailNextToken]);
         setSearchParams(buildParams(activeQuery, nextPage, gmailNextToken, filter));
-        fetchPage(provider, gmailNextToken);
+        fetchPage(provider, gmailNextToken, undefined, undefined, routeMailboxId);
       }
     }
   }
@@ -489,14 +545,14 @@ export default function Emails() {
     setPage(prevPage);
     if (provider === 'outlook') {
       setSearchParams(buildParams(activeQuery, prevPage, undefined, filter));
-      fetchPage(provider, undefined, prevPage);
+      fetchPage(provider, undefined, prevPage, undefined, routeMailboxId);
     } else {
       const history = [...gmailTokenHistory];
       history.pop();
       const prevToken = history.length > 0 ? history[history.length - 1] : undefined;
       setGmailTokenHistory(history);
       setSearchParams(buildParams(activeQuery, prevPage, prevToken, filter));
-      fetchPage(provider, prevToken);
+      fetchPage(provider, prevToken, undefined, undefined, routeMailboxId);
     }
   }
 
