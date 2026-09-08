@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { config } from '../config/env';
-import { User, UserSetting } from '../db/models';
+import { User, UserSetting, LinkedMailbox } from '../db/models';
 import { createVerification, verifyCode } from '../services/verification';
 import { sendVerificationEmail } from '../services/email';
 import { withRLS } from '../middleware/rls';
@@ -25,18 +25,31 @@ function signToken(user: { id: string; email: string }): string {
 }
 
 /**
- * Store Outlook tokens on the user and auto-connect their mailbox
- * if no mailbox is currently connected.
+ * Store Outlook tokens in LinkedMailbox and auto-connect the mailbox
+ * in UserSettings if no mailbox is currently connected.
  */
 async function storeOutlookTokensAndConnect(
   user: User,
   tokens: { accessToken: string; refreshToken: string | null; tokenExpiry: Date | null },
   mailboxEmail: string,
 ) {
-  await user.update({
-    outlookAccessToken: tokens.accessToken,
-    outlookRefreshToken: tokens.refreshToken,
-    outlookTokenExpiry: tokens.tokenExpiry,
+  const [mailbox] = await LinkedMailbox.findOrCreate({
+    where: { userId: user.id, email: mailboxEmail },
+    defaults: {
+      userId: user.id,
+      provider: 'outlook',
+      email: mailboxEmail,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      tokenExpiry: tokens.tokenExpiry,
+    },
+  });
+
+  // Always refresh tokens on the existing mailbox
+  await mailbox.update({
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken || mailbox.refreshToken,
+    tokenExpiry: tokens.tokenExpiry,
   });
 
   const settings = await UserSetting.findOne({ where: { userId: user.id } });
@@ -443,12 +456,15 @@ router.post('/microsoft', async (req: Request, res: Response) => {
         await user.update({ microsoftId, displayName: displayName || user.displayName });
         await storeOutlookTokensAndConnect(user, { accessToken, refreshToken, tokenExpiry }, email);
       } else {
-        // Create new user with Outlook tokens
-        user = await User.create({
-          email, microsoftId, displayName,
-          outlookAccessToken: accessToken,
-          outlookRefreshToken: refreshToken,
-          outlookTokenExpiry: tokenExpiry,
+        // Create new user and store tokens in LinkedMailbox
+        user = await User.create({ email, microsoftId, displayName });
+        await LinkedMailbox.create({
+          userId: user.id,
+          provider: 'outlook',
+          email,
+          accessToken,
+          refreshToken,
+          tokenExpiry,
         });
         await UserSetting.create({
           userId: user.id,

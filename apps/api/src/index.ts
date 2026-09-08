@@ -15,7 +15,6 @@ import outlookRoutes from './routes/outlook';
 import pixelRoutes from './routes/pixel';
 import trackRoutes from './routes/track';
 import mailboxRoutes from './routes/mailboxes';
-import { migrateMailboxTokens } from './db/migrate-mailbox-tokens';
 
 const app = express();
 
@@ -73,9 +72,6 @@ async function start(): Promise<void> {
     // Sync all models — creates tables if they don't exist, adds missing columns
     await sequelize.sync({ alter: true });
     console.log('[PostMail API] Database schema synced');
-
-    // Migrate legacy token columns to LinkedMailbox rows
-    await migrateMailboxTokens();
 
     // Start HTTP server
     app.listen(config.port, () => {
