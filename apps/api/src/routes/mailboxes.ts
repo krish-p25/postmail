@@ -56,7 +56,6 @@ router.delete('/:id', async (req: Request, res: Response) => {
     }
 
     await mailbox.destroy();
-    console.log(`[PostMail API] Mailbox ${mailbox.id} (${mailbox.email}) disconnected for user ${req.user!.id}`);
 
     res.json({ success: true });
   } catch (error) {

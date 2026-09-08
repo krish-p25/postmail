@@ -6,28 +6,6 @@ import { notifyEmailOpened } from '../services/notifications';
 
 const router = Router();
 
-function logPixelRequest(req: Request, token: string, matched: boolean): void {
-  const entry = {
-    timestamp: new Date().toISOString(),
-    token: token.substring(0, 12) + '...',
-    matched,
-    ip: req.ip,
-    xForwardedFor: req.headers['x-forwarded-for'] || null,
-    xRealIp: req.headers['x-real-ip'] || null,
-    userAgent: req.headers['user-agent'] || null,
-    referer: req.headers['referer'] || null,
-    accept: req.headers['accept'] || null,
-    acceptLanguage: req.headers['accept-language'] || null,
-    acceptEncoding: req.headers['accept-encoding'] || null,
-    cacheControl: req.headers['cache-control'] || null,
-    connection: req.headers['connection'] || null,
-    host: req.headers['host'] || null,
-    via: req.headers['via'] || null,
-    allHeaders: req.headers,
-  };
-  console.log('[PostMail Pixel] REQUEST:', JSON.stringify(entry, null, 2));
-}
-
 // 1x1 transparent GIF (43 bytes) — smallest valid image for email tracking
 const TRANSPARENT_GIF = Buffer.from(
   'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
@@ -56,8 +34,6 @@ router.get('/:token', async (req: Request, res: Response) => {
     const trackedEmail = await TrackedEmail.findOne({
       where: { trackingToken: req.params.token },
     });
-
-    logPixelRequest(req, req.params.token, !!trackedEmail);
 
     if (!trackedEmail) {
       sendPixel(res);

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { config } from '../config/env';
 import { LinkedMailbox } from '../db/models';
+import { lookupTrackingByMessageIds } from '../services/tracking-lookup';
 
 const router = Router();
 
@@ -180,7 +181,6 @@ router.post('/callback', async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`[PostMail API] Outlook mailbox ${created ? 'created' : 'updated'}: ${mailboxEmail} for user ${req.user!.id}`);
     res.json({ success: true });
   } catch (error) {
     console.error('[PostMail API] Outlook callback error:', error);
@@ -208,7 +208,7 @@ router.get('/emails', async (req: Request, res: Response) => {
       return;
     }
 
-    const pageSize = 20;
+    const pageSize = 25;
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
     const skip = (page - 1) * pageSize;
     const searchQuery = (req.query.q as string) || '';
@@ -246,7 +246,10 @@ router.get('/emails', async (req: Request, res: Response) => {
         }
         const retryData = await retryRes.json();
         const emails = formatMessages(retryData.value || []);
-        res.json({ emails, page, hasMore: emails.length === pageSize });
+        const ids = emails.map((e) => e.id);
+        const trackingMap = await lookupTrackingByMessageIds(ids, req.user!.id);
+        const enriched = emails.map((e) => ({ ...e, tracking: trackingMap.get(e.id) || null }));
+        res.json({ emails: enriched, page, hasMore: emails.length === pageSize });
         return;
       }
       res.status(500).json({ error: 'Failed to fetch Outlook emails' });
@@ -255,7 +258,10 @@ router.get('/emails', async (req: Request, res: Response) => {
 
     const data = await graphRes.json();
     const emails = formatMessages(data.value || []);
-    res.json({ emails, page, hasMore: emails.length === pageSize });
+    const ids = emails.map((e) => e.id);
+    const trackingMap = await lookupTrackingByMessageIds(ids, req.user!.id);
+    const enriched = emails.map((e) => ({ ...e, tracking: trackingMap.get(e.id) || null }));
+    res.json({ emails: enriched, page, hasMore: emails.length === pageSize });
   } catch (error) {
     console.error('[PostMail API] Outlook emails error:', error);
     res.status(500).json({ error: 'Failed to fetch Outlook emails' });
@@ -282,7 +288,6 @@ function formatMessages(messages: GraphMessage[]) {
         : r.emailAddress.address,
     ),
     sentAt: msg.sentDateTime ? new Date(msg.sentDateTime).toISOString() : null,
-    tracked: false,
     hasAttachments: msg.hasAttachments || false,
   }));
 }

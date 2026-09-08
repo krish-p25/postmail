@@ -3,6 +3,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { google } from 'googleapis';
 import { config } from '../config/env';
 import { LinkedMailbox } from '../db/models';
+import { lookupTrackingByMessageIds } from '../services/tracking-lookup';
 
 const router = Router();
 
@@ -195,7 +196,6 @@ router.post('/callback', async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`[PostMail API] Gmail mailbox ${created ? 'created' : 'updated'}: ${mailboxEmail} for user ${req.user!.id}`);
     res.json({ success: true });
   } catch (error) {
     console.error('[PostMail API] Gmail callback error:', error);
@@ -220,7 +220,7 @@ router.get('/emails', async (req: Request, res: Response) => {
     const client = createAuthenticatedClient(mailbox);
     const gmail = google.gmail({ version: 'v1', auth: client as any });
 
-    const pageSize = 20;
+    const pageSize = 25;
     const pageToken = (req.query.pageToken as string) || undefined;
     const searchQuery = (req.query.q as string) || '';
 
@@ -262,17 +262,25 @@ router.get('/emails', async (req: Request, res: Response) => {
         const hasAttachments = checkForAttachments(detail.data.payload);
 
         return {
-          id: msg.id,
+          id: msg.id!,
           subject,
           recipients,
           sentAt: date ? new Date(date).toISOString() : null,
-          tracked: false,
           hasAttachments,
         };
       }),
     );
 
-    res.json({ emails, nextPageToken });
+    // Look up tracking data for all message IDs in one query
+    const ids = emails.map((e) => e.id);
+    const trackingMap = await lookupTrackingByMessageIds(ids, req.user!.id);
+
+    const enriched = emails.map((email) => ({
+      ...email,
+      tracking: trackingMap.get(email.id) || null,
+    }));
+
+    res.json({ emails: enriched, nextPageToken });
   } catch (error) {
     console.error('[PostMail API] Gmail emails error:', error);
     res.status(500).json({ error: 'Failed to fetch Gmail emails' });

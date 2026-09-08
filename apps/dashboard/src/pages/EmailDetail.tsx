@@ -150,6 +150,7 @@ interface TrackedEmailEntry {
   recipient: string | null;
   status: string;
   sentAt: string | null;
+  messageId: string | null;
   opens: TrackingOpen[];
 }
 
@@ -164,6 +165,11 @@ function parseUserAgent(ua: string | null): string {
   if (ua.includes('Safari')) return 'Safari';
   if (ua.includes('Googlebot')) return 'Gmail (image proxy)';
   return 'Email client';
+}
+
+/** Strip Re:/Fwd:/Fw: prefixes for subject comparison. */
+function normalizeSubject(s: string): string {
+  return s.replace(/^(?:re|fwd?)\s*:\s*/i, '').toLowerCase();
 }
 
 /**
@@ -191,12 +197,28 @@ function matchTrackingToMessages(
 ): Map<string, TrackingData> {
   const map = new Map<string, TrackingData>();
 
+  // Build a messageId → TrackedEmailEntry lookup for O(1) matching
+  const byMessageId = new Map<string, TrackedEmailEntry>();
+  for (const te of trackedEmails) {
+    if (te.messageId) byMessageId.set(te.messageId, te);
+  }
+
   for (const msg of messages) {
+    // 1. Match by provider message ID (exact)
+    const idMatch = byMessageId.get(msg.id);
+    if (idMatch) {
+      const sentTime = idMatch.sentAt ? new Date(idMatch.sentAt).getTime() : null;
+      const validOpens = sentTime
+        ? idMatch.opens.filter((o) => new Date(o.opened_at).getTime() >= sentTime)
+        : idMatch.opens;
+      map.set(msg.id, { status: idMatch.status, opens: validOpens });
+      continue;
+    }
+
+    // 2. Fall back to body scan for tracking pixel
     if (!msg.body) continue;
     for (const te of trackedEmails) {
       if (hasDirectTrackingPixel(msg.body, te.trackingToken)) {
-        // Filter out opens that occurred before the email was actually sent
-        // (draft previews / image-proxy pre-fetches)
         const sentTime = te.sentAt ? new Date(te.sentAt).getTime() : null;
         const validOpens = sentTime
           ? te.opens.filter((o) => new Date(o.opened_at).getTime() >= sentTime)
@@ -404,9 +426,9 @@ export default function EmailDetail() {
           // Fallback: if no body-match found but subject matches, attach to
           // the first message in the thread (the original tracked send)
           if (map.size === 0) {
-            const emailSubject = msgs[0].subject.toLowerCase();
+            const emailSubject = normalizeSubject(msgs[0].subject);
             const match = tracked.find(
-              (te) => te.id === id || (te.subject && te.subject.toLowerCase() === emailSubject),
+              (te) => te.id === id || (te.subject && normalizeSubject(te.subject) === emailSubject),
             );
             if (match) {
               const firstMsg = msgs[0];

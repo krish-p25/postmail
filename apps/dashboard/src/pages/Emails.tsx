@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams, useParams } from 'react-router-dom';
-import { api, LinkedMailboxInfo } from '../services/api';
+import { api, LinkedMailboxInfo, SentEmail } from '../services/api';
 
 function ExtensionBanner() {
   const [extensionDetected, setExtensionDetected] = useState<boolean | null>(null);
@@ -52,36 +52,11 @@ function ExtensionBanner() {
   );
 }
 
-interface MailEmail {
-  id: string;
-  subject: string;
-  recipients: string[];
-  sentAt: string | null;
-  tracked: boolean;
-  hasAttachments: boolean;
-}
+type TrackingStatus = 'tracked' | 'opened' | 'draft' | 'untracked';
 
-interface TrackedEmailData {
-  id: string;
-  trackingToken: string;
-  recipient: string | null;
-  subject: string | null;
-  status: 'pending' | 'sent' | 'discarded' | 'failed';
-  sentAt: string | null;
-  createdAt: string;
-  opens: Array<{
-    id: string;
-    opened_at: string;
-    user_agent: string | null;
-    ip_address: string | null;
-    dismissed: boolean;
-  }>;
-}
-
-interface MergedEmail extends MailEmail {
-  trackingStatus: 'tracked' | 'opened' | 'draft' | 'untracked';
+interface DisplayEmail extends SentEmail {
+  trackingStatus: TrackingStatus;
   openCount: number;
-  trackedEmailId: string | null;
 }
 
 type FilterOption = 'all' | 'tracked' | 'untracked';
@@ -105,77 +80,21 @@ function formatRecipients(recipients: string[]): string {
   return `${first} +${recipients.length - 1}`;
 }
 
-function mergeEmails(sentEmails: MailEmail[], trackedEmails: TrackedEmailData[]): MergedEmail[] {
-  const merged: MergedEmail[] = sentEmails.map((email) => {
-    // Try to match against tracked emails:
-    //   1. By subject + recipient (strongest match)
-    //   2. By subject alone (if tracked email has no recipient — reader bug fallback)
-    const match = trackedEmails.find((te) => {
-      if (!te.subject) return false;
-      const subjectMatch = te.subject.toLowerCase() === email.subject.toLowerCase();
-      if (!subjectMatch) return false;
-
-      // If tracked email has a recipient, verify it matches
-      if (te.recipient) {
-        const recipientMatch = email.recipients.some((r) =>
-          r.toLowerCase().includes((te.recipient || '').split(',')[0].trim().toLowerCase()),
-        );
-        return recipientMatch;
-      }
-
-      // Subject-only match (tracked email has no recipient stored)
-      return true;
-    });
-
-    if (match) {
-      const activeOpens = match.opens.filter(
-        (o) => !o.dismissed,
-      );
-      const openCount = activeOpens.length;
-      let trackingStatus: MergedEmail['trackingStatus'] = 'tracked';
-      if (openCount > 0) trackingStatus = 'opened';
-      if (match.status === 'pending') trackingStatus = 'draft';
-
-      return {
-        ...email,
-        tracked: true,
-        trackingStatus,
-        openCount,
-        trackedEmailId: match.id,
-      };
+function toDisplayEmails(emails: SentEmail[]): DisplayEmail[] {
+  return emails.map((email) => {
+    if (!email.tracking) {
+      return { ...email, trackingStatus: 'untracked' as TrackingStatus, openCount: 0 };
     }
-
-    return {
-      ...email,
-      trackingStatus: 'untracked',
-      openCount: 0,
-      trackedEmailId: null,
-    };
+    const activeOpens = email.tracking.opens.filter((o) => !o.dismissed);
+    const openCount = activeOpens.length;
+    let trackingStatus: TrackingStatus = 'tracked';
+    if (openCount > 0) trackingStatus = 'opened';
+    if (email.tracking.status === 'pending') trackingStatus = 'draft';
+    return { ...email, trackingStatus, openCount };
   });
-
-  // Add pending tracked emails that aren't in the sent list yet (drafts)
-  for (const te of trackedEmails) {
-    if (te.status !== 'pending') continue;
-    const alreadyMerged = merged.some((m) => m.trackedEmailId === te.id);
-    if (alreadyMerged) continue;
-
-    merged.push({
-      id: te.id,
-      subject: te.subject || '(no subject)',
-      recipients: te.recipient ? te.recipient.split(', ') : [],
-      sentAt: te.sentAt,
-      tracked: true,
-      hasAttachments: false,
-      trackingStatus: 'draft',
-      openCount: 0,
-      trackedEmailId: te.id,
-    });
-  }
-
-  return merged;
 }
 
-function StatusBadge({ status, openCount }: { status: MergedEmail['trackingStatus']; openCount: number }) {
+function StatusBadge({ status, openCount }: { status: TrackingStatus; openCount: number }) {
   switch (status) {
     case 'opened':
       return (
@@ -207,7 +126,7 @@ function StatusBadge({ status, openCount }: { status: MergedEmail['trackingStatu
 function AccordionSection({ mailbox }: { mailbox: LinkedMailboxInfo }) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
-  const [emails, setEmails] = useState<MergedEmail[]>([]);
+  const [emails, setEmails] = useState<DisplayEmail[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetched, setFetched] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -233,16 +152,14 @@ function AccordionSection({ mailbox }: { mailbox: LinkedMailboxInfo }) {
 
   function loadEmails() {
     setLoading(true);
-    const sentPromise =
+    const promise =
       mailbox.provider === 'outlook'
         ? api.getOutlookEmails(undefined, undefined, mailbox.id).then((d) => d.emails)
         : api.getGmailEmails(undefined, undefined, mailbox.id).then((d) => d.emails);
 
-    const trackedPromise = api.getTrackedEmails().then((d) => d.emails);
-
-    Promise.all([sentPromise, trackedPromise])
-      .then(([sent, tracked]) => {
-        setEmails(mergeEmails(sent, tracked));
+    promise
+      .then((sent) => {
+        setEmails(toDisplayEmails(sent));
         setFetched(true);
       })
       .catch(() => {})
@@ -337,7 +254,7 @@ export default function Emails() {
   const [mailboxConnected, setMailboxConnected] = useState<boolean | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
   const [mailboxEmail, setMailboxEmail] = useState<string | null>(null);
-  const [emails, setEmails] = useState<MergedEmail[]>([]);
+  const [emails, setEmails] = useState<DisplayEmail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -377,7 +294,7 @@ export default function Emails() {
 
     const search = q !== undefined ? q : activeQuery;
 
-    const sentPromise =
+    const promise =
       prov === 'outlook'
         ? api.getOutlookEmails(outlookPage, search || undefined, mbId).then((data) => {
             setHasMore(data.hasMore);
@@ -389,12 +306,9 @@ export default function Emails() {
             return data.emails;
           });
 
-    const trackedPromise = api.getTrackedEmails().then((data) => data.emails);
-
-    Promise.all([sentPromise, trackedPromise])
-      .then(([sentEmails, trackedEmails]) => {
-        const merged = mergeEmails(sentEmails, trackedEmails);
-        setEmails(merged);
+    promise
+      .then((sentEmails) => {
+        setEmails(toDisplayEmails(sentEmails));
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load emails'))
       .finally(() => setLoading(false));

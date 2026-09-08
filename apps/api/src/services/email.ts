@@ -168,7 +168,6 @@ export async function sendVerificationEmail(to: string, code: string): Promise<v
     subject: `${code} is your PostMail verification code`,
     html: verificationTemplate(code),
   });
-  console.log(`[PostMail API] Verification email sent to ${to}`);
 }
 
 export async function sendPasswordChangedEmail(to: string): Promise<void> {
@@ -178,5 +177,4 @@ export async function sendPasswordChangedEmail(to: string): Promise<void> {
     subject: 'Your PostMail password has been changed',
     html: passwordChangedTemplate(),
   });
-  console.log(`[PostMail API] Password changed email sent to ${to}`);
 }

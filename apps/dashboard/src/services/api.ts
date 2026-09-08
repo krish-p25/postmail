@@ -16,6 +16,29 @@ export interface EmailAttachment {
   size: number;
 }
 
+export interface EmailTrackingData {
+  id: string;
+  trackingToken: string;
+  status: string;
+  sentAt: string | null;
+  opens: Array<{
+    id: string;
+    opened_at: string;
+    user_agent: string | null;
+    ip_address: string | null;
+    dismissed: boolean;
+  }>;
+}
+
+export interface SentEmail {
+  id: string;
+  subject: string;
+  recipients: string[];
+  sentAt: string | null;
+  hasAttachments: boolean;
+  tracking: EmailTrackingData | null;
+}
+
 export interface EmailMessage {
   id: string;
   threadId: string;
@@ -146,14 +169,7 @@ export const api = {
     const res = await authFetch(`/gmail/emails${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw new Error('Failed to fetch Gmail emails');
     return res.json() as Promise<{
-      emails: Array<{
-        id: string;
-        subject: string;
-        recipients: string[];
-        sentAt: string | null;
-        tracked: boolean;
-        hasAttachments: boolean;
-      }>;
+      emails: SentEmail[];
       nextPageToken: string | null;
     }>;
   },
@@ -195,14 +211,7 @@ export const api = {
     const res = await authFetch(`/outlook/emails${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw new Error('Failed to fetch Outlook emails');
     return res.json() as Promise<{
-      emails: Array<{
-        id: string;
-        subject: string;
-        recipients: string[];
-        sentAt: string | null;
-        tracked: boolean;
-        hasAttachments: boolean;
-      }>;
+      emails: SentEmail[];
       page: number;
       hasMore: boolean;
     }>;
@@ -232,6 +241,7 @@ export const api = {
         subject: string | null;
         status: 'pending' | 'sent' | 'discarded' | 'failed';
         sentAt: string | null;
+        messageId: string | null;
         createdAt: string;
         opens: Array<{
           id: string;
