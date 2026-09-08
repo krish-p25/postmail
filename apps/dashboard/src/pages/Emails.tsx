@@ -179,25 +179,25 @@ function StatusBadge({ status, openCount }: { status: MergedEmail['trackingStatu
   switch (status) {
     case 'opened':
       return (
-        <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-600">
+        <span className="shrink-0 whitespace-nowrap rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-600">
           Opened {openCount}x
         </span>
       );
     case 'tracked':
       return (
-        <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-600">
+        <span className="shrink-0 whitespace-nowrap rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-600">
           Tracked
         </span>
       );
     case 'draft':
       return (
-        <span className="rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-600">
+        <span className="shrink-0 whitespace-nowrap rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-600">
           Draft
         </span>
       );
     case 'untracked':
       return (
-        <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-600">
+        <span className="shrink-0 whitespace-nowrap rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-600">
           Untracked
         </span>
       );
@@ -755,7 +755,7 @@ export default function Emails() {
                 className="block w-full rounded-xl bg-white p-4 text-left shadow-sm ring-1 ring-gray-200 transition active:bg-gray-50"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
+                  <div className="min-w-0 flex items-center gap-1.5">
                     <p className="text-sm font-medium text-gray-900 line-clamp-2">{email.subject}</p>
                     {email.hasAttachments && (
                       <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
