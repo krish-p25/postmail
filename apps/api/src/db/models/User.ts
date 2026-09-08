@@ -8,17 +8,11 @@ interface UserAttributes {
   googleId: string | null;
   microsoftId: string | null;
   displayName: string | null;
-  gmailAccessToken: string | null;
-  gmailRefreshToken: string | null;
-  gmailTokenExpiry: Date | null;
-  outlookAccessToken: string | null;
-  outlookRefreshToken: string | null;
-  outlookTokenExpiry: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'passwordHash' | 'googleId' | 'microsoftId' | 'displayName' | 'gmailAccessToken' | 'gmailRefreshToken' | 'gmailTokenExpiry' | 'outlookAccessToken' | 'outlookRefreshToken' | 'outlookTokenExpiry' | 'createdAt' | 'updatedAt'> {}
+interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'passwordHash' | 'googleId' | 'microsoftId' | 'displayName' | 'createdAt' | 'updatedAt'> {}
 
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   declare id: string;
@@ -27,12 +21,6 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   declare googleId: string | null;
   declare microsoftId: string | null;
   declare displayName: string | null;
-  declare gmailAccessToken: string | null;
-  declare gmailRefreshToken: string | null;
-  declare gmailTokenExpiry: Date | null;
-  declare outlookAccessToken: string | null;
-  declare outlookRefreshToken: string | null;
-  declare outlookTokenExpiry: Date | null;
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -70,36 +58,6 @@ User.init(
       type: DataTypes.STRING,
       allowNull: true,
       field: 'display_name',
-    },
-    gmailAccessToken: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      field: 'gmail_access_token',
-    },
-    gmailRefreshToken: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      field: 'gmail_refresh_token',
-    },
-    gmailTokenExpiry: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      field: 'gmail_token_expiry',
-    },
-    outlookAccessToken: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      field: 'outlook_access_token',
-    },
-    outlookRefreshToken: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      field: 'outlook_refresh_token',
-    },
-    outlookTokenExpiry: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      field: 'outlook_token_expiry',
     },
     createdAt: {
       type: DataTypes.DATE,
