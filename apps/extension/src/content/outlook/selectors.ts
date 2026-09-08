@@ -70,9 +70,57 @@ export function findComposeContainer(subjectInput: HTMLElement): HTMLElement | n
   return null;
 }
 
+/**
+ * Find the reply compose container by walking up from a body textbox
+ * to the nearest ancestor that also contains a To field.
+ * Used for Outlook quick-reply areas that lack a subject input.
+ */
+export function findReplyComposeContainer(body: HTMLElement): HTMLElement | null {
+  let el: HTMLElement | null = body.parentElement;
+  while (el && el !== document.body) {
+    if (queryFirst(el, TO_FIELD_SELECTORS)) {
+      return el;
+    }
+    el = el.parentElement;
+  }
+  return null;
+}
+
+/**
+ * Extract the subject from a reply compose by reading the conversation
+ * heading in Outlook's reading pane. Quick-reply areas don't have a
+ * subject input — the subject comes from the thread header.
+ */
+export function findReplySubject(_composeElement: Element): string {
+  // Strategy 1: Conversation subject heading
+  const subjectEl = document.querySelector(
+    '[role="heading"][aria-label*="Conversation"], [role="heading"][aria-level="2"]',
+  );
+  if (subjectEl) {
+    const text = subjectEl.textContent?.trim();
+    if (text) return text;
+  }
+
+  // Strategy 2: Subject shown in the reading pane title area
+  const titleEl = document.querySelector(
+    'span[title][role="heading"], div[data-app-section="ConversationContainer"] h2',
+  );
+  if (titleEl) {
+    const text = titleEl.textContent?.trim();
+    if (text) return text;
+  }
+
+  return '';
+}
+
 /** Find the editable message body inside a compose container. */
 export function findComposeBody(composeElement: Element): HTMLElement | null {
   return queryFirst(composeElement, BODY_SELECTORS);
+}
+
+/** Find all body textboxes in the document. */
+export function findAllBodies(): NodeListOf<Element> | null {
+  return queryAllFirst(document, BODY_SELECTORS);
 }
 
 /** Read the subject value from a compose container. */

@@ -77,13 +77,13 @@ export class ComposeTracker {
   }
 
   /**
-   * Watch the compose body for mutations and re-inject the tracking pixel
+   * Watch the compose container for mutations and re-inject the tracking pixel
    * if the user accidentally deletes it (e.g. Ctrl+A → Backspace).
+   *
+   * Observes the compose container (not just the body) so re-injection still
+   * works if the mail provider replaces the body element entirely.
    */
   private startPixelGuard(): void {
-    const body = this.findBody(this.composeElement);
-    if (!body) return;
-
     this.pixelGuard = new MutationObserver(() => {
       if (this.cancelled || this.state === ComposeTrackingState.CLEANED_UP) return;
       if (!this.injector.isInjected()) {
@@ -92,7 +92,7 @@ export class ComposeTracker {
       }
     });
 
-    this.pixelGuard.observe(body, { childList: true, subtree: true });
+    this.pixelGuard.observe(this.composeElement, { childList: true, subtree: true });
     console.log(`[PostMail][Tracker:${this.composeId}] Pixel guard started`);
   }
 

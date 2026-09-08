@@ -10,7 +10,7 @@ import { findComposeBody as gmailFindBody, getSenderEmail as gmailGetSenderEmail
 // Outlook imports
 import { OutlookComposeDetector } from './outlook/compose-detector';
 import { OutlookRecipientReader } from './outlook/recipient-reader';
-import { findComposeBody as outlookFindBody, findComposeSubject as outlookFindSubject, getSenderEmail as outlookGetSenderEmail } from './outlook/selectors';
+import { findComposeBody as outlookFindBody, findComposeSubject as outlookFindSubject, findReplySubject as outlookFindReplySubject, getSenderEmail as outlookGetSenderEmail } from './outlook/selectors';
 
 /**
  * PostMail content script entry point.
@@ -51,7 +51,13 @@ function buildOutlookConfig(): ComposeManagerConfig {
     createDetector: (callbacks) => new OutlookComposeDetector(callbacks),
     createRecipientReader: (element) => new OutlookRecipientReader(element),
     findBody: (composeElement) => outlookFindBody(composeElement),
-    findSubject: (composeElement) => outlookFindSubject(composeElement),
+    findSubject: (composeElement) => {
+      // Full compose windows have a subject input
+      const subject = outlookFindSubject(composeElement);
+      if (subject) return subject;
+      // Inline reply/forward — read subject from conversation heading
+      return outlookFindReplySubject(composeElement);
+    },
     getSenderEmail: outlookGetSenderEmail,
     provider: 'outlook',
   };
