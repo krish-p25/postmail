@@ -5,7 +5,7 @@ import { ExtensionMessage } from '../shared/messaging';
 // Gmail imports
 import { ComposeDetector as GmailComposeDetector } from './gmail/compose-detector';
 import { RecipientReader as GmailRecipientReader } from './gmail/recipient-reader';
-import { findComposeBody as gmailFindBody, getSenderEmail as gmailGetSenderEmail } from './gmail/selectors';
+import { findComposeBody as gmailFindBody, getSenderEmail as gmailGetSenderEmail, findReplySubject } from './gmail/selectors';
 
 // Outlook imports
 import { OutlookComposeDetector } from './outlook/compose-detector';
@@ -35,8 +35,11 @@ function buildGmailConfig(): ComposeManagerConfig {
     createRecipientReader: (element) => new GmailRecipientReader(element),
     findBody: (composeElement) => gmailFindBody(composeElement),
     findSubject: (composeElement) => {
+      // New compose dialogs have a subjectbox input
       const input = composeElement.querySelector('input[name="subjectbox"]') as HTMLInputElement;
-      return input?.value || '';
+      if (input) return input.value || '';
+      // Inline reply/forward — read subject from thread heading
+      return findReplySubject(composeElement);
     },
     getSenderEmail: gmailGetSenderEmail,
     provider: 'gmail',

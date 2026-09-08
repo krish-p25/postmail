@@ -143,6 +143,15 @@ interface TrackingData {
   opens: TrackingOpen[];
 }
 
+interface TrackedEmailEntry {
+  id: string;
+  trackingToken: string;
+  subject: string | null;
+  recipient: string | null;
+  status: string;
+  opens: TrackingOpen[];
+}
+
 function parseUserAgent(ua: string | null): string {
   if (!ua) return 'Unknown';
   if (ua.includes('Thunderbird')) return 'Thunderbird';
@@ -156,19 +165,75 @@ function parseUserAgent(ua: string | null): string {
   return 'Email client';
 }
 
-function OpensTimeline({ tracking, onDismiss }: { tracking: TrackingData; onDismiss: (openId: string) => void }) {
+/**
+ * Check whether a tracking token appears as a direct (non-quoted) <img> in the
+ * message HTML.  Replies that quote the original email carry the pixel inside
+ * <blockquote> or Gmail's `.gmail_quote` wrapper — we must ignore those.
+ */
+function hasDirectTrackingPixel(html: string, token: string): boolean {
+  // Strip all quoted-content blocks so we only inspect the author's own body.
+  // Gmail wraps quoted text in <div class="gmail_quote"> or <blockquote>.
+  const stripped = html
+    .replace(/<div[^>]*class=["'][^"']*gmail_quote[^"']*["'][^>]*>[\s\S]*$/gi, '')
+    .replace(/<blockquote[\s\S]*$/gi, '');
+  return stripped.includes(`/o/${token}`);
+}
+
+/**
+ * Match tracked emails to individual messages by scanning message bodies
+ * for tracking pixel URLs containing the tracking token, ignoring tokens
+ * that only appear inside quoted/replied content.
+ */
+function matchTrackingToMessages(
+  messages: EmailMessage[],
+  trackedEmails: TrackedEmailEntry[],
+): Map<string, TrackingData> {
+  const map = new Map<string, TrackingData>();
+
+  for (const msg of messages) {
+    if (!msg.body) continue;
+    for (const te of trackedEmails) {
+      if (hasDirectTrackingPixel(msg.body, te.trackingToken)) {
+        map.set(msg.id, { status: te.status, opens: te.opens });
+        break;
+      }
+    }
+  }
+
+  return map;
+}
+
+function MessageOpens({ tracking, onDismiss }: { tracking: TrackingData; onDismiss: (openId: string) => void }) {
   const sorted = [...tracking.opens].sort(
     (a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime(),
   );
   const activeOpens = sorted.filter((o) => !o.dismissed);
   const dismissedOpens = sorted.filter((o) => o.dismissed);
+  const [expanded, setExpanded] = useState(false);
   const [showDismissed, setShowDismissed] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [listHeight, setListHeight] = useState(0);
+
+  const measureList = useCallback(() => {
+    if (listRef.current) {
+      setListHeight(listRef.current.scrollHeight);
+    }
+  }, []);
+
+  useEffect(() => {
+    measureList();
+  }, [expanded, showDismissed, activeOpens.length, dismissedOpens.length, measureList]);
 
   if (tracking.opens.length === 0) {
     return (
-      <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
-        <h3 className="text-sm font-semibold text-gray-900">Opens</h3>
-        <p className="mt-2 text-sm text-gray-500">No opens recorded yet.</p>
+      <div className="border-t border-gray-100 px-4 py-3 sm:px-5 sm:py-4">
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <svg className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178Z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+          </svg>
+          <span>Tracked — no opens yet</span>
+        </div>
       </div>
     );
   }
@@ -227,39 +292,58 @@ function OpensTimeline({ tracking, onDismiss }: { tracking: TrackingData; onDism
   }
 
   return (
-    <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
-      <h3 className="text-sm font-semibold text-gray-900">
-        Opens ({activeOpens.length})
-      </h3>
-      {activeOpens.length === 0 && (
-        <p className="mt-2 text-sm text-gray-500">No opens recorded yet.</p>
-      )}
-      {activeOpens.length > 0 && (
-        <div className="mt-4 space-y-3">
-          {activeOpens.map((open, idx) => renderOpen(open, idx, activeOpens, false))}
-        </div>
-      )}
-      {dismissedOpens.length > 0 && (
-        <div className="mt-3 border-t border-gray-100 pt-3">
-          <button
-            onClick={() => setShowDismissed(!showDismissed)}
-            className="flex items-center gap-1 text-xs font-medium text-gray-400 transition hover:text-gray-600"
-          >
-            <svg
-              className={`h-3.5 w-3.5 transition-transform ${showDismissed ? 'rotate-90' : ''}`}
-              fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-            </svg>
-            {dismissedOpens.length} dismissed {dismissedOpens.length === 1 ? 'open' : 'opens'}
-          </button>
-          {showDismissed && (
+    <div className="border-t border-gray-100 px-4 py-3 sm:px-5 sm:py-4">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center gap-2"
+      >
+        <svg className="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178Z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+        </svg>
+        <h4 className="text-sm font-semibold text-gray-900">
+          Opened {activeOpens.length} {activeOpens.length === 1 ? 'time' : 'times'}
+        </h4>
+        <svg
+          className={`ml-auto h-4 w-4 text-gray-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+          fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+      <div
+        className="overflow-hidden transition-[height] duration-200 ease-in-out"
+        style={{ height: expanded ? listHeight + 'px' : '0px' }}
+      >
+        <div ref={listRef}>
+          {activeOpens.length > 0 && (
             <div className="mt-3 space-y-3">
-              {dismissedOpens.map((open, idx) => renderOpen(open, idx, dismissedOpens, true))}
+              {activeOpens.map((open, idx) => renderOpen(open, idx, activeOpens, false))}
+            </div>
+          )}
+          {dismissedOpens.length > 0 && (
+            <div className="mt-3 border-t border-gray-100 pt-3">
+              <button
+                onClick={() => setShowDismissed(!showDismissed)}
+                className="flex items-center gap-1 text-xs font-medium text-gray-400 transition hover:text-gray-600"
+              >
+                <svg
+                  className={`h-3.5 w-3.5 transition-transform ${showDismissed ? 'rotate-90' : ''}`}
+                  fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                </svg>
+                {dismissedOpens.length} dismissed {dismissedOpens.length === 1 ? 'open' : 'opens'}
+              </button>
+              {showDismissed && (
+                <div className="mt-3 space-y-3">
+                  {dismissedOpens.map((open, idx) => renderOpen(open, idx, dismissedOpens, true))}
+                </div>
+              )}
             </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -273,14 +357,7 @@ export default function EmailDetail() {
   const [provider, setProvider] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tracking, setTracking] = useState<TrackingData | null>(null);
-  const [pendingTrackedEmails, setPendingTrackedEmails] = useState<Array<{
-    id: string;
-    subject: string | null;
-    recipient: string | null;
-    status: string;
-    opens: TrackingOpen[];
-  }> | null>(null);
+  const [messageTracking, setMessageTracking] = useState<Map<string, TrackingData>>(new Map());
 
   const detailFetched = useRef(false);
   useEffect(() => {
@@ -288,7 +365,7 @@ export default function EmailDetail() {
     if (detailFetched.current) return;
     detailFetched.current = true;
 
-    api
+    const messagesPromise = api
       .getSettings()
       .then((settings) => {
         let prov = settings.mailboxProvider || 'gmail';
@@ -303,52 +380,56 @@ export default function EmailDetail() {
             : api.getGmailEmailDetail(id, mailboxId);
         return fetchDetail;
       })
-      .then((data) => setMessages(data.messages))
+      .then((data) => {
+        setMessages(data.messages);
+        return data.messages;
+      });
+
+    const trackingPromise = api.getTrackedEmails()
+      .then((data) => data.emails)
+      .catch(() => [] as TrackedEmailEntry[]);
+
+    // Once both are loaded, match tracking to individual messages
+    Promise.all([messagesPromise, trackingPromise])
+      .then(([msgs, tracked]) => {
+        if (tracked.length > 0 && msgs.length > 0) {
+          const map = matchTrackingToMessages(msgs, tracked);
+          // Fallback: if no body-match found but subject matches, attach to
+          // the first message in the thread (the original tracked send)
+          if (map.size === 0) {
+            const emailSubject = msgs[0].subject.toLowerCase();
+            const match = tracked.find(
+              (te) => te.id === id || (te.subject && te.subject.toLowerCase() === emailSubject),
+            );
+            if (match) {
+              const firstMsg = msgs[0];
+              map.set(firstMsg.id, { status: match.status, opens: match.opens });
+            }
+          }
+          setMessageTracking(map);
+        }
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load email'))
       .finally(() => setLoading(false));
-
-    // Try to load tracking data (may not exist for this email)
-    api.getTrackedEmails().then((data) => {
-      // Match by subject since the route :id is a Gmail/Outlook ID, not the DB UUID
-      const match = data.emails.find((te) => {
-        if (te.id === id) return true;
-        return false;
-      });
-      if (match) {
-        setTracking({ status: match.status, opens: match.opens });
-      } else {
-        // Defer subject-based matching until messages are loaded
-        setTracking(null);
-        setPendingTrackedEmails(data.emails);
-      }
-    }).catch(() => {
-      // Silently fail — tracking data is supplementary
-    });
   }, [id]);
-
-  // Once messages are loaded, try subject-based match for tracking data
-  useEffect(() => {
-    if (!pendingTrackedEmails || messages.length === 0 || tracking) return;
-    const emailSubject = messages[0].subject.toLowerCase();
-    const match = pendingTrackedEmails.find(
-      (te) => te.subject && te.subject.toLowerCase() === emailSubject,
-    );
-    if (match) {
-      setTracking({ status: match.status, opens: match.opens });
-    }
-    setPendingTrackedEmails(null);
-  }, [messages, pendingTrackedEmails, tracking]);
 
   const subject = messages.length > 0 ? messages[0].subject : '';
 
   function handleDismissOpen(openId: string) {
     api.dismissOpen(openId).then(() => {
-      setTracking((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          opens: prev.opens.map((o) => (o.id === openId ? { ...o, dismissed: true } : o)),
-        };
+      setMessageTracking((prev) => {
+        const next = new Map(prev);
+        for (const [msgId, data] of next) {
+          const hasOpen = data.opens.some((o) => o.id === openId);
+          if (hasOpen) {
+            next.set(msgId, {
+              ...data,
+              opens: data.opens.map((o) => (o.id === openId ? { ...o, dismissed: true } : o)),
+            });
+            break;
+          }
+        }
+        return next;
       });
     }).catch((err) => {
       console.error('Failed to dismiss open:', err);
@@ -436,15 +517,10 @@ export default function EmailDetail() {
             </p>
           </div>
 
-          {tracking && (
-            <div className="mb-6">
-              <OpensTimeline tracking={tracking} onDismiss={handleDismissOpen} />
-            </div>
-          )}
-
           <div className="space-y-4">
             {messages.map((msg, index) => {
               const sender = parseEmailAddress(msg.from);
+              const msgTracking = messageTracking.get(msg.id);
               return (
                 <div
                   key={msg.id}
@@ -509,6 +585,10 @@ export default function EmailDetail() {
                         ))}
                       </div>
                     </div>
+                  )}
+
+                  {msgTracking && (
+                    <MessageOpens tracking={msgTracking} onDismiss={handleDismissOpen} />
                   )}
                 </div>
               );
