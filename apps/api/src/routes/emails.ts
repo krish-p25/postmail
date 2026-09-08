@@ -15,6 +15,7 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const emails = await withRLS(req.user!.id, async (transaction) => {
       return TrackedEmail.findAll({
+        where: { userId: req.user!.id },
         transaction,
         order: [['created_at', 'DESC']],
         include: [
@@ -41,7 +42,8 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const email = await withRLS(req.user!.id, async (transaction) => {
-      return TrackedEmail.findByPk(req.params.id, {
+      return TrackedEmail.findOne({
+        where: { id: req.params.id, userId: req.user!.id },
         transaction,
         include: [
           {

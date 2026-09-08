@@ -311,11 +311,6 @@ async function purgePreSendOpens(trackedEmail: TrackedEmail, sentAt: Date): Prom
       openedAt: { [Op.lt]: sentAt },
     },
   });
-  if (deleted > 0) {
-    console.log(
-      `[PostMail API] Purged ${deleted} pre-send open(s) for token ${trackedEmail.trackingToken.substring(0, 8)}...`,
-    );
-  }
   return deleted;
 }
 
@@ -335,9 +330,7 @@ async function verifyViaOutlook(
     return;
   }
 
-  const graphUrl = `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=10&$orderby=sentDateTime desc&$select=body`;
-
-  console.log(`[PostMail API] verify-sent (Outlook): searching for token ${trackingToken.substring(0, 8)}...`);
+  const graphUrl = `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=10&$orderby=sentDateTime desc&$select=id,body`;
 
   let graphRes = await fetch(graphUrl, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -362,20 +355,22 @@ async function verifyViaOutlook(
 
   const data = await graphRes.json();
   let found = false;
+  let foundMessageId: string | null = null;
 
   for (const msg of (data.value || [])) {
     const bodyContent: string = msg.body?.content || '';
     if (bodyContent.includes(trackingToken)) {
       found = true;
+      foundMessageId = msg.id || null;
       break;
     }
   }
 
-  console.log(`[PostMail API] verify-sent (Outlook): found=${found} for token ${trackingToken.substring(0, 8)}...`);
-
   if (found && trackedEmail && trackedEmail.status === 'pending') {
     const sentAt = new Date();
-    await trackedEmail.update({ status: 'sent', sentAt });
+    const updates: Record<string, unknown> = { status: 'sent', sentAt };
+    if (foundMessageId) updates.messageId = foundMessageId;
+    await trackedEmail.update(updates);
     await purgePreSendOpens(trackedEmail, sentAt);
   }
 
@@ -419,8 +414,6 @@ async function verifyViaGmail(
     ? `in:sent subject:(${subject}) newer_than:1h`
     : `in:sent newer_than:1h`;
 
-  console.log(`[PostMail API] verify-sent (Gmail): searching with q="${q}" for token ${trackingToken.substring(0, 8)}...`);
-
   const searchRes = await gmail.users.messages.list({
     userId: 'me',
     q,
@@ -428,6 +421,7 @@ async function verifyViaGmail(
   });
 
   let found = false;
+  let foundMessageId: string | null = null;
 
   if (searchRes.data.messages && searchRes.data.messages.length > 0) {
     for (const msg of searchRes.data.messages) {
@@ -439,12 +433,14 @@ async function verifyViaGmail(
       const raw = full.data.raw || '';
       if (raw.includes(trackingToken)) {
         found = true;
+        foundMessageId = msg.id!;
         break;
       }
       try {
         const decoded = Buffer.from(raw, 'base64url').toString('utf-8');
         if (decoded.includes(trackingToken)) {
           found = true;
+          foundMessageId = msg.id!;
           break;
         }
       } catch {
@@ -453,11 +449,11 @@ async function verifyViaGmail(
     }
   }
 
-  console.log(`[PostMail API] verify-sent (Gmail): found=${found} for token ${trackingToken.substring(0, 8)}...`);
-
   if (found && trackedEmail && trackedEmail.status === 'pending') {
     const sentAt = new Date();
-    await trackedEmail.update({ status: 'sent', sentAt });
+    const updates: Record<string, unknown> = { status: 'sent', sentAt };
+    if (foundMessageId) updates.messageId = foundMessageId;
+    await trackedEmail.update(updates);
     await purgePreSendOpens(trackedEmail, sentAt);
   }
 

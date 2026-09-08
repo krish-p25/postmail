@@ -10,11 +10,12 @@ interface TrackedEmailAttributes {
   status: 'pending' | 'sent' | 'discarded' | 'failed';
   sentAt: Date | null;
   mailboxId: string | null;
+  messageId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-interface TrackedEmailCreation extends Optional<TrackedEmailAttributes, 'id' | 'recipient' | 'subject' | 'status' | 'sentAt' | 'mailboxId' | 'createdAt' | 'updatedAt'> {}
+interface TrackedEmailCreation extends Optional<TrackedEmailAttributes, 'id' | 'recipient' | 'subject' | 'status' | 'sentAt' | 'mailboxId' | 'messageId' | 'createdAt' | 'updatedAt'> {}
 
 class TrackedEmail extends Model<TrackedEmailAttributes, TrackedEmailCreation> implements TrackedEmailAttributes {
   declare id: string;
@@ -25,6 +26,7 @@ class TrackedEmail extends Model<TrackedEmailAttributes, TrackedEmailCreation> i
   declare status: 'pending' | 'sent' | 'discarded' | 'failed';
   declare sentAt: Date | null;
   declare mailboxId: string | null;
+  declare messageId: string | null;
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -70,6 +72,11 @@ TrackedEmail.init(
       allowNull: true,
       field: 'mailbox_id',
       references: { model: 'linked_mailboxes', key: 'id' },
+    },
+    messageId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: 'message_id',
     },
     createdAt: {
       type: DataTypes.DATE,
