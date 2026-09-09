@@ -448,6 +448,23 @@ export default function EmailDetail() {
 
   const subject = messages.length > 0 ? messages[0].subject : '';
 
+  // Collapsible thread: all messages expanded by default
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (messages.length > 0) {
+      setExpandedMessages(new Set(messages.map((m) => m.id)));
+    }
+  }, [messages]);
+
+  function toggleMessage(msgId: string) {
+    setExpandedMessages((prev) => {
+      const next = new Set(prev);
+      if (next.has(msgId)) next.delete(msgId);
+      else next.add(msgId);
+      return next;
+    });
+  }
+
   function handleDismissOpen(openId: string) {
     api.dismissOpen(openId).then(() => {
       setMessageTracking((prev) => {
@@ -554,12 +571,20 @@ export default function EmailDetail() {
             {messages.map((msg, index) => {
               const sender = parseEmailAddress(msg.from);
               const msgTracking = messageTracking.get(msg.id);
+              const isExpanded = expandedMessages.has(msg.id);
+
               return (
                 <div
                   key={msg.id}
                   className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200"
                 >
-                  <div className="border-b border-gray-100 bg-gray-50/50 px-4 py-3 sm:px-5 sm:py-4">
+                  {/* Header — always visible, click to toggle body */}
+                  <button
+                    onClick={() => toggleMessage(msg.id)}
+                    className={`w-full text-left px-4 py-3 sm:px-5 sm:py-4 transition hover:bg-gray-100/50 cursor-pointer ${
+                      isExpanded ? 'border-b border-gray-100 bg-gray-50/50' : 'bg-gray-50/50'
+                    }`}
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
@@ -588,41 +613,58 @@ export default function EmailDetail() {
                         </div>
                       </div>
 
-                      <div className="shrink-0 text-right">
-                        <p className="text-xs text-gray-500">{formatDate(msg.date)}</p>
-                        <span className="mt-1 inline-block text-xs text-gray-400">
-                          #{index + 1}
-                        </span>
+                      <div className="flex shrink-0 items-start gap-2">
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">{formatDate(msg.date)}</p>
+                          <span className="mt-1 inline-block text-xs text-gray-400">
+                            #{index + 1}
+                          </span>
+                        </div>
+                        <svg
+                          className={`mt-0.5 h-4 w-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                          fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                        </svg>
                       </div>
                     </div>
-                  </div>
+                  </button>
 
-                  <div className="px-4 py-3 sm:px-5 sm:py-4">
-                    {msg.body ? (
-                      <EmailBody html={msg.body} />
-                    ) : (
-                      <p className="text-sm italic text-gray-400">
-                        {msg.snippet || 'No content available'}
-                      </p>
-                    )}
-                  </div>
-
-                  {msg.attachments && msg.attachments.length > 0 && (
-                    <div className="border-t border-gray-100 px-4 py-3 sm:px-5 sm:py-4">
-                      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-                        Attachments ({msg.attachments.length})
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {msg.attachments.map((att) => (
-                          <AttachmentButton key={att.attachmentId} attachment={att} provider={provider} />
-                        ))}
+                  {/* Collapsible content — animated height via CSS grid rows */}
+                  <div
+                    className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
+                      isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                    }`}
+                  >
+                    <div className="overflow-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      <div className="px-4 py-3 sm:px-5 sm:py-4">
+                        {msg.body ? (
+                          <EmailBody html={msg.body} />
+                        ) : (
+                          <p className="text-sm italic text-gray-400">
+                            {msg.snippet || 'No content available'}
+                          </p>
+                        )}
                       </div>
-                    </div>
-                  )}
 
-                  {msgTracking && (
-                    <MessageOpens tracking={msgTracking} onDismiss={handleDismissOpen} />
-                  )}
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className="border-t border-gray-100 px-4 py-3 sm:px-5 sm:py-4">
+                          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                            Attachments ({msg.attachments.length})
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {msg.attachments.map((att) => (
+                              <AttachmentButton key={att.attachmentId} attachment={att} provider={provider} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {msgTracking && (
+                        <MessageOpens tracking={msgTracking} onDismiss={handleDismissOpen} />
+                      )}
+                    </div>
+                  </div>
                 </div>
               );
             })}
