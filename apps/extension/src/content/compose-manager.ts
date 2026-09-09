@@ -42,10 +42,10 @@ interface ComposeInstance {
  * Orchestrates multiple compose window lifecycles for any mail provider.
  *
  * Flow:
- *   1. Compose detected → inject pixel immediately → show "Tracking" toast
- *   2. Recipients added → register/update tracking with API
- *   3. "Don't track" clicked → remove pixel, cancel tracking, dismiss toast
- *   4. Compose removed → verify sent status → show result toast
+ *   1. Compose detected -> inject pixel immediately -> show "Tracking" toast
+ *   2. Recipients added -> register/update tracking with API
+ *   3. "Don't track" clicked -> remove pixel, cancel tracking, dismiss toast
+ *   4. Compose removed -> verify sent status -> show result toast
  */
 export class ComposeManager {
   private composes = new Map<HTMLElement, ComposeInstance>();
@@ -60,11 +60,9 @@ export class ComposeManager {
       onComposeDetected: (el) => this.handleComposeDetected(el),
       onComposeRemoved: (el) => this.handleComposeRemoved(el),
     });
-    console.log('[PostMail][Manager] Created');
   }
 
   start(): void {
-    console.log('[PostMail][Manager] Starting compose detector...');
     this.detector.start();
   }
 
@@ -79,7 +77,6 @@ export class ComposeManager {
 
   setTrackingEnabled(enabled: boolean): void {
     this.trackingEnabled = enabled;
-    console.log(`[PostMail][Manager] Tracking ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   getComposeCount(): number {
@@ -91,13 +88,9 @@ export class ComposeManager {
   }
 
   private handleComposeDetected(element: HTMLElement): void {
-    if (!this.trackingEnabled) {
-      console.log('[PostMail][Manager] Tracking disabled, ignoring compose');
-      return;
-    }
+    if (!this.trackingEnabled) return;
 
     const id = `compose-${++this.nextId}`;
-    console.log(`[PostMail][Manager] Compose DETECTED: ${id}`);
 
     const tracker = new ComposeTracker(id, element, this.trackingEnabled, this.config.findBody, this.config.findSubject, this.config.getSenderEmail, this.config.provider);
     const recipientReader = this.config.createRecipientReader(element);
@@ -105,14 +98,11 @@ export class ComposeManager {
 
     // Show "Tracking" toast immediately with "Don't track" button
     toast.show('tracking', { subject: '', recipient: '' }, () => {
-      // "Don't track" callback
-      console.log(`[PostMail][Manager] User cancelled tracking for ${id}`);
       tracker.cancelTracking();
       toast.update('cancelled', { subject: '', recipient: '' });
     });
 
     recipientReader.onChange((recipients) => {
-      console.log(`[PostMail][Manager] ${id} recipients changed:`, recipients);
       tracker.handleRecipientChange(recipients);
     });
     recipientReader.start();
@@ -122,10 +112,7 @@ export class ComposeManager {
 
   private handleComposeRemoved(element: HTMLElement): void {
     const instance = this.composes.get(element);
-    if (!instance) {
-      console.log('[PostMail][Manager] Compose removed but no instance found');
-      return;
-    }
+    if (!instance) return;
 
     // Read info BEFORE cleanup (DOM is about to be gone)
     const info = instance.tracker.getInfo();
@@ -145,18 +132,7 @@ export class ComposeManager {
 
     const recipient = allRecipients[0] || '';
 
-    console.log(`[PostMail][Manager] Compose REMOVED: ${instance.id}`, {
-      state: info.state,
-      token: info.trackingToken ? info.trackingToken.substring(0, 8) + '...' : 'none',
-      injected: info.injected,
-      pixelInjected: instance.tracker.isPixelInjected(),
-      cancelled: instance.tracker.isCancelled(),
-      recipients: info.recipients,
-      subject,
-    });
-
     if (instance.tracker.isCancelled()) {
-      console.log(`[PostMail][Manager] Tracking was cancelled for ${instance.id}, skipping verification`);
       instance.tracker.cleanup();
       instance.recipientReader.stop();
       this.composes.delete(element);
@@ -167,8 +143,6 @@ export class ComposeManager {
     const trackingToken = info.trackingToken;
     const finalRecipients = allRecipients.length > 0 ? allRecipients : (recipient ? [recipient] : []);
     if (trackingToken) {
-      console.log(`[PostMail][Manager] Starting verification for ${instance.id}`);
-
       // Update tracked email with final subject & recipients (may have changed since registration)
       this.updateTrackedEmail(trackingToken, finalRecipients, subject);
 
@@ -176,8 +150,6 @@ export class ComposeManager {
       instance.toast.update('verifying', { subject, recipient });
 
       this.verifySent(trackingToken, instance.toast, { subject, recipient });
-    } else {
-      console.log(`[PostMail][Manager] No token for ${instance.id}, skipping verification`);
     }
 
     instance.tracker.cleanup();
@@ -186,24 +158,21 @@ export class ComposeManager {
   }
 
   private updateTrackedEmail(trackingToken: string, recipients: string[], subject: string): void {
-    const tokenPreview = trackingToken.substring(0, 8) + '...';
     const senderEmail = this.config.getSenderEmail();
     const provider = this.config.provider;
-    console.log(`[PostMail][Manager] Updating tracked email ${tokenPreview}`, { recipients, subject, senderEmail, provider });
 
     try {
       chrome.runtime.sendMessage(
         { type: 'UPDATE_TRACKED_EMAIL', trackingToken, recipients, subject, senderEmail, provider },
         (response) => {
           if (chrome.runtime.lastError) {
-            console.error('[PostMail][Manager] Update failed:', chrome.runtime.lastError.message);
-            return;
+            console.error('[PostMail] Update failed:', chrome.runtime.lastError.message);
           }
-          console.log(`[PostMail][Manager] Update response:`, response);
+          void response;
         },
       );
     } catch (err) {
-      console.error('[PostMail][Manager] Update sendMessage threw:', err);
+      console.error('[PostMail] Update error:', err);
     }
   }
 
@@ -212,12 +181,9 @@ export class ComposeManager {
     toast: TrackingToast,
     data: { subject: string; recipient: string },
   ): void {
-    const tokenPreview = trackingToken.substring(0, 8) + '...';
-
     // Delay the first check by 2s to give the mail provider time to index
-    console.log(`[PostMail][Manager] Will verify sent status in 2s for token ${tokenPreview}`);
     setTimeout(() => {
-      this.doVerifyAttempt(trackingToken, toast, data, tokenPreview, true);
+      this.doVerifyAttempt(trackingToken, toast, data, true);
     }, 2000);
   }
 
@@ -225,44 +191,35 @@ export class ComposeManager {
     trackingToken: string,
     toast: TrackingToast,
     data: { subject: string; recipient: string },
-    tokenPreview: string,
     canRetry: boolean,
   ): void {
     const senderEmail = this.config.getSenderEmail();
     const provider = this.config.provider;
-    console.log(`[PostMail][Manager] Verifying sent status for token ${tokenPreview}`);
 
     try {
       chrome.runtime.sendMessage(
         { type: 'VERIFY_EMAIL_SENT', trackingToken, senderEmail, provider },
         (response) => {
           if (chrome.runtime.lastError) {
-            console.error('[PostMail][Manager] Verify failed:', chrome.runtime.lastError.message);
             toast.update('error', data);
             return;
           }
 
-          console.log(`[PostMail][Manager] Verify response:`, response);
-
           if (response?.found) {
-            console.log(`[PostMail][Manager] Email confirmed SENT for ${tokenPreview}`);
             toast.update('success', data);
             return;
           }
 
           if (canRetry) {
-            console.log(`[PostMail][Manager] Email not found yet, retrying in 2s for ${tokenPreview}`);
             setTimeout(() => {
-              this.doVerifyAttempt(trackingToken, toast, data, tokenPreview, false);
+              this.doVerifyAttempt(trackingToken, toast, data, false);
             }, 2000);
           } else {
-            console.log(`[PostMail][Manager] Email not found after retry — marking as DRAFT for ${tokenPreview}`);
             toast.update('draft', data);
           }
         },
       );
-    } catch (err) {
-      console.error('[PostMail][Manager] sendMessage threw (extension context invalidated?):', err);
+    } catch {
       toast.update('error', data);
     }
   }

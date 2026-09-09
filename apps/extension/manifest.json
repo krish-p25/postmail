@@ -1,27 +1,54 @@
 {
   "manifest_version": 3,
-  "name": "PostMail - Email Open Tracking",
-  "version": "0.1.0",
-  "description": "Track when your emails are opened",
+  "name": "PostMail – Email Open Tracker for Gmail & Outlook",
+  "version": "1.0.0",
+  "description": "Know when your emails are opened. Real-time read receipts and open tracking for Gmail and Outlook.",
+  "homepage_url": "https://postmail.krishrp.xyz",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": ["storage"],
-  "host_permissions": ["https://mail.google.com/*", "https://outlook.office.com/*", "https://outlook.live.com/*", "https://outlook.office365.com/*", "https://api.postmail.krishrp.xyz/*", "https://postmail.krishrp.xyz/*"],
+  "host_permissions": [
+    "https://mail.google.com/*",
+    "https://outlook.office.com/*",
+    "https://outlook.live.com/*",
+    "https://outlook.office365.com/*",
+    "https://api.postmail.krishrp.xyz/*",
+    "https://postmail.krishrp.xyz/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["https://mail.google.com/*", "https://outlook.office.com/*", "https://outlook.live.com/*", "https://outlook.office365.com/*"],
+      "matches": [
+        "https://mail.google.com/*",
+        "https://outlook.office.com/*",
+        "https://outlook.live.com/*",
+        "https://outlook.office365.com/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://postmail.krishrp.xyz/*", "https://*.postmail.app/*"],
+      "matches": [
+        "https://postmail.krishrp.xyz/*",
+        "https://*.postmail.app/*"
+      ],
       "js": ["dashboard-marker.js"],
       "run_at": "document_start"
     }
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "PostMail"
+    "default_title": "PostMail",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
   }
 }

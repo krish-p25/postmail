@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 560" width="1400" height="560">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#ea580c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1400" height="560" fill="url(#bg)"/>
+
+  <!-- Subtle decorative circles -->
+  <circle cx="1250" cy="80" r="250" fill="rgba(255,255,255,0.05)"/>
+  <circle cx="1300" cy="150" r="180" fill="rgba(255,255,255,0.04)"/>
+  <circle cx="100" cy="480" r="200" fill="rgba(255,255,255,0.04)"/>
+  <circle cx="180" cy="520" r="120" fill="rgba(255,255,255,0.03)"/>
+
+  <!-- Left side: Icon + Text -->
+  <g transform="translate(180, 130)">
+    <!-- Icon -->
+    <rect width="140" height="140" rx="30" fill="rgba(255,255,255,0.2)"/>
+    <rect x="26" y="39" width="88" height="62" rx="8" stroke="#fff" stroke-width="6" fill="none"/>
+    <path d="M31 43l39 30 39-30" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="106" cy="39" r="18" fill="#22c55e"/>
+    <circle cx="106" cy="39" r="7" fill="#fff"/>
+  </g>
+
+  <!-- Title -->
+  <text x="360" y="200" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="56" font-weight="800" fill="#ffffff">PostMail</text>
+
+  <!-- Subtitle -->
+  <text x="183" y="320" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="26" font-weight="500" fill="rgba(255,255,255,0.9)">Know when your emails are opened.</text>
+  <text x="183" y="360" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="26" font-weight="500" fill="rgba(255,255,255,0.9)">Real-time read receipts for Gmail and Outlook.</text>
+
+  <!-- Badges -->
+  <g transform="translate(183, 400)">
+    <rect width="120" height="36" rx="18" fill="rgba(255,255,255,0.2)"/>
+    <text x="60" y="24" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="600" fill="#fff">Gmail</text>
+  </g>
+  <g transform="translate(320, 400)">
+    <rect width="120" height="36" rx="18" fill="rgba(255,255,255,0.2)"/>
+    <text x="60" y="24" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="600" fill="#fff">Outlook</text>
+  </g>
+  <g transform="translate(457, 400)">
+    <rect width="160" height="36" rx="18" fill="rgba(255,255,255,0.2)"/>
+    <text x="80" y="24" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15" font-weight="600" fill="#fff">Multi-Mailbox</text>
+  </g>
+
+  <!-- Right side: Feature cards -->
+  <g transform="translate(820, 100)">
+    <!-- Card 1: Opened -->
+    <rect width="400" height="100" rx="16" fill="rgba(255,255,255,0.95)"/>
+    <circle cx="44" cy="50" r="20" fill="#dcfce7"/>
+    <path d="M36 50l5 5 11-11" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <text x="80" y="40" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700" fill="#111827">Proposal_v2.pdf</text>
+    <text x="80" y="62" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" fill="#16a34a" font-weight="600">Opened 3 times</text>
+    <text x="80" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" fill="#9ca3af">iPhone  ·  2 min ago</text>
+  </g>
+
+  <g transform="translate(850, 220)">
+    <!-- Card 2: Just opened -->
+    <rect width="400" height="100" rx="16" fill="rgba(255,255,255,0.95)"/>
+    <circle cx="44" cy="50" r="20" fill="#dbeafe"/>
+    <circle cx="44" cy="50" r="6" fill="#3b82f6">
+      <animate attributeName="opacity" values="1;0.4;1" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <text x="80" y="40" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700" fill="#111827">Meeting follow-up</text>
+    <text x="80" y="62" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" fill="#3b82f6" font-weight="600">Opened just now</text>
+    <text x="80" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" fill="#9ca3af">Chrome  ·  Desktop</text>
+  </g>
+
+  <g transform="translate(820, 340)">
+    <!-- Card 3: Tracked -->
+    <rect width="400" height="100" rx="16" fill="rgba(255,255,255,0.95)"/>
+    <circle cx="44" cy="50" r="20" fill="#f3f4f6"/>
+    <circle cx="44" cy="50" r="6" fill="#9ca3af"/>
+    <text x="80" y="40" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="700" fill="#111827">Invoice #1042</text>
+    <text x="80" y="62" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" fill="#6b7280" font-weight="600">Tracked — not opened yet</text>
+    <text x="80" y="82" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" fill="#9ca3af">Sent 4 hours ago</text>
+  </g>
+</svg>

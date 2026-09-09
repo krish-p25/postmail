@@ -126,7 +126,6 @@ export class TrackingToast {
   private onDontTrack: (() => void) | null = null;
 
   show(state: ToastState, data: ToastData, onDontTrack?: () => void): void {
-    console.log(`[PostMail][Toast] show(${state})`, data);
     injectStyles();
     this.currentState = state;
     this.onDontTrack = onDontTrack || null;
@@ -160,7 +159,6 @@ export class TrackingToast {
   }
 
   update(state: ToastState, data: ToastData): void {
-    console.log(`[PostMail][Toast] update(${state})`, data);
     if (!this.el) {
       // Toast was dismissed — re-show for non-tracking states (verification results)
       if (state !== 'tracking') {
@@ -283,7 +281,6 @@ export class TrackingToast {
         dontTrackBtn.style.background = 'none';
       });
       dontTrackBtn.addEventListener('click', () => {
-        console.log('[PostMail][Toast] "Don\'t track" clicked');
         handler();
       }, { once: true });
     }
