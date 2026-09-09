@@ -16,7 +16,6 @@
     "https://outlook.office.com/*",
     "https://outlook.live.com/*",
     "https://outlook.office365.com/*",
-    "https://api.postmail.krishrp.xyz/*",
     "https://postmail.krishrp.xyz/*"
   ],
   "background": {

@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
 import { config } from './config/env';
 import { sequelize } from './db/sequelize';
 import './db/models'; // Register all models and associations
@@ -22,46 +23,63 @@ const app = express();
 // Trust proxy so req.ip reads X-Forwarded-For behind reverse proxies
 app.set('trust proxy', true);
 
+// All routes live under /api so NPM can path-route to this service
+const api = express.Router();
+
 // Pixel tracking route — mounted before helmet/CORS/auth
 // because email clients fetch this without CORS headers
-app.use('/o', pixelRoutes);
+api.use('/o', pixelRoutes);
 
 // Security
-app.use(helmet());
+api.use(helmet());
 
-// CORS — allow dashboard origin
-app.use(cors({
+// CORS — allow dashboard origin (same origin in prod, but needed for local dev)
+api.use(cors({
   origin: config.dashboardUrl,
   credentials: true,
 }));
 
 // Body parsing
-app.use(express.json());
+api.use(express.json());
 
 // Health check
-app.get('/health', (_req, res) => {
+api.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // API info
-app.get('/', (_req, res) => {
+api.get('/', (_req, res) => {
   res.json({ name: 'PostMail API', version: '0.1.0' });
 });
 
 // Public auth routes (no middleware)
-app.use('/auth', authRoutes);
+api.use('/auth', authRoutes);
 
 // Authenticated API routes
-app.use('/me', authMiddleware, meRoutes);
-app.use('/emails', authMiddleware, emailRoutes);
-app.use('/settings', authMiddleware, settingsRoutes);
-app.use('/gmail', authMiddleware, gmailRoutes);
-app.use('/outlook', authMiddleware, outlookRoutes);
-app.use('/track', authMiddleware, trackRoutes);
-app.use('/mailboxes', authMiddleware, mailboxRoutes);
+api.use('/me', authMiddleware, meRoutes);
+api.use('/emails', authMiddleware, emailRoutes);
+api.use('/settings', authMiddleware, settingsRoutes);
+api.use('/gmail', authMiddleware, gmailRoutes);
+api.use('/outlook', authMiddleware, outlookRoutes);
+api.use('/track', authMiddleware, trackRoutes);
+api.use('/mailboxes', authMiddleware, mailboxRoutes);
 
-// Error handler (must be last middleware)
-app.use(errorHandler);
+// Error handler (must be last middleware on the router)
+api.use(errorHandler);
+
+// Mount everything under /api
+app.use('/api', api);
+
+// ─── Dashboard static files (production only) ──────────────
+// In production the built React SPA lives next to the API.
+// Resolved path: /app/apps/api/dist/../../dashboard/dist → /app/apps/dashboard/dist
+const dashboardDist = path.resolve(__dirname, '../../dashboard/dist');
+app.use(express.static(dashboardDist));
+
+// SPA fallback — React Router handles 404s client-side
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(dashboardDist, 'index.html'));
+});
 
 // Initialize database and start server
 async function start(): Promise<void> {

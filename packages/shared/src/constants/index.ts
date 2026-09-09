@@ -1,8 +1,8 @@
 /** Base URL for the tracking pixel endpoint. Override via environment/config. */
-export const TRACKING_PIXEL_BASE_URL = 'https://api.postmail.krishrp.xyz';
+export const TRACKING_PIXEL_BASE_URL = 'https://postmail.krishrp.xyz';
 
 /** Path prefix for the tracking pixel endpoint */
-export const TRACKING_PIXEL_PATH = '/o';
+export const TRACKING_PIXEL_PATH = '/api/o';
 
 /** Build a full tracking URL from a token */
 export function buildTrackingUrl(token: string, baseUrl = TRACKING_PIXEL_BASE_URL): string {

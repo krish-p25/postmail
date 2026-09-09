@@ -1,6 +1,6 @@
 import { auth } from './auth';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://api.postmail.krishrp.xyz';
+const API_URL = import.meta.env.VITE_API_URL || 'https://postmail.krishrp.xyz/api';
 
 export interface LinkedMailboxInfo {
   id: string;
