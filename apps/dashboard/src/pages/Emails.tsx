@@ -665,7 +665,7 @@ export default function Emails() {
             {filteredEmails.map((email) => (
               <button
                 key={email.id}
-                onClick={() => navigate(`/dashboard/emails/${email.id}`)}
+                onClick={() => navigate(`/dashboard/emails/${email.id}${routeMailboxId ? `?mailboxId=${routeMailboxId}` : ''}`)}
                 className="block w-full rounded-xl bg-white p-4 text-left shadow-sm ring-1 ring-gray-200 transition active:bg-gray-50"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -723,7 +723,7 @@ export default function Emails() {
                     </td>
                     <td className="px-4 py-3">
                       <button
-                        onClick={() => navigate(`/dashboard/emails/${email.id}`)}
+                        onClick={() => navigate(`/dashboard/emails/${email.id}${routeMailboxId ? `?mailboxId=${routeMailboxId}` : ''}`)}
                         className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary-700"
                       >
                         View

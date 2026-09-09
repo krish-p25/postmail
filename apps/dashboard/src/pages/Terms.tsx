@@ -11,13 +11,13 @@ export default function Terms() {
 
       <main className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-16">
         <h1 className="text-2xl font-bold text-white sm:text-4xl">Terms of Service</h1>
-        <p className="mt-2 text-sm text-gray-500">Last updated: August 25, 2026</p>
+        <p className="mt-2 text-sm text-gray-500">Last updated: September 9, 2026</p>
 
         <div className="mt-8 space-y-8 text-gray-300 sm:mt-12 sm:space-y-10 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-white sm:[&_h2]:text-xl [&_p]:mt-3 [&_p]:leading-relaxed [&_p]:text-gray-400 [&_ul]:mt-3 [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:pl-5 [&_ul]:text-gray-400 sm:[&_ul]:pl-6">
           <section>
             <h2>1. Acceptance of Terms</h2>
             <p>
-              By accessing or using the PostMail web application and Chrome extension (the "Service"),
+              By accessing or using the PostMail web application and browser extension (the "Service"),
               you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these
               Terms, do not use the Service.
             </p>
@@ -26,23 +26,40 @@ export default function Terms() {
           <section>
             <h2>2. Description of Service</h2>
             <p>
-              PostMail provides email open tracking tools, including a Chrome extension that integrates
-              with Gmail and a web dashboard for viewing tracking data. The Service inserts tracking
-              pixels into emails you compose to detect when recipients open those emails.
+              PostMail provides email open tracking tools, including a browser extension that integrates
+              with Gmail and Microsoft Outlook on the web, and a web dashboard for viewing tracking data.
+              The Service inserts tracking pixels into emails you compose — including new messages, replies,
+              and forwards — to detect when recipients open those emails.
             </p>
           </section>
 
           <section>
             <h2>3. Account Registration</h2>
             <p>
-              To use the Service, you must create an account using an email address and password or by
-              signing in with Google. You are responsible for maintaining the confidentiality of your
-              account credentials and for all activities that occur under your account.
+              To use the Service, you must create an account using an email address and password, or by
+              signing in with Google or Microsoft. You are responsible for maintaining the confidentiality
+              of your account credentials and for all activities that occur under your account.
             </p>
           </section>
 
           <section>
-            <h2>4. Acceptable Use</h2>
+            <h2>4. Connected Mailboxes and OAuth Access</h2>
+            <p>
+              The Service allows you to connect one or more email mailboxes (Gmail and/or Microsoft Outlook)
+              via OAuth. When you connect a mailbox, you grant PostMail permission to access your sent mail
+              folder to verify that tracked emails were successfully sent and to display your sent email
+              history on the dashboard. PostMail requests only the minimum OAuth scopes necessary to provide
+              these features.
+            </p>
+            <p>
+              You may connect multiple mailboxes across different providers. Each connected mailbox's OAuth
+              tokens are stored securely and are used exclusively to provide the Service. You may disconnect
+              any mailbox at any time through the dashboard settings, which revokes PostMail's access.
+            </p>
+          </section>
+
+          <section>
+            <h2>5. Acceptable Use</h2>
             <p>You agree not to use the Service to:</p>
             <ul>
               <li>Send spam or unsolicited bulk email</li>
@@ -51,22 +68,28 @@ export default function Terms() {
               <li>Impersonate any person or entity</li>
               <li>Interfere with or disrupt the Service or its infrastructure</li>
               <li>Attempt to gain unauthorized access to other users' accounts or data</li>
+              <li>Use automated systems to abuse the tracking pixel endpoint</li>
               <li>Use the Service for any illegal purpose</li>
             </ul>
           </section>
 
           <section>
-            <h2>5. User Responsibilities</h2>
+            <h2>6. User Responsibilities</h2>
             <p>
               You are solely responsible for ensuring that your use of email tracking complies with all
               applicable laws and regulations in your jurisdiction and the recipient's jurisdiction. Some
               jurisdictions require disclosure of email tracking to recipients. It is your responsibility
               to understand and comply with these requirements.
             </p>
+            <p>
+              PostMail tracks emails across new compose windows, replies, and forwards. You are responsible
+              for the tracking activity on all emails sent from your connected mailboxes, regardless of
+              whether they are original messages or replies within a thread.
+            </p>
           </section>
 
           <section>
-            <h2>6. Service Tiers and Billing</h2>
+            <h2>7. Service Tiers and Billing</h2>
             <p>
               The Service offers free and paid tiers. Free accounts are limited to 50 tracked emails per
               month. Paid plans are billed monthly. You may cancel your subscription at any time, and
@@ -76,7 +99,7 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2>7. Intellectual Property</h2>
+            <h2>8. Intellectual Property</h2>
             <p>
               The Service, including its design, code, and branding, is owned by PostMail and protected
               by intellectual property laws. You retain ownership of any content you create or track
@@ -86,7 +109,7 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2>8. Privacy</h2>
+            <h2>9. Privacy</h2>
             <p>
               Your use of the Service is also governed by our{' '}
               <Link to="/privacy" className="text-[#0066FF] hover:underline">Privacy Policy</Link>,
@@ -95,37 +118,40 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2>9. Disclaimer of Warranties</h2>
+            <h2>10. Disclaimer of Warranties</h2>
             <p>
               The Service is provided "as is" and "as available" without warranties of any kind, either
               express or implied. We do not guarantee that tracking pixels will be loaded by all email
               clients, as some clients block external images by default. Open tracking accuracy depends
-              on recipient email client behavior and is not guaranteed to be 100% accurate.
+              on recipient email client behavior and is not guaranteed to be 100% accurate. Re-injection
+              of tracking pixels after content edits is performed on a best-effort basis and may not
+              succeed in all scenarios.
             </p>
           </section>
 
           <section>
-            <h2>10. Limitation of Liability</h2>
+            <h2>11. Limitation of Liability</h2>
             <p>
               To the maximum extent permitted by law, PostMail shall not be liable for any indirect,
               incidental, special, consequential, or punitive damages, or any loss of profits or revenue,
               whether incurred directly or indirectly, or any loss of data, use, or goodwill arising out
-              of your use of the Service.
+              of your use of the Service. This includes, without limitation, any inaccuracies in open
+              tracking data, failure to detect email opens, or loss of tracking data.
             </p>
           </section>
 
           <section>
-            <h2>11. Termination</h2>
+            <h2>12. Termination</h2>
             <p>
               We reserve the right to suspend or terminate your account at any time for violation of
               these Terms or for any other reason at our sole discretion. Upon termination, your right
-              to use the Service ceases immediately. You may delete your account at any time through
-              the dashboard settings.
+              to use the Service ceases immediately, and any connected mailbox authorizations are revoked.
+              You may delete your account at any time through the dashboard settings.
             </p>
           </section>
 
           <section>
-            <h2>12. Changes to Terms</h2>
+            <h2>13. Changes to Terms</h2>
             <p>
               We may modify these Terms at any time. We will provide notice of material changes by
               posting the updated Terms on the Service with a new "Last updated" date. Your continued
@@ -134,7 +160,7 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2>13. Governing Law</h2>
+            <h2>14. Governing Law</h2>
             <p>
               These Terms are governed by and construed in accordance with applicable law, without
               regard to conflict of law principles.
@@ -142,9 +168,9 @@ export default function Terms() {
           </section>
 
           <section>
-            <h2>14. Contact Us</h2>
+            <h2>15. Contact Us</h2>
             <p>
-              If you have questions about these Terms, contact us at legal@postmail.app.
+              If you have questions about these Terms, contact us at support.postmail@krishrp.xyz.
             </p>
           </section>
         </div>
