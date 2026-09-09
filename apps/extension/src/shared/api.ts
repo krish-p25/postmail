@@ -23,6 +23,7 @@ export interface PreflightResult {
   ok: boolean;
   reason?: PreflightReason;
   detail?: string;
+  linkedEmails?: string[];
 }
 
 export async function checkAuth(): Promise<PreflightResult> {
@@ -47,7 +48,12 @@ export async function checkAuth(): Promise<PreflightResult> {
     return { ok: false, reason: 'server_error', detail: `Server returned ${res.status}` };
   }
 
-  return { ok: true };
+  try {
+    const data = await res.json();
+    return { ok: true, linkedEmails: data.linkedEmails || [] };
+  } catch {
+    return { ok: true, linkedEmails: [] };
+  }
 }
 
 export async function registerTrackedEmail(
