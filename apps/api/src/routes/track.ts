@@ -95,8 +95,16 @@ async function resolveMailbox(
  * GET /api/track/preflight
  * Lightweight auth check — if you reach this handler, the JWT is valid.
  */
-router.get('/preflight', (_req: Request, res: Response) => {
-  res.json({ ok: true });
+router.get('/preflight', async (req: Request, res: Response) => {
+  try {
+    const mailboxes = await LinkedMailbox.findAll({
+      where: { userId: req.user!.id },
+      attributes: ['email'],
+    });
+    res.json({ ok: true, linkedEmails: mailboxes.map((m) => m.email) });
+  } catch {
+    res.json({ ok: true, linkedEmails: [] });
+  }
 });
 
 /**

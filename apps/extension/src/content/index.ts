@@ -1,6 +1,8 @@
 import { ComposeManager, ComposeManagerConfig } from './compose-manager';
 import { ExtensionMessage } from '../shared/messaging';
 import { showAuthBanner, removeAuthBanner } from './auth-banner';
+import { getSenderEmail as gmailGetCurrentEmail } from './gmail/selectors';
+import { getSenderEmail as outlookGetCurrentEmail } from './outlook/selectors';
 
 // Gmail imports
 import { ComposeDetector as GmailComposeDetector } from './gmail/compose-detector';
@@ -92,7 +94,33 @@ function init(): void {
   });
 }
 
+function getCurrentEmail(provider: 'gmail' | 'outlook'): string | null {
+  return provider === 'gmail' ? gmailGetCurrentEmail() : outlookGetCurrentEmail();
+}
+
+/** Retry email detection up to `attempts` times with a delay between each. */
+function detectEmailWithRetry(
+  provider: 'gmail' | 'outlook',
+  attempts: number,
+  delayMs: number,
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    let remaining = attempts;
+    function tryDetect(): void {
+      const email = getCurrentEmail(provider);
+      if (email) { resolve(email); return; }
+      remaining--;
+      if (remaining <= 0) { resolve(null); return; }
+      setTimeout(tryDetect, delayMs);
+    }
+    tryDetect();
+  });
+}
+
 function runAuthPreflight(): void {
+  const provider = getProvider();
+  if (!provider) return;
+
   try {
     chrome.runtime.sendMessage({ type: 'CHECK_AUTH' }, (response) => {
       if (chrome.runtime.lastError) {
@@ -101,7 +129,11 @@ function runAuthPreflight(): void {
       }
 
       if (response?.ok) {
-        removeAuthBanner();
+        const linkedEmails: string[] = response.linkedEmails || [];
+        // Retry email detection — SPA DOM may not be ready yet
+        detectEmailWithRetry(provider, 6, 500).then((currentEmail) => {
+          showAuthBanner('ok', linkedEmails, currentEmail);
+        });
       } else {
         const reason = response?.reason || 'no_token';
         showAuthBanner(reason);
