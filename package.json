@@ -12,6 +12,8 @@
     "build:shared": "cd packages/shared && npx tsc",
     "build:extension": "cd apps/extension && npx webpack",
     "build": "npm run build:shared && npm run build:extension",
+    "video:studio": "cd apps/video && npm run studio",
+    "video:render": "cd apps/video && npm run render",
     "test": "npm run test --workspaces --if-present",
     "test:extension": "cd apps/extension && npx jest",
     "lint": "prettier --check .",
