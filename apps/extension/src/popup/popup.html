@@ -8,22 +8,55 @@
 </head>
 <body>
   <div class="popup-container">
-    <h1 class="popup-title">PostMail</h1>
-
-    <div class="tracking-toggle">
-      <span class="toggle-label">Tracking</span>
-      <label class="switch">
-        <input type="checkbox" id="trackingToggle">
-        <span class="slider"></span>
-      </label>
+    <div class="popup-header">
+      <svg width="20" height="20" viewBox="0 0 128 128" fill="none">
+        <rect width="128" height="128" rx="28" fill="#4f46e5"/>
+        <rect x="24" y="36" width="80" height="56" rx="8" stroke="#fff" stroke-width="6" fill="none"/>
+        <path d="M28 40l36 28 36-28" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="98" cy="36" r="16" fill="#22c55e"/>
+        <circle cx="98" cy="36" r="6" fill="#fff"/>
+      </svg>
+      <h1 class="popup-title">PostMail</h1>
     </div>
 
-    <div class="status" id="status">
-      <span class="status-dot" id="statusDot"></span>
-      <span id="statusText">Loading...</span>
+    <!-- Authenticated view -->
+    <div id="authedView" class="view" style="display: none;">
+      <div class="tracking-toggle">
+        <span class="toggle-label">Email tracking</span>
+        <label class="switch">
+          <input type="checkbox" id="trackingToggle">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="status" id="status">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Loading...</span>
+      </div>
+
+      <a href="#" id="dashboardLink" class="btn btn-secondary">Open Dashboard</a>
     </div>
 
-    <a href="#" id="dashboardLink" class="dashboard-link">Open Dashboard</a>
+    <!-- Unauthenticated view -->
+    <div id="unauthedView" class="view" style="display: none;">
+      <div class="unauthed-message">
+        <svg class="unauthed-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/>
+        </svg>
+        <p class="unauthed-title">Sign in to start tracking</p>
+        <p class="unauthed-subtitle">Create a free account to know when your emails are opened.</p>
+      </div>
+      <a href="#" id="signUpLink" class="btn btn-primary">Get Started Free</a>
+      <a href="#" id="signInLink" class="btn btn-secondary">I already have an account</a>
+    </div>
+
+    <!-- Loading view -->
+    <div id="loadingView" class="view">
+      <div class="status">
+        <span class="status-dot loading"></span>
+        <span>Checking account...</span>
+      </div>
+    </div>
   </div>
   <script src="popup.js"></script>
 </body>
