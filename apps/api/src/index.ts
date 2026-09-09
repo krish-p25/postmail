@@ -74,6 +74,7 @@ app.use('/api', api);
 // In production the built React SPA lives next to the API.
 // Resolved path: /app/apps/api/dist/../../dashboard/dist → /app/apps/dashboard/dist
 const dashboardDist = path.resolve(__dirname, '../../dashboard/dist');
+app.use('/.well-known', express.static(path.join(dashboardDist, '.well-known')));
 app.use(express.static(dashboardDist));
 
 // SPA fallback — React Router handles 404s client-side
