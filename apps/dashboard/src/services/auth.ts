@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'https://api.postmail.krishrp.xyz';
+const API_URL = import.meta.env.VITE_API_URL || 'https://postmail.krishrp.xyz/api';
 const TOKEN_KEY = 'postmail_token';
 
 export interface AuthUser {

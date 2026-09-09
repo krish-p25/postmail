@@ -9,5 +9,11 @@ export default defineConfig({
     port: 3006,
     host: true,
     allowedHosts: ['localhost', '127.0.0.1', '0.0.0.0', 'postmail.krishrp.xyz'],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3005',
+        changeOrigin: true,
+      },
+    },
   },
 });

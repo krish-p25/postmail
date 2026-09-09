@@ -16,9 +16,9 @@ services:
       timeout: 5s
       retries: 5
 
-  api:
-    image: postmail-api:latest
-    container_name: postmail-api
+  app:
+    image: postmail:latest
+    container_name: postmail-app
     ports:
       - "${API_PORT:-3005}:3005"
     environment:
@@ -35,16 +35,11 @@ services:
       MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID}
       MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET}
       MICROSOFT_REDIRECT_URI: ${MICROSOFT_REDIRECT_URI:-http://localhost:3006/outlook/callback}
+      OUTLOOK_MAILBOX_REDIRECT_URI: ${OUTLOOK_MAILBOX_REDIRECT_URI:-http://localhost:3006/outlook/callback}
       DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3006}
     depends_on:
       postgres:
         condition: service_healthy
-
-  dashboard:
-    image: postmail-dashboard:latest
-    container_name: postmail-dashboard
-    ports:
-      - "${DASHBOARD_PORT:-3006}:3006"
 
 volumes:
   pgdata:
