@@ -63,7 +63,9 @@ async function resolveMailbox(
 ): Promise<LinkedMailbox | null> {
   // 1. If TrackedEmail already has a mailboxId, use it
   if (trackedEmail?.mailboxId) {
-    const mailbox = await LinkedMailbox.findByPk(trackedEmail.mailboxId);
+    const mailbox = await LinkedMailbox.findOne({
+      where: { id: trackedEmail.mailboxId, userId },
+    });
     if (mailbox) return mailbox;
   }
 
@@ -316,6 +318,7 @@ async function purgePreSendOpens(trackedEmail: TrackedEmail, sentAt: Date): Prom
   const deleted = await EmailOpen.destroy({
     where: {
       trackedEmailId: trackedEmail.id,
+      userId: trackedEmail.userId,
       openedAt: { [Op.lt]: sentAt },
     },
   });
