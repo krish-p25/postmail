@@ -577,22 +577,22 @@ export default function Emails() {
           </div>
           {/* Skeleton — desktop table */}
           <div className="mt-6 hidden overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200 sm:block">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/50">
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Subject</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Recipient</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Sent</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"></th>
+                  <th className="w-[40%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Subject</th>
+                  <th className="w-[22%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Recipient</th>
+                  <th className="w-[16%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Sent</th>
+                  <th className="w-[12%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Status</th>
+                  <th className="w-[10%] px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
-                    <td className="px-4 py-3"><div className="h-4 w-48 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" /></td>
-                    <td className="px-4 py-3"><div className="h-4 w-36 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.15s' }} /></td>
-                    <td className="px-4 py-3"><div className="h-4 w-24 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.3s' }} /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-3/4 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-3/4 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.15s' }} /></td>
+                    <td className="px-4 py-3"><div className="h-4 w-3/4 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.3s' }} /></td>
                     <td className="px-4 py-3"><div className="h-5 w-16 animate-[shimmer_1.5s_infinite] rounded-full bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.45s' }} /></td>
                     <td className="px-4 py-3"><div className="h-7 w-14 animate-[shimmer_1.5s_infinite] rounded-lg bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: '0.6s' }} /></td>
                   </tr>
@@ -689,14 +689,14 @@ export default function Emails() {
 
           {/* Desktop — table layout */}
           <div className="mt-6 hidden overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200 sm:block">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/50">
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Subject</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Recipient</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Sent</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"></th>
+                  <th className="w-[40%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Subject</th>
+                  <th className="w-[22%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Recipient</th>
+                  <th className="w-[16%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Sent</th>
+                  <th className="w-[12%] px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Status</th>
+                  <th className="w-[10%] px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -704,7 +704,7 @@ export default function Emails() {
                   <tr key={email.id} className="transition hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">
                       <div className="flex items-center gap-1.5">
-                        {email.subject}
+                        <span className="truncate" title={email.subject}>{email.subject}</span>
                         {email.hasAttachments && (
                           <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
@@ -712,7 +712,7 @@ export default function Emails() {
                         )}
                       </div>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600" title={email.recipients.join(', ')}>
+                    <td className="truncate px-4 py-3 text-sm text-gray-600" title={email.recipients.join(', ')}>
                       {formatRecipients(email.recipients)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
