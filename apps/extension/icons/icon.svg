@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Orange rounded background -->
+  <rect width="512" height="512" rx="112" ry="112" fill="#F26522"/>
+
+  <!-- Clip flap to envelope shape -->
+  <defs>
+    <clipPath id="envelope-clip">
+      <rect x="79" y="119" width="354" height="274" rx="36" ry="36"/>
+    </clipPath>
+  </defs>
+
+  <!-- Envelope body -->
+  <rect x="96" y="136" width="320" height="240" rx="36" ry="36" fill="none" stroke="#fff" stroke-width="34" stroke-linejoin="round"/>
+
+  <!-- Envelope flap (clipped to envelope bounds) -->
+  <polyline points="100,154 256,280 412,154" fill="none" stroke="#fff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#envelope-clip)"/>
+</svg>
