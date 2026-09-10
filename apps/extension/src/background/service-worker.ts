@@ -1,10 +1,10 @@
 import { ExtensionMessage, TrackingStateResponse, RegisterResponse, VerifyResponse } from '../shared/messaging';
 import { getTrackingEnabled, setTrackingEnabled } from '../shared/storage';
-import { registerTrackedEmail, updateTrackedEmail, verifyEmailSent, discardTrackedEmail, checkAuth, PreflightResult } from '../shared/api';
+import { registerTrackedEmail, updateTrackedEmail, verifyEmailSent, discardTrackedEmail, checkAuth, getTrackedEmails, PreflightResult, TrackedEmailInfo } from '../shared/api';
 
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener(
-  (message: ExtensionMessage, _sender, sendResponse: (response: TrackingStateResponse | RegisterResponse | VerifyResponse | { success: boolean } | PreflightResult) => void) => {
+  (message: ExtensionMessage, _sender, sendResponse: (response: TrackingStateResponse | RegisterResponse | VerifyResponse | { success: boolean } | PreflightResult | { emails: TrackedEmailInfo[] }) => void) => {
 
     if (message.type === 'GET_TRACKING_STATE') {
       getTrackingEnabled().then((enabled) => sendResponse({ trackingEnabled: enabled }));
@@ -47,6 +47,13 @@ chrome.runtime.onMessage.addListener(
       verifyEmailSent(message.trackingToken, message.senderEmail, message.provider)
         .then((res) => sendResponse(res))
         .catch(() => sendResponse({ found: false, authError: false }));
+      return true;
+    }
+
+    if (message.type === 'GET_TRACKED_EMAILS') {
+      getTrackedEmails()
+        .then((emails) => sendResponse({ emails }))
+        .catch(() => sendResponse({ emails: [] }));
       return true;
     }
 

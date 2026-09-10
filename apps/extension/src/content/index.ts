@@ -3,6 +3,7 @@ import { ExtensionMessage } from '../shared/messaging';
 import { showAuthBanner, removeAuthBanner } from './auth-banner';
 import { getSenderEmail as gmailGetCurrentEmail } from './gmail/selectors';
 import { getSenderEmail as outlookGetCurrentEmail } from './outlook/selectors';
+import { InboxTracker } from './gmail/inbox-tracker';
 
 // Gmail imports
 import { ComposeDetector as GmailComposeDetector } from './gmail/compose-detector';
@@ -134,6 +135,11 @@ function runAuthPreflight(): void {
         detectEmailWithRetry(provider, 6, 500).then((currentEmail) => {
           showAuthBanner('ok', linkedEmails, currentEmail);
         });
+        // Start inbox tracking overlay for Gmail
+        if (provider === 'gmail') {
+          const tracker = new InboxTracker();
+          tracker.start();
+        }
       } else {
         const reason = response?.reason || 'no_token';
         showAuthBanner(reason);

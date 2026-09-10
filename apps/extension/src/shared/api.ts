@@ -123,6 +123,26 @@ export async function discardTrackedEmail(
   return res.json();
 }
 
+export interface TrackedEmailInfo {
+  id: string;
+  subject: string | null;
+  recipient: string | null;
+  status: string;
+  sentAt: string | null;
+  opens: { id: string; opened_at: string; dismissed: boolean }[];
+}
+
+export async function getTrackedEmails(): Promise<TrackedEmailInfo[]> {
+  try {
+    const res = await authFetch('/emails');
+    if (res.status === 401 || !res.ok) return [];
+    const data = await res.json();
+    return data.emails || [];
+  } catch {
+    return [];
+  }
+}
+
 export async function verifyEmailSent(
   trackingToken: string,
   senderEmail: string | null,
