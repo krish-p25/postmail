@@ -297,7 +297,8 @@ async function verifySentEmail(
     return;
   }
 
-  if (result.found && trackedEmail && trackedEmail.status === 'pending') {
+  if (result.found && trackedEmail && (trackedEmail.status === 'pending' || trackedEmail.status === 'discarded')) {
+    // Update pending emails and recover prematurely discarded ones
     const sentAt = result.sentAt || new Date();
     const updates: Record<string, unknown> = { status: 'sent', sentAt };
     if (result.messageId) updates.messageId = result.messageId;
