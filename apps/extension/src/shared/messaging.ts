@@ -7,7 +7,8 @@ export type ExtensionMessage =
   | { type: 'VERIFY_EMAIL_SENT'; trackingToken: string; senderEmail: string | null; provider: string }
   | { type: 'DISCARD_TRACKED_EMAIL'; trackingToken: string }
   | { type: 'UPDATE_TRACKED_EMAIL'; trackingToken: string; recipients: string[]; subject: string; senderEmail: string | null; provider: string }
-  | { type: 'CHECK_AUTH' };
+  | { type: 'CHECK_AUTH' }
+  | { type: 'GET_TRACKED_EMAILS' };
 
 export interface TrackingStateResponse {
   trackingEnabled: boolean;

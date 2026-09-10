@@ -139,9 +139,12 @@ export class TrackingToast {
       width: `${TOAST_WIDTH}px`,
       zIndex: '2147483647',
       fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-      background: '#ffffff',
-      borderRadius: '12px',
-      boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+      background: 'rgba(255, 255, 255, 0.72)',
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
+      borderRadius: '14px',
+      border: '1px solid rgba(255, 255, 255, 0.45)',
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.10), 0 0 0 1px rgba(0, 0, 0, 0.04)',
       overflow: 'hidden',
       animation: 'postmail-toast-in 300ms ease-out forwards',
     });
@@ -199,7 +202,7 @@ export class TrackingToast {
 
   private buildContent(state: ToastState, data: ToastData): string {
     return `
-      <div style="height: 3px; background: linear-gradient(90deg, ${BRAND_COLOR}, #818cf8);"></div>
+      <div style="height: 2px; background: linear-gradient(90deg, ${BRAND_COLOR}, #818cf8); opacity: 0.7;"></div>
       <div style="display: flex; align-items: center; gap: 6px; padding: 8px 16px 0 16px;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
           <rect width="24" height="24" rx="5" fill="${BRAND_COLOR}"/>
