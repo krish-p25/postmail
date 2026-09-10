@@ -448,6 +448,23 @@ export default function EmailDetail() {
 
   const subject = messages.length > 0 ? messages[0].subject : '';
 
+  // Scroll to hash target after messages load
+  const scrolledRef = useRef(false);
+  useEffect(() => {
+    if (scrolledRef.current || loading || messages.length === 0) return;
+    const hash = window.location.hash;
+    if (!hash) return;
+    scrolledRef.current = true;
+    // Wait for the grid-rows expansion animation (300ms) to finish
+    // so elements are at their final positions before scrolling
+    setTimeout(() => {
+      const el = document.getElementById(hash.slice(1));
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 350);
+  }, [loading, messages]);
+
   // Collapsible thread: all messages expanded by default
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
   useEffect(() => {
@@ -576,6 +593,7 @@ export default function EmailDetail() {
               return (
                 <div
                   key={msg.id}
+                  id={`msg-${msg.id}`}
                   className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200"
                 >
                   {/* Header — always visible, click to toggle body */}
