@@ -257,3 +257,114 @@ export async function searchSentFolder(
   }
   return searchGmailSentFolder(mailbox, trackingToken, options);
 }
+
+/**
+ * Batch search: fetch sent messages once per mailbox and scan for multiple tokens.
+ * Returns a Map of trackingToken → SentEmailMatch for all found tokens.
+ * Unfound tokens are not included in the map.
+ */
+export async function batchSearchSentFolder(
+  mailbox: LinkedMailbox,
+  tokens: string[],
+): Promise<Map<string, SentEmailMatch>> {
+  if (mailbox.provider === 'outlook') {
+    return batchSearchOutlookSentFolder(mailbox, tokens);
+  }
+  return batchSearchGmailSentFolder(mailbox, tokens);
+}
+
+async function batchSearchGmailSentFolder(
+  mailbox: LinkedMailbox,
+  tokens: string[],
+): Promise<Map<string, SentEmailMatch>> {
+  const results = new Map<string, SentEmailMatch>();
+  if (tokens.length === 0) return results;
+
+  const oauth2Client = createGmailClient(mailbox);
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client as any });
+  const remaining = new Set(tokens);
+
+  try {
+    const listRes = await gmail.users.messages.list({
+      userId: 'me',
+      q: 'in:sent newer_than:1d',
+      maxResults: 25,
+    });
+
+    const messageRefs = listRes.data.messages || [];
+    if (messageRefs.length === 0) return results;
+
+    // Fetch all message bodies in parallel
+    const fullMessages = await Promise.all(
+      messageRefs.map(ref =>
+        gmail.users.messages.get({ userId: 'me', id: ref.id!, format: 'full' }),
+      ),
+    );
+
+    for (const full of fullMessages) {
+      if (remaining.size === 0) break;
+      const bodyText = extractBodyText(full.data.payload);
+
+      for (const token of remaining) {
+        if (bodyText.includes(token)) {
+          const sentAt = full.data.internalDate
+            ? new Date(Number(full.data.internalDate))
+            : undefined;
+          results.set(token, { found: true, messageId: full.data.id!, sentAt });
+          remaining.delete(token);
+          break; // each message has at most one tracking pixel
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[PostMail API] Gmail batch sent folder search failed:', error);
+  }
+
+  return results;
+}
+
+async function batchSearchOutlookSentFolder(
+  mailbox: LinkedMailbox,
+  tokens: string[],
+): Promise<Map<string, SentEmailMatch>> {
+  const results = new Map<string, SentEmailMatch>();
+  if (tokens.length === 0) return results;
+
+  const accessToken = await getOutlookAccessToken(mailbox);
+  if (!accessToken) return results;
+
+  const graphUrl = `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=25&$orderby=sentDateTime desc&$select=id,body,sentDateTime`;
+
+  let graphRes = await fetch(graphUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (graphRes.status === 401) {
+    const refreshed = await refreshOutlookToken(mailbox);
+    if (!refreshed) return results;
+    graphRes = await fetch(graphUrl, {
+      headers: { Authorization: `Bearer ${refreshed}` },
+    });
+  }
+
+  if (!graphRes.ok) return results;
+
+  const data = await graphRes.json();
+  const remaining = new Set(tokens);
+
+  for (const msg of (data.value || [])) {
+    if (remaining.size === 0) break;
+    const bodyContent: string = msg.body?.content || '';
+
+    for (const token of remaining) {
+      if (bodyContent.includes(token)) {
+        const sentAt = msg.sentDateTime ? new Date(msg.sentDateTime) : undefined;
+        results.set(token, { found: true, messageId: msg.id || null, sentAt });
+        remaining.delete(token);
+        break;
+      }
+    }
+  }
+
+  return results;
+}

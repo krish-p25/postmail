@@ -16,7 +16,7 @@ const OPEN_ATTRIBUTES = ['id', 'opened_at', 'user_agent', 'ip_address', 'dismiss
 router.get('/', async (req: Request, res: Response) => {
   try {
     // Resolve pending emails before loading dashboard data
-    await resolvePendingEmails(req.user!.id);
+    await resolvePendingEmails(req.user!.id, 'GET /api/emails (dashboard)');
 
     const emails = await withRLS(req.user!.id, async (transaction) => {
       return TrackedEmail.findAll({
