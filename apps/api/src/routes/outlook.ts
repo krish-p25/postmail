@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { config } from '../config/env';
 import { LinkedMailbox } from '../db/models';
 import { lookupTrackingByMessageIds } from '../services/tracking-lookup';
+import { resolvePendingEmails } from '../services/resolve-pending';
 
 const router = Router();
 
@@ -195,6 +196,9 @@ router.post('/callback', async (req: Request, res: Response) => {
  */
 router.get('/emails', async (req: Request, res: Response) => {
   try {
+    // Resolve any pending tracked emails before loading the list
+    await resolvePendingEmails(req.user!.id);
+
     const mailbox = await findOutlookMailbox(req.user!.id, req.query.mailboxId as string | undefined);
 
     if (!mailbox || !mailbox.refreshToken) {
