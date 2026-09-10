@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { TrackedEmail, EmailOpen } from '../db/models';
 import { withRLS } from '../middleware/rls';
+import { resolvePendingEmails } from '../services/resolve-pending';
 
 const router = Router();
 
@@ -9,10 +10,14 @@ const OPEN_ATTRIBUTES = ['id', 'opened_at', 'user_agent', 'ip_address', 'dismiss
 /**
  * GET /api/emails
  * Returns all tracked emails for the authenticated user.
+ * Before returning, resolves any pending tracked emails by searching sent folders.
  * Uses RLS to ensure tenant isolation.
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
+    // Resolve pending emails before loading dashboard data
+    await resolvePendingEmails(req.user!.id);
+
     const emails = await withRLS(req.user!.id, async (transaction) => {
       return TrackedEmail.findAll({
         where: { userId: req.user!.id },
