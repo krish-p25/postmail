@@ -11,6 +11,8 @@ export interface TrackedEmailSummary {
   recipient: string | null;
   status: string;
   openCount: number;
+  sentAt: string | null;
+  opens: { opened_at: string; ip_address: string | null; user_agent: string | null }[];
 }
 
 export interface BadgeConfig {
@@ -55,13 +57,20 @@ export function fetchTrackedEmails(): Promise<TrackedEmailSummary[]> {
             resolve([]);
             return;
           }
+          const nonDismissed = (opens: any[]) => (opens || []).filter((o: any) => !o.dismissed);
           resolve(
             response.emails.map((e: any) => ({
               id: e.id,
               subject: e.subject || '',
               recipient: e.recipient,
               status: e.status,
-              openCount: (e.opens || []).filter((o: any) => !o.dismissed).length,
+              openCount: nonDismissed(e.opens).length,
+              sentAt: e.sentAt || null,
+              opens: nonDismissed(e.opens).map((o: any) => ({
+                opened_at: o.opened_at,
+                ip_address: o.ip_address || null,
+                user_agent: o.user_agent || null,
+              })),
             })),
           );
         },
@@ -83,7 +92,40 @@ export function createBadgeElement(tracked: TrackedEmailSummary): HTMLSpanElemen
   textSpan.textContent = config.label;
   badge.appendChild(textSpan);
 
+  if (tracked.opens.length > 0) {
+    const times = tracked.opens.map((o) => {
+      const d = new Date(o.opened_at);
+      return d.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    });
+    badge.title = `Opened ${times.length}x:\n${times.join('\n')}`;
+  }
+
   return badge;
+}
+
+export const READING_BADGE_ATTR = 'data-postmail-reading-badge';
+
+export function parseDevice(ua: string | null): string {
+  if (!ua) return 'Unknown device';
+  let browser = 'Unknown';
+  if (ua.includes('Edg')) browser = 'Edge';
+  else if (ua.includes('Chrome')) browser = 'Chrome';
+  else if (ua.includes('Firefox')) browser = 'Firefox';
+  else if (ua.includes('Safari')) browser = 'Safari';
+
+  let os = '';
+  if (ua.includes('Windows')) os = 'Windows';
+  else if (ua.includes('Macintosh') || ua.includes('Mac OS')) os = 'Mac';
+  else if (ua.includes('Android')) os = 'Android';
+  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+  else if (ua.includes('Linux')) os = 'Linux';
+
+  return os ? `${browser} on ${os}` : browser;
 }
 
 export function isBadgeCurrent(badge: Element, tracked: TrackedEmailSummary): boolean {
@@ -133,6 +175,40 @@ export function injectBadgeStyles(): void {
       background: #dcfce7;
       color: ${GREEN};
       animation: postmail-enter-opened 0.5s ease-out both;
+    }
+    .postmail-reading-badge {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 8px 0 4px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 12px;
+    }
+    .postmail-reading-badge .postmail-open-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+    }
+    .postmail-reading-badge .postmail-open-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #475569;
+      font-size: 11px;
+      line-height: 16px;
+    }
+    .postmail-reading-badge .postmail-open-row .postmail-open-time {
+      font-weight: 500;
+      color: #334155;
+      min-width: 120px;
+    }
+    .postmail-reading-badge .postmail-open-row .postmail-open-dot {
+      color: #94a3b8;
     }
   `;
   document.head.appendChild(style);
