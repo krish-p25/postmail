@@ -182,27 +182,42 @@ export function findRecipientEmails(composeElement: Element): string[] {
 export function getSenderEmail(): string | null {
   const EMAIL_RE = /[\w.+-]+@[\w.-]+\.\w+/;
 
-  // Strategy 1: aria-label on profile/account elements
-  const profileLabels = document.querySelectorAll('[aria-label*="@"]');
-  for (const el of profileLabels) {
-    const label = el.getAttribute('aria-label') || '';
-    const match = label.match(EMAIL_RE);
+  // Strategy 0: Outlook localStorage — olk-BootDiagnostics contains the logged-in email
+  try {
+    const bootDiag = localStorage.getItem('olk-BootDiagnostics') || '';
+    const storageMatch = bootDiag.match(EMAIL_RE);
+    if (storageMatch) return storageMatch[0];
+  } catch {
+    // Storage access may be blocked
+  }
+
+  // Strategy 1: Microsoft account menu email (visible after profile flyout opened)
+  const accountEmail = document.querySelector('#mectrl_currentAccount_secondary');
+  if (accountEmail) {
+    const text = accountEmail.textContent?.trim() || '';
+    const match = text.match(EMAIL_RE);
     if (match) return match[0];
   }
 
-  // Strategy 2: title on profile elements
-  const profileTitles = document.querySelectorAll('button[title*="@"], div[title*="@"]');
-  for (const el of profileTitles) {
-    const title = el.getAttribute('title') || '';
-    const match = title.match(EMAIL_RE);
+  // Strategy 2: Microsoft account profile button
+  const profileBtn = document.querySelector(
+    '#mectrl_main_trigger, button[data-tid="mectrl_main_trigger"], #meInitialsButton',
+  );
+  if (profileBtn) {
+    const text = profileBtn.getAttribute('aria-label') || profileBtn.getAttribute('title') || '';
+    const match = text.match(EMAIL_RE);
     if (match) return match[0];
   }
 
-  // Strategy 3: data-lpc-hover-target-id containing @
-  const lpcElements = document.querySelectorAll('[data-lpc-hover-target-id*="@"]');
-  for (const el of lpcElements) {
-    const id = el.getAttribute('data-lpc-hover-target-id') || '';
-    if (id.includes('@')) return id;
+  // Strategy 3: header/banner area only (avoids message rows)
+  const header = document.querySelector('[role="banner"], header, #O365_HeaderRightRegion');
+  if (header) {
+    const headerEls = header.querySelectorAll('[aria-label*="@"], [title*="@"]');
+    for (const el of headerEls) {
+      const text = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+      const match = text.match(EMAIL_RE);
+      if (match) return match[0];
+    }
   }
 
   return null;

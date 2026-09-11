@@ -207,7 +207,9 @@ export function showAuthBanner(reason: string, linkedEmails?: string[], currentE
   // Authenticated — check if current email is in linked list
   if (reason === 'ok' && linkedEmails) {
     if (!currentEmail) {
-      // Couldn't detect the email — don't show any banner (avoid false positives)
+      // Couldn't detect the email — show ready if mailboxes are linked,
+      // since auth token already validates the user's identity
+      if (linkedEmails.length > 0) showBanner('ready');
       return;
     }
     const normalised = currentEmail.toLowerCase();

@@ -4,6 +4,7 @@ import { showAuthBanner, removeAuthBanner } from './auth-banner';
 import { getSenderEmail as gmailGetCurrentEmail } from './gmail/selectors';
 import { getSenderEmail as outlookGetCurrentEmail } from './outlook/selectors';
 import { InboxTracker } from './gmail/inbox-tracker';
+import { OutlookInboxTracker } from './outlook/inbox-tracker';
 
 // Gmail imports
 import { ComposeDetector as GmailComposeDetector } from './gmail/compose-detector';
@@ -131,13 +132,19 @@ function runAuthPreflight(): void {
 
       if (response?.ok) {
         const linkedEmails: string[] = response.linkedEmails || [];
+        console.log('[PostMail] Auth OK | linkedEmails:', linkedEmails);
         // Retry email detection — SPA DOM may not be ready yet
         detectEmailWithRetry(provider, 6, 500).then((currentEmail) => {
+          console.log('[PostMail] Detected currentEmail:', currentEmail, '| provider:', provider);
+          console.log('[PostMail] Match check:', linkedEmails.map(e => e.toLowerCase()), 'includes', currentEmail?.toLowerCase());
           showAuthBanner('ok', linkedEmails, currentEmail);
         });
-        // Start inbox tracking overlay for Gmail
+        // Start inbox tracking overlay
         if (provider === 'gmail') {
           const tracker = new InboxTracker();
+          tracker.start();
+        } else if (provider === 'outlook') {
+          const tracker = new OutlookInboxTracker();
           tracker.start();
         }
       } else {
