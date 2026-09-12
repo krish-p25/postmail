@@ -11,12 +11,13 @@ interface TrackedEmailAttributes {
   sentAt: Date | null;
   mailboxId: string | null;
   messageId: string | null;
+  conversationId: string | null;
   resolveAttempts: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
-interface TrackedEmailCreation extends Optional<TrackedEmailAttributes, 'id' | 'recipient' | 'subject' | 'status' | 'sentAt' | 'mailboxId' | 'messageId' | 'resolveAttempts' | 'createdAt' | 'updatedAt'> {}
+interface TrackedEmailCreation extends Optional<TrackedEmailAttributes, 'id' | 'recipient' | 'subject' | 'status' | 'sentAt' | 'mailboxId' | 'messageId' | 'conversationId' | 'resolveAttempts' | 'createdAt' | 'updatedAt'> {}
 
 class TrackedEmail extends Model<TrackedEmailAttributes, TrackedEmailCreation> implements TrackedEmailAttributes {
   declare id: string;
@@ -28,6 +29,7 @@ class TrackedEmail extends Model<TrackedEmailAttributes, TrackedEmailCreation> i
   declare sentAt: Date | null;
   declare mailboxId: string | null;
   declare messageId: string | null;
+  declare conversationId: string | null;
   declare resolveAttempts: number;
   declare createdAt: Date;
   declare updatedAt: Date;
@@ -79,6 +81,11 @@ TrackedEmail.init(
       type: DataTypes.STRING,
       allowNull: true,
       field: 'message_id',
+    },
+    conversationId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: 'conversation_id',
     },
     resolveAttempts: {
       type: DataTypes.INTEGER,

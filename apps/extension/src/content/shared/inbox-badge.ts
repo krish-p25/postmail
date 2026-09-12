@@ -12,6 +12,8 @@ export interface TrackedEmailSummary {
   status: string;
   openCount: number;
   sentAt: string | null;
+  trackingToken: string;
+  conversationId: string | null;
   opens: { opened_at: string; ip_address: string | null; user_agent: string | null }[];
 }
 
@@ -66,6 +68,8 @@ export function fetchTrackedEmails(): Promise<TrackedEmailSummary[]> {
               status: e.status,
               openCount: nonDismissed(e.opens).length,
               sentAt: e.sentAt || null,
+              trackingToken: e.trackingToken || '',
+              conversationId: e.conversationId || null,
               opens: nonDismissed(e.opens).map((o: any) => ({
                 opened_at: o.opened_at,
                 ip_address: o.ip_address || null,

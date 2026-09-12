@@ -132,11 +132,8 @@ function runAuthPreflight(): void {
 
       if (response?.ok) {
         const linkedEmails: string[] = response.linkedEmails || [];
-        console.log('[PostMail] Auth OK | linkedEmails:', linkedEmails);
         // Retry email detection — SPA DOM may not be ready yet
         detectEmailWithRetry(provider, 6, 500).then((currentEmail) => {
-          console.log('[PostMail] Detected currentEmail:', currentEmail, '| provider:', provider);
-          console.log('[PostMail] Match check:', linkedEmails.map(e => e.toLowerCase()), 'includes', currentEmail?.toLowerCase());
           showAuthBanner('ok', linkedEmails, currentEmail);
         });
         // Start inbox tracking overlay
