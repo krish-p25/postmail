@@ -1,21 +1,4 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: postmail-db
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postmail}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postmail_dev}
-      POSTGRES_DB: ${POSTGRES_DB:-postmail}
-    ports:
-      - "${POSTGRES_PORT:-5433}:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postmail}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   app:
     image: postmail:latest
     container_name: postmail-app
@@ -24,22 +7,22 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3005
-      DATABASE_URL: postgres://${POSTGRES_USER:-postmail}:${POSTGRES_PASSWORD:-postmail_dev}@postgres:5432/${POSTGRES_DB:-postmail}
+      DATABASE_URL: postgres://postgres:postgres@shared-postgres:5432/postgres
       JWT_SECRET: ${JWT_SECRET}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3006/oauth/callback}
       GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID}
       GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET}
-      GMAIL_REDIRECT_URI: ${GMAIL_REDIRECT_URI:-http://localhost:3006/gmail/callback}
+      GMAIL_REDIRECT_URI: ${GMAIL_REDIRECT_URI:-http://localhost:3006/oauth/callback}
       MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID}
       MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET}
       MICROSOFT_REDIRECT_URI: ${MICROSOFT_REDIRECT_URI:-http://localhost:3006/outlook/callback}
       OUTLOOK_MAILBOX_REDIRECT_URI: ${OUTLOOK_MAILBOX_REDIRECT_URI:-http://localhost:3006/outlook/callback}
       DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3006}
-    depends_on:
-      postgres:
-        condition: service_healthy
+    networks:
+      - shared-db
 
-volumes:
-  pgdata:
+networks:
+  shared-db:
+    external: true
