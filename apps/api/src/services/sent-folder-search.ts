@@ -9,6 +9,7 @@ const MS_GRAPH_URL = 'https://graph.microsoft.com/v1.0';
 export interface SentEmailMatch {
   found: boolean;
   messageId: string | null;
+  conversationId?: string | null;
   sentAt?: Date;
   authError?: boolean;
 }
@@ -44,7 +45,7 @@ async function refreshOutlookToken(mailbox: LinkedMailbox): Promise<string | nul
 }
 
 /** Get a valid Outlook access token, refreshing if needed. */
-async function getOutlookAccessToken(mailbox: LinkedMailbox): Promise<string | null> {
+export async function getOutlookAccessToken(mailbox: LinkedMailbox): Promise<string | null> {
   let accessToken = mailbox.accessToken;
   if (!accessToken || (mailbox.tokenExpiry && mailbox.tokenExpiry.getTime() < Date.now())) {
     accessToken = await refreshOutlookToken(mailbox);
@@ -210,7 +211,7 @@ export async function searchOutlookSentFolder(
     return { found: false, messageId: null, authError: true };
   }
 
-  const graphUrl = `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=15&$orderby=sentDateTime desc&$select=id,body,sentDateTime`;
+  const graphUrl = `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=15&$orderby=sentDateTime desc&$select=id,body,sentDateTime,conversationId`;
 
   let graphRes = await fetch(graphUrl, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -237,7 +238,7 @@ export async function searchOutlookSentFolder(
     const bodyContent: string = msg.body?.content || '';
     if (bodyContent.includes(trackingToken)) {
       const sentAt = msg.sentDateTime ? new Date(msg.sentDateTime) : undefined;
-      return { found: true, messageId: msg.id || null, sentAt };
+      return { found: true, messageId: msg.id || null, conversationId: msg.conversationId || null, sentAt };
     }
   }
 
@@ -333,7 +334,7 @@ async function batchSearchOutlookSentFolder(
   const accessToken = await getOutlookAccessToken(mailbox);
   if (!accessToken) return results;
 
-  const graphUrl = `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=25&$orderby=sentDateTime desc&$select=id,body,sentDateTime`;
+  const graphUrl = `${MS_GRAPH_URL}/me/mailFolders/SentItems/messages?$top=25&$orderby=sentDateTime desc&$select=id,body,sentDateTime,conversationId`;
 
   let graphRes = await fetch(graphUrl, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -359,7 +360,7 @@ async function batchSearchOutlookSentFolder(
     for (const token of remaining) {
       if (bodyContent.includes(token)) {
         const sentAt = msg.sentDateTime ? new Date(msg.sentDateTime) : undefined;
-        results.set(token, { found: true, messageId: msg.id || null, sentAt });
+        results.set(token, { found: true, messageId: msg.id || null, conversationId: msg.conversationId || null, sentAt });
         remaining.delete(token);
         break;
       }

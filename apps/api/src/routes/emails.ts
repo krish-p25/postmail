@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { TrackedEmail, EmailOpen } from '../db/models';
 import { withRLS } from '../middleware/rls';
-import { resolvePendingEmails } from '../services/resolve-pending';
+import { resolvePendingEmails, backfillConversationIds } from '../services/resolve-pending';
 
 const router = Router();
 
@@ -16,7 +16,10 @@ const OPEN_ATTRIBUTES = ['id', 'opened_at', 'user_agent', 'ip_address', 'dismiss
 router.get('/', async (req: Request, res: Response) => {
   try {
     // Resolve pending emails before loading dashboard data
-    await resolvePendingEmails(req.user!.id, 'GET /api/emails (dashboard)');
+    await resolvePendingEmails(req.user!.id);
+
+    // Backfill conversation IDs for existing emails (fire-and-forget)
+    backfillConversationIds(req.user!.id).catch(() => {});
 
     const emails = await withRLS(req.user!.id, async (transaction) => {
       return TrackedEmail.findAll({

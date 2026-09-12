@@ -212,7 +212,7 @@ router.post('/callback', async (req: Request, res: Response) => {
 router.get('/emails', async (req: Request, res: Response) => {
   try {
     // Resolve any pending tracked emails before loading the list
-    await resolvePendingEmails(req.user!.id, 'GET /api/gmail/emails');
+    await resolvePendingEmails(req.user!.id);
 
     const mailbox = await findGmailMailbox(req.user!.id, req.query.mailboxId as string | undefined);
 

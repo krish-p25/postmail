@@ -37,6 +37,16 @@ const ROW_SELECTORS = [
 const DATE_MATCH_TOLERANCE_MS = 5 * 60 * 1000;
 
 /**
+ * Normalize Outlook conversation IDs to a canonical form.
+ * The MS Graph API returns URL-safe base64 (_ and -) while
+ * Outlook's DOM uses standard base64 (+ and /). Convert to
+ * URL-safe so both sides match.
+ */
+function normalizeConvId(id: string): string {
+  return id.replace(/\+/g, '_').replace(/\//g, '-');
+}
+
+/**
  * Parse Outlook's date title format: "Day M/D/YYYY H:MM AM/PM"
  * e.g. "Tue 9/8/2026 10:48 PM"
  */
@@ -53,6 +63,12 @@ function parseOutlookDate(dateStr: string): Date | null {
 export class OutlookInboxTracker {
   /** Maps normalized subject → all tracked emails with that subject. */
   private emailMap = new Map<string, TrackedEmailSummary[]>();
+  /** Maps tracking token → tracked email for pixel-based matching. */
+  private tokenMap = new Map<string, TrackedEmailSummary>();
+  /** Maps Outlook conversation ID → all tracked emails in that conversation. */
+  private convIdMap = new Map<string, TrackedEmailSummary[]>();
+  /** Maps normalized conv subject → most recent tracked email found via reading pane pixels. */
+  private readingPaneLatest = new Map<string, TrackedEmailSummary>();
   private observer: MutationObserver | null = null;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -73,22 +89,37 @@ export class OutlookInboxTracker {
   private async refresh(): Promise<void> {
     const emails = await fetchTrackedEmails();
     this.emailMap.clear();
+    this.tokenMap.clear();
+    this.convIdMap.clear();
 
     for (const email of emails) {
-      if (email.status !== 'sent' || !email.subject) continue;
+      if (email.status !== 'sent') continue;
+
+      if (email.trackingToken) {
+        this.tokenMap.set(email.trackingToken, email);
+      }
+
+      if (email.conversationId) {
+        const normConvId = normalizeConvId(email.conversationId);
+        const convList = this.convIdMap.get(normConvId) || [];
+        convList.push(email);
+        this.convIdMap.set(normConvId, convList);
+      }
+
+      if (!email.subject) continue;
       const key = normalizeSubject(email.subject);
       const list = this.emailMap.get(key) || [];
       list.push(email);
       this.emailMap.set(key, list);
     }
-
     this.scan();
   }
 
   private scan(): void {
+    this.readingPaneLatest.clear();
+    this.scanReadingPane();
     this.scanInboxRows();
     this.scanThreadItems();
-    this.scanReadingPane();
   }
 
   // ── Inbox rows (top-level) ──────────────────────────────────────────
@@ -106,17 +137,36 @@ export class OutlookInboxTracker {
   }
 
   private processInboxRow(row: HTMLElement): void {
-    // Only process direct badge on this row, not badges in nested thread items
     const existingBadge = this.directBadge(row);
 
-    const subject = this.findSubjectInRow(row);
-    if (!subject) {
-      existingBadge?.remove();
-      return;
+    // Primary: use DOM data-convid to find the latest tracked email in this conversation
+    let tracked: TrackedEmailSummary | null = null;
+    const domConvId = row.getAttribute('data-convid');
+    if (domConvId) {
+      tracked = this.getLatestFromList(this.convIdMap.get(normalizeConvId(domConvId)));
     }
 
-    const normalized = normalizeSubject(subject.text);
-    const tracked = this.getLatestTracked(normalized);
+    // Try subject-based matching
+    const subject = this.findSubjectInRow(row);
+    if (subject) {
+      const normalized = normalizeSubject(subject.text);
+
+      // Subject + conversation ID chain matching
+      const subjectLatest = this.getLatestForThread(normalized);
+      if (subjectLatest) {
+        const trackedTime = tracked?.sentAt ? new Date(tracked.sentAt).getTime() : 0;
+        const subjectTime = subjectLatest.sentAt ? new Date(subjectLatest.sentAt).getTime() : 0;
+        if (subjectTime > trackedTime) tracked = subjectLatest;
+      }
+
+      // Reading pane pixel discoveries
+      const rpLatest = this.readingPaneLatest.get(normalized);
+      if (rpLatest) {
+        const trackedTime = tracked?.sentAt ? new Date(tracked.sentAt).getTime() : 0;
+        const rpTime = rpLatest.sentAt ? new Date(rpLatest.sentAt).getTime() : 0;
+        if (rpTime > trackedTime) tracked = rpLatest;
+      }
+    }
 
     if (!tracked) {
       existingBadge?.remove();
@@ -128,13 +178,73 @@ export class OutlookInboxTracker {
       existingBadge.remove();
     }
 
+    // Place badge before subject span, or find a suitable element in the row
     const badge = createBadgeElement(tracked);
-    subject.element.before(badge);
+    const anchor = subject?.element || this.findSubjectSpan(row);
+    if (anchor) {
+      anchor.before(badge);
+    }
   }
 
-  /** Get the most recently sent tracked email for a given normalized subject. */
-  private getLatestTracked(key: string): TrackedEmailSummary | null {
-    const list = this.emailMap.get(key);
+  /** Find the first subject-like span in a row for badge placement (no emailMap check). */
+  private findSubjectSpan(row: HTMLElement): HTMLElement | null {
+    const titledSpans = row.querySelectorAll('span[title]');
+    for (const span of titledSpans) {
+      const title = span.getAttribute('title') || '';
+      if (!title || title.includes('@')) continue;
+      // Skip date spans
+      if (/\d{1,2}\/\d{1,2}\/\d{4}/.test(title)) continue;
+      return span as HTMLElement;
+    }
+    return null;
+  }
+
+  /**
+   * Get the latest tracked email for a thread by following conversation IDs.
+   * Starts with subject-matched emails, then includes all emails sharing
+   * the same conversationId to find the true latest across the thread.
+   */
+  private getLatestForThread(normalizedSubject: string): TrackedEmailSummary | null {
+    const subjectList = this.emailMap.get(normalizedSubject);
+    if (!subjectList || subjectList.length === 0) return null;
+
+    // Collect all normalized conversation IDs from subject-matched emails
+    const convIds = new Set<string>();
+    for (const email of subjectList) {
+      if (email.conversationId) convIds.add(normalizeConvId(email.conversationId));
+    }
+
+    // No conversation IDs — fall back to subject-only matching
+    if (convIds.size === 0) return this.getLatestFromList(subjectList);
+
+    // Gather all tracked emails across all related conversations
+    const seen = new Set<string>();
+    const candidates: TrackedEmailSummary[] = [];
+
+    for (const email of subjectList) {
+      if (!seen.has(email.id)) {
+        seen.add(email.id);
+        candidates.push(email);
+      }
+    }
+
+    for (const convId of convIds) {
+      const convEmails = this.convIdMap.get(convId);
+      if (convEmails) {
+        for (const email of convEmails) {
+          if (!seen.has(email.id)) {
+            seen.add(email.id);
+            candidates.push(email);
+          }
+        }
+      }
+    }
+
+    return this.getLatestFromList(candidates);
+  }
+
+  /** Get the most recently sent email from a list. */
+  private getLatestFromList(list: TrackedEmailSummary[] | undefined): TrackedEmailSummary | null {
     if (!list || list.length === 0) return null;
     return list.reduce((latest, e) => {
       const latestTime = latest.sentAt ? new Date(latest.sentAt).getTime() : 0;
@@ -152,7 +262,7 @@ export class OutlookInboxTracker {
     const titledSpans = row.querySelectorAll('span[title]');
     for (const span of titledSpans) {
       const title = span.getAttribute('title') || '';
-      if (!title || title.includes('@') || title.includes('/')) continue;
+      if (!title || title.includes('@')) continue;
       const normalized = normalizeSubject(title);
       if (this.emailMap.has(normalized)) {
         return { element: span as HTMLElement, text: title };
@@ -279,46 +389,70 @@ export class OutlookInboxTracker {
     const convContainer = document.getElementById('ConversationReadingPaneContainer');
     if (!convContainer) return;
 
-    // Get conversation subject from CONV_*_SUBJECT
+    // Get subject-based tracked list as fallback
     const convSubject = convContainer.querySelector('[id*="CONV_"][id$="_SUBJECT"]')
       || convContainer.querySelector('[id$="_SUBJECT"]');
     const subjectText = convSubject?.textContent?.trim();
-    if (!subjectText) return;
+    const trackedList = subjectText
+      ? this.emailMap.get(normalizeSubject(subjectText)) || []
+      : [];
 
-    const normalized = normalizeSubject(subjectText);
-    const trackedList = this.emailMap.get(normalized);
-    if (!trackedList || trackedList.length === 0) return;
+    const allMatched: TrackedEmailSummary[] = [];
 
-    // Find all expanded messages in the reading pane
     const messages = convContainer.querySelectorAll('[aria-label="Email message"]');
     for (const msg of messages) {
-      this.processReadingPaneMessage(msg as HTMLElement, trackedList);
+      const matched = this.processReadingPaneMessage(msg as HTMLElement, trackedList);
+      if (matched) allMatched.push(matched);
+    }
+
+    // Store the most recent tracked email found for this conversation
+    if (subjectText && allMatched.length > 0) {
+      const latest = allMatched.reduce((best, e) => {
+        const bestTime = best.sentAt ? new Date(best.sentAt).getTime() : 0;
+        const eTime = e.sentAt ? new Date(e.sentAt).getTime() : 0;
+        return eTime > bestTime ? e : best;
+      });
+      this.readingPaneLatest.set(normalizeSubject(subjectText), latest);
     }
   }
 
-  private processReadingPaneMessage(msg: HTMLElement, trackedList: TrackedEmailSummary[]): void {
+  /** Find a tracked email by its tracking pixel embedded in the message body. */
+  private findByTrackingPixel(msg: HTMLElement): TrackedEmailSummary | null {
+    const imgs = msg.querySelectorAll('img[data-postmail-tracking="true"]');
+    for (const img of imgs) {
+      const src = img.getAttribute('src') || '';
+      const match = src.match(/\/o\/([0-9a-f-]{36})/);
+      if (match) {
+        const token = match[1];
+        const tracked = this.tokenMap.get(token);
+        if (tracked) return tracked;
+      }
+    }
+    return null;
+  }
+
+  private processReadingPaneMessage(msg: HTMLElement, trackedList: TrackedEmailSummary[]): TrackedEmailSummary | null {
     const existingBadge = msg.querySelector(`[${READING_BADGE_ATTR}]`);
 
-    // Get date from MSG_*_DATETIME element
-    const dateEl = msg.querySelector('[id$="_DATETIME"]');
-    if (!dateEl) {
-      existingBadge?.remove();
-      return;
-    }
-    const msgDate = parseOutlookDate(dateEl.textContent?.trim() || '');
-    if (!msgDate) {
-      existingBadge?.remove();
-      return;
+    // Primary: match by tracking pixel in email body
+    let matched = this.findByTrackingPixel(msg);
+
+    // Fallback: match by date proximity against subject-matched list
+    if (!matched && trackedList.length > 0) {
+      const dateEl = msg.querySelector('[id$="_DATETIME"]');
+      const msgDate = dateEl ? parseOutlookDate(dateEl.textContent?.trim() || '') : null;
+      if (msgDate) {
+        matched = this.matchByDate(msgDate, trackedList);
+      }
     }
 
-    const matched = this.matchByDate(msgDate, trackedList);
     if (!matched) {
       existingBadge?.remove();
-      return;
+      return null;
     }
 
     if (existingBadge) {
-      if (isBadgeCurrent(existingBadge, matched)) return;
+      if (isBadgeCurrent(existingBadge, matched)) return matched;
       existingBadge.remove();
     }
 
@@ -327,10 +461,13 @@ export class OutlookInboxTracker {
 
     // Insert after the TO line or after the DATETIME element
     const toEl = msg.querySelector('[id$="_TO"]');
+    const dateEl = msg.querySelector('[id$="_DATETIME"]');
     const insertAfter = toEl || dateEl;
     if (insertAfter?.parentElement) {
       insertAfter.parentElement.insertBefore(container, insertAfter.nextSibling);
     }
+
+    return matched;
   }
 
   private createReadingPaneBadge(tracked: TrackedEmailSummary): HTMLDivElement {
