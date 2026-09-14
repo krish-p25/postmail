@@ -97,7 +97,8 @@ export function createBadgeElement(tracked: TrackedEmailSummary): HTMLSpanElemen
   badge.appendChild(textSpan);
 
   if (tracked.opens.length > 0) {
-    const times = tracked.opens.map((o) => {
+    const sorted = [...tracked.opens].sort((a, b) => new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime());
+    const times = sorted.map((o) => {
       const d = new Date(o.opened_at);
       return d.toLocaleString(undefined, {
         month: 'short',

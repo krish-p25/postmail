@@ -491,7 +491,8 @@ export class OutlookInboxTracker {
       const list = document.createElement('div');
       list.className = 'postmail-open-list';
 
-      for (const open of tracked.opens) {
+      const sortedOpens = [...tracked.opens].sort((a, b) => new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime());
+      for (const open of sortedOpens) {
         const row = document.createElement('div');
         row.className = 'postmail-open-row';
 
