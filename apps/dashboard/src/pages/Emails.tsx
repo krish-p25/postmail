@@ -396,16 +396,21 @@ export default function Emails() {
     if (prevRouteMailboxId.current === routeMailboxId) return;
     prevRouteMailboxId.current = routeMailboxId;
 
-    // Reset search/pagination state
+    // Preserve incoming search query from URL (e.g. "View all" link with ?q=)
+    const incomingQuery = searchParams.get('q') || '';
+
+    // Reset pagination state
     setPage(1);
     setGmailNextToken(null);
     setGmailTokenHistory([]);
-    setSearchQuery('');
-    setActiveQuery('');
-    setSearchOpen(false);
-    setFilter('all');
     setHasMore(false);
-    setSearchParams({}, { replace: true });
+    setFilter('all');
+
+    // Preserve search if navigating with a query, otherwise clear
+    setSearchQuery(incomingQuery);
+    setActiveQuery(incomingQuery);
+    setSearchOpen(!!incomingQuery);
+    setSearchParams(incomingQuery ? { q: incomingQuery } : {}, { replace: true });
 
     // Multi-mailbox accordion view
     if (linkedMailboxes.length > 1 && !routeMailboxId) {
@@ -419,11 +424,11 @@ export default function Emails() {
       const mb = linkedMailboxes.find((m) => m.id === routeMailboxId);
       const prov = mb?.provider || 'gmail';
       setProvider(prov);
-      fetchPage(prov, undefined, undefined, '', routeMailboxId);
+      fetchPage(prov, undefined, undefined, incomingQuery, routeMailboxId);
     } else if (settingsCache.current?.mailboxConnected) {
       const prov = settingsCache.current.mailboxProvider || 'gmail';
       setProvider(prov);
-      fetchPage(prov, undefined, undefined, '');
+      fetchPage(prov, undefined, undefined, incomingQuery);
     } else {
       setLoading(false);
     }
