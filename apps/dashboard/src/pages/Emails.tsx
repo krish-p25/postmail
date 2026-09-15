@@ -201,9 +201,15 @@ function AccordionSection({ mailbox }: { mailbox: LinkedMailboxInfo }) {
       >
         <div ref={contentRef} className="border-t border-gray-100 px-4 py-3">
           {loading && (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-12 animate-[shimmer_1.5s_infinite] rounded-lg bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" />
+                <div key={i} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="h-3.5 w-3/5 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: `${i * 0.1}s` }} />
+                    <div className="h-2.5 w-2/5 animate-[shimmer_1.5s_infinite] rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: `${i * 0.1 + 0.15}s` }} />
+                  </div>
+                  <div className="h-5 w-16 shrink-0 animate-[shimmer_1.5s_infinite] rounded-full bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]" style={{ animationDelay: `${i * 0.1 + 0.3}s` }} />
+                </div>
               ))}
             </div>
           )}
