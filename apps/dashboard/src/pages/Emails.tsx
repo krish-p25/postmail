@@ -123,14 +123,15 @@ function StatusBadge({ status, openCount }: { status: TrackingStatus; openCount:
   }
 }
 
-function AccordionSection({ mailbox }: { mailbox: LinkedMailboxInfo }) {
+function AccordionSection({ mailbox, searchQuery = '', filter = 'all' as FilterOption }: { mailbox: LinkedMailboxInfo; searchQuery?: string; filter?: FilterOption }) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
-  const [emails, setEmails] = useState<DisplayEmail[]>([]);
+  const [allEmails, setAllEmails] = useState<DisplayEmail[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetched, setFetched] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
+  const lastQuery = useRef('');
 
   const measureHeight = useCallback(() => {
     if (contentRef.current) {
@@ -140,31 +141,52 @@ function AccordionSection({ mailbox }: { mailbox: LinkedMailboxInfo }) {
 
   useEffect(() => {
     if (expanded) measureHeight();
-  }, [expanded, emails, loading, measureHeight]);
+  }, [expanded, allEmails, loading, measureHeight]);
+
+  // Auto-expand and search when query changes
+  useEffect(() => {
+    if (searchQuery && searchQuery !== lastQuery.current) {
+      lastQuery.current = searchQuery;
+      setExpanded(true);
+      loadEmails(searchQuery);
+    } else if (!searchQuery && lastQuery.current) {
+      // Search cleared — re-fetch without query if previously searched
+      lastQuery.current = '';
+      if (fetched) loadEmails('');
+    }
+  }, [searchQuery]);
 
   function handleToggle() {
     const next = !expanded;
     setExpanded(next);
     if (next && !fetched) {
-      loadEmails();
+      loadEmails(searchQuery);
     }
   }
 
-  function loadEmails() {
+  function loadEmails(query?: string) {
     setLoading(true);
+    const search = query || undefined;
     const promise =
       mailbox.provider === 'outlook'
-        ? api.getOutlookEmails(undefined, undefined, mailbox.id).then((d) => d.emails)
-        : api.getGmailEmails(undefined, undefined, mailbox.id).then((d) => d.emails);
+        ? api.getOutlookEmails(undefined, search, mailbox.id).then((d) => d.emails)
+        : api.getGmailEmails(undefined, search, mailbox.id).then((d) => d.emails);
 
     promise
       .then((sent) => {
-        setEmails(toDisplayEmails(sent));
+        setAllEmails(toDisplayEmails(sent));
         setFetched(true);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }
+
+  const emails = allEmails.filter((email) => {
+    if (filter === 'all') return true;
+    if (filter === 'tracked') return email.trackingStatus !== 'untracked';
+    if (filter === 'untracked') return email.trackingStatus === 'untracked';
+    return true;
+  });
 
   return (
     <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200">
@@ -214,7 +236,9 @@ function AccordionSection({ mailbox }: { mailbox: LinkedMailboxInfo }) {
             </div>
           )}
           {!loading && emails.length === 0 && fetched && (
-            <p className="py-4 text-center text-sm text-gray-500">No sent emails found</p>
+            <p className="py-4 text-center text-sm text-gray-500">
+              {searchQuery ? `No results for "${searchQuery}"` : filter !== 'all' ? `No ${filter} emails` : 'No sent emails found'}
+            </p>
           )}
           {!loading && emails.length > 0 && (
             <div className="space-y-1">
@@ -233,7 +257,7 @@ function AccordionSection({ mailbox }: { mailbox: LinkedMailboxInfo }) {
               ))}
               {emails.length > 10 && (
                 <button
-                  onClick={() => navigate(`/dashboard/emails/mailbox/${mailbox.id}`)}
+                  onClick={() => navigate(`/dashboard/emails/mailbox/${mailbox.id}${searchQuery ? `?q=${encodeURIComponent(searchQuery)}` : ''}`)}
                   className="mt-1 w-full rounded-lg py-2 text-center text-xs font-medium text-primary-600 transition hover:bg-primary-50"
                 >
                   View all {emails.length} emails
@@ -618,7 +642,7 @@ export default function Emails() {
       {!loading && !error && isMultiMailbox && (
         <div className="mt-6 space-y-3">
           {linkedMailboxes.map((mb) => (
-            <AccordionSection key={mb.id} mailbox={mb} />
+            <AccordionSection key={mb.id} mailbox={mb} searchQuery={activeQuery} filter={filter} />
           ))}
         </div>
       )}
