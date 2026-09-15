@@ -72,6 +72,7 @@ export async function resolvePendingEmails(userId: string): Promise<number> {
           const sentAt = match.sentAt || new Date();
           const updates: Record<string, unknown> = { status: 'sent', sentAt };
           if (match.messageId) updates.messageId = match.messageId;
+          if (match.threadId) updates.threadId = match.threadId;
           if (match.conversationId) updates.conversationId = match.conversationId;
           if (!email.mailboxId) updates.mailboxId = mailboxId;
           await email.update(updates);

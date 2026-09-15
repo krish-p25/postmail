@@ -17,6 +17,7 @@ import pixelRoutes from './routes/pixel';
 import trackRoutes from './routes/track';
 import mailboxRoutes from './routes/mailboxes';
 import { runMigrations } from './db/migrate';
+import { backfillAllIds } from './services/backfill-ids';
 
 const app = express();
 
@@ -100,6 +101,9 @@ async function start(): Promise<void> {
     app.listen(config.port, () => {
       console.log(`[PostMail API] Server running on port ${config.port}`);
       console.log(`[PostMail API] Environment: ${config.nodeEnv}`);
+
+      // Backfill missing threadId/conversationId (non-blocking)
+      backfillAllIds().catch(() => {});
     });
   } catch (error) {
     console.error('[PostMail API] Failed to start:', error);

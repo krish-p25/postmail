@@ -88,7 +88,11 @@ export function injectOverlayStyles(): void {
       font-size: 12px;
       line-height: 16px;
     }
-    .postmail-overlay-opened .postmail-overlay-open-row { color: #15803d; }
+    .postmail-overlay-opened .postmail-overlay-open-row {
+      color: #15803d;
+      justify-content: space-between;
+      border-bottom: 1px dotted #15803d;
+    }
     .postmail-overlay-tracked .postmail-overlay-open-row { color: #6d28d9; }
     .postmail-overlay-open-time {
       font-weight: 500;

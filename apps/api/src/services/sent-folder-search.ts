@@ -9,6 +9,7 @@ const MS_GRAPH_URL = 'https://graph.microsoft.com/v1.0';
 export interface SentEmailMatch {
   found: boolean;
   messageId: string | null;
+  threadId?: string | null;
   conversationId?: string | null;
   sentAt?: Date;
   authError?: boolean;
@@ -138,7 +139,7 @@ async function scanMessagesForToken(
       const sentAt = full.data.internalDate
         ? new Date(Number(full.data.internalDate))
         : undefined;
-      return { found: true, messageId: msg.id!, sentAt };
+      return { found: true, messageId: msg.id!, threadId: full.data.threadId || null, sentAt };
     }
   }
   return { found: false, messageId: null };
@@ -311,7 +312,7 @@ async function batchSearchGmailSentFolder(
           const sentAt = full.data.internalDate
             ? new Date(Number(full.data.internalDate))
             : undefined;
-          results.set(token, { found: true, messageId: full.data.id!, sentAt });
+          results.set(token, { found: true, messageId: full.data.id!, threadId: full.data.threadId || null, sentAt });
           remaining.delete(token);
           break; // each message has at most one tracking pixel
         }

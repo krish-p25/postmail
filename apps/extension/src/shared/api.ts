@@ -77,20 +77,6 @@ export async function registerTrackedEmail(
   return res.json();
 }
 
-export async function confirmEmailSent(
-  trackingToken: string,
-): Promise<{ success: boolean }> {
-  const res = await authFetch('/track/confirm-sent', {
-    method: 'POST',
-    body: JSON.stringify({ trackingToken }),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to confirm sent: ${res.status} ${text}`);
-  }
-  return res.json();
-}
-
 export async function updateTrackedEmail(
   trackingToken: string,
   recipients: string[],
