@@ -2,8 +2,13 @@
  * Gmail Inbox Tracker
  *
  * Scans Gmail inbox/sent rows and badges tracked emails with their open status.
- * Matches by normalized subject against the PostMail tracked emails API.
  * Uses MutationObserver to handle Gmail's SPA navigation.
+ *
+ * Matching strategy:
+ *  - Thread view:  data-legacy-thread-id on the h2 heading → threadId lookup
+ *  - Per-message:  data-legacy-message-id on message containers → messageId lookup
+ *  - Inbox rows:   normalized subject (Gmail DOM does not expose API-compatible
+ *                  thread IDs on inbox rows, so subject is the only option here)
  */
 
 import {
@@ -23,16 +28,14 @@ import {
   createThreadOverlay,
   isOverlayCurrent,
 } from './thread-overlay';
-import { getSenderEmail } from './selectors';
-
-/** Max time difference (ms) between sentAt and message date to consider a match. */
-const DATE_MATCH_TOLERANCE_MS = 5 * 60 * 1000;
 
 export class InboxTracker {
-  /** Best match per subject — used for inbox row badges. */
+  /** Best match per normalized subject — used for inbox row badges. */
   private emailMap = new Map<string, TrackedEmailSummary>();
-  /** All tracked emails per subject — used for per-message thread overlays. */
-  private threadEmails = new Map<string, TrackedEmailSummary[]>();
+  /** Maps Gmail threadId → all tracked emails in that thread. */
+  private threadIdMap = new Map<string, TrackedEmailSummary[]>();
+  /** Maps Gmail messageId → tracked email. */
+  private messageIdMap = new Map<string, TrackedEmailSummary>();
   private observer: MutationObserver | null = null;
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -54,22 +57,30 @@ export class InboxTracker {
   private async refresh(): Promise<void> {
     const emails = await fetchTrackedEmails();
     this.emailMap.clear();
-    this.threadEmails.clear();
+    this.threadIdMap.clear();
+    this.messageIdMap.clear();
 
     for (const email of emails) {
       if (email.status !== 'sent' || !email.subject) continue;
-      const key = normalizeSubject(email.subject);
 
-      // Best match for inbox badges
+      // Subject map for inbox row badges (Gmail DOM limitation)
+      const key = normalizeSubject(email.subject);
       const existing = this.emailMap.get(key);
       if (!existing || email.openCount > existing.openCount) {
         this.emailMap.set(key, email);
       }
 
-      // All matches for per-message thread overlays
-      const list = this.threadEmails.get(key) || [];
-      list.push(email);
-      this.threadEmails.set(key, list);
+      // Thread ID map for thread-level matching
+      if (email.threadId) {
+        const list = this.threadIdMap.get(email.threadId) || [];
+        list.push(email);
+        this.threadIdMap.set(email.threadId, list);
+      }
+
+      // Message ID map for per-message matching
+      if (email.messageId) {
+        this.messageIdMap.set(email.messageId, email);
+      }
     }
 
     this.scanRows();
@@ -111,7 +122,7 @@ export class InboxTracker {
     subjectEl.before(badge);
   }
 
-  // ── Per-message thread overlays ───────────────────────────────────
+  // ── Per-message thread overlays (ID-based) ────────────────────────
 
   private scanThread(): void {
     const subjectEl = document.querySelector(
@@ -123,11 +134,24 @@ export class InboxTracker {
       return;
     }
 
-    const text = subjectEl.textContent?.trim();
-    if (!text) return;
+    // Primary: match by thread ID from DOM attribute
+    const legacyThreadId = subjectEl.getAttribute('data-legacy-thread-id');
+    let trackedList = legacyThreadId ? this.threadIdMap.get(legacyThreadId) : undefined;
 
-    const normalized = normalizeSubject(text);
-    const trackedList = this.threadEmails.get(normalized);
+    // Fallback: match by subject (covers emails whose threadId hasn't been backfilled yet)
+    if (!trackedList || trackedList.length === 0) {
+      const text = subjectEl.textContent?.trim();
+      if (text) {
+        const normalized = normalizeSubject(text);
+        // Collect all tracked emails matching this subject that have no threadId
+        trackedList = [];
+        for (const [, email] of this.emailMap) {
+          if (email.subject && normalizeSubject(email.subject) === normalized) {
+            trackedList.push(email);
+          }
+        }
+      }
+    }
 
     if (!trackedList || trackedList.length === 0) {
       document.querySelectorAll(`[${OVERLAY_ATTR}]`).forEach((el) => el.remove());
@@ -135,14 +159,13 @@ export class InboxTracker {
     }
 
     const messages = this.findThreadMessages();
-    const currentEmail = getSenderEmail();
     const matched = new Set<string>();
 
     for (const msg of messages) {
-      this.processThreadMessage(msg, trackedList, matched, currentEmail);
+      this.processThreadMessage(msg, trackedList, matched);
     }
 
-    // Remove stale overlays that no longer correspond to a visible message
+    // Remove stale overlays
     document.querySelectorAll(`[${OVERLAY_ATTR}]`).forEach((el) => {
       const id = el.getAttribute(OVERLAY_ATTR);
       if (!id || !matched.has(id)) el.remove();
@@ -175,48 +198,29 @@ export class InboxTracker {
   }
 
   /**
-   * Match a single thread message to a tracked email and insert its overlay.
-   * Only overlays messages sent by the current user (tracked emails are always sent).
-   * Matches by date proximity (within 5 min of sentAt).
+   * Match a single thread message to a tracked email by ID and insert its overlay.
+   *
+   * Strategy:
+   *  1. Extract data-legacy-message-id or data-message-id from DOM → messageIdMap lookup
+   *  2. Fallback: if only one unmatched tracked email remains in the thread, use it
    */
   private processThreadMessage(
     msg: HTMLElement,
     trackedList: TrackedEmailSummary[],
     matched: Set<string>,
-    currentEmail: string | null,
   ): void {
-    // Only overlay messages sent by the current user
-    if (currentEmail) {
-      const senderEl = msg.querySelector('span.gD[email], span[email]');
-      const sender = senderEl?.getAttribute('email')?.toLowerCase();
-      if (sender && sender !== currentEmail.toLowerCase()) {
-        msg.querySelector(`[${OVERLAY_ATTR}]`)?.remove();
-        return;
-      }
-    }
-
-    // Extract message date from the header
-    const dateEl = msg.querySelector('span.g3 span[title], span.g3[title]');
-    const dateStr = dateEl?.getAttribute('title');
-    const msgDate = dateStr ? new Date(dateStr) : null;
-
     let trackedMatch: TrackedEmailSummary | null = null;
 
-    if (msgDate && !isNaN(msgDate.getTime())) {
-      // Match by closest sentAt within tolerance
-      let bestDiff = Infinity;
-      for (const tracked of trackedList) {
-        if (matched.has(tracked.id)) continue;
-        if (!tracked.sentAt) continue;
-        const diff = Math.abs(msgDate.getTime() - new Date(tracked.sentAt).getTime());
-        if (diff < DATE_MATCH_TOLERANCE_MS && diff < bestDiff) {
-          bestDiff = diff;
-          trackedMatch = tracked;
-        }
+    // Primary: match by message ID from DOM
+    const msgId = this.extractMessageId(msg);
+    if (msgId) {
+      const byId = this.messageIdMap.get(msgId);
+      if (byId && !matched.has(byId.id)) {
+        trackedMatch = byId;
       }
     }
 
-    // Fallback: if only one unmatched tracked email remains, use it
+    // Fallback: if only one unmatched tracked email in the thread, use it
     if (!trackedMatch) {
       const unmatched = trackedList.filter((t) => !matched.has(t.id));
       if (unmatched.length === 1) {
@@ -246,6 +250,27 @@ export class InboxTracker {
         bodyWrapper.insertAdjacentElement('beforebegin', overlay);
       }
     }
+  }
+
+  /**
+   * Extract a Gmail API-compatible message ID from a message container.
+   * Checks for data-legacy-message-id and data-message-id attributes
+   * on the container and its descendants.
+   */
+  private extractMessageId(msg: HTMLElement): string | null {
+    // Check the container itself
+    const directId = msg.getAttribute('data-legacy-message-id')
+      || msg.getAttribute('data-message-id');
+    if (directId) return directId;
+
+    // Check descendants for legacy message ID
+    const el = msg.querySelector('[data-legacy-message-id], [data-message-id]');
+    if (el) {
+      return el.getAttribute('data-legacy-message-id')
+        || el.getAttribute('data-message-id');
+    }
+
+    return null;
   }
 
   // ── DOM observer ──────────────────────────────────────────────────

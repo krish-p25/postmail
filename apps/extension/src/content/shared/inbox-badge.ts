@@ -13,6 +13,8 @@ export interface TrackedEmailSummary {
   openCount: number;
   sentAt: string | null;
   trackingToken: string;
+  messageId: string | null;
+  threadId: string | null;
   conversationId: string | null;
   opens: { opened_at: string; ip_address: string | null; user_agent: string | null }[];
 }
@@ -69,6 +71,8 @@ export function fetchTrackedEmails(): Promise<TrackedEmailSummary[]> {
               openCount: nonDismissed(e.opens).length,
               sentAt: e.sentAt || null,
               trackingToken: e.trackingToken || '',
+              messageId: e.messageId || null,
+              threadId: e.threadId || null,
               conversationId: e.conversationId || null,
               opens: nonDismissed(e.opens).map((o: any) => ({
                 opened_at: o.opened_at,
@@ -181,39 +185,69 @@ export function injectBadgeStyles(): void {
       color: ${GREEN};
       animation: postmail-enter-opened 0.5s ease-out both;
     }
-    .postmail-reading-badge {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      margin: 8px 0 4px;
-      padding: 8px 12px;
-      border-radius: 8px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 12px;
+    @keyframes postmail-reading-in {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
     }
+    .postmail-reading-badge {
+      padding: 14px 18px;
+      border-radius: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      animation: postmail-reading-in 0.3s ease-out both;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.03);
+      width: 100%;
+      box-sizing: border-box;
+      margin: 8px 0 12px;
+    }
+    .postmail-reading-badge.postmail-reading-tracked {
+      background: rgba(237, 233, 254, 0.72);
+      border: 1px solid rgba(167, 139, 250, 0.3);
+    }
+    .postmail-reading-badge.postmail-reading-opened {
+      background: rgba(220, 252, 231, 0.72);
+      border: 1px solid rgba(74, 222, 128, 0.3);
+    }
+    .postmail-reading-badge .postmail-reading-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .postmail-reading-badge .postmail-reading-status-text {
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    .postmail-reading-tracked .postmail-reading-status-text { color: #6d28d9; }
+    .postmail-reading-opened .postmail-reading-status-text { color: #15803d; }
     .postmail-reading-badge .postmail-open-list {
+      margin-top: 10px;
       display: flex;
       flex-direction: column;
-      gap: 4px;
-      flex: 1;
+      gap: 6px;
     }
     .postmail-reading-badge .postmail-open-row {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #475569;
-      font-size: 11px;
+      font-size: 12px;
       line-height: 16px;
+    }
+    .postmail-reading-tracked .postmail-open-row { color: #6d28d9; }
+    .postmail-reading-opened .postmail-open-row { 
+      color: #15803d;
+      justify-content: space-between;
+      border-bottom: 1px dotted #15803d;
     }
     .postmail-reading-badge .postmail-open-row .postmail-open-time {
       font-weight: 500;
-      color: #334155;
-      min-width: 120px;
     }
-    .postmail-reading-badge .postmail-open-row .postmail-open-dot {
-      color: #94a3b8;
+    .postmail-reading-badge .postmail-open-row .postmail-open-sep {
+      opacity: 0.4;
+    }
+    .postmail-reading-badge .postmail-open-row .postmail-open-device {
+      opacity: 0.7;
     }
   `;
   document.head.appendChild(style);

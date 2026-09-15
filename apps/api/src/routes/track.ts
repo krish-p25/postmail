@@ -111,39 +111,6 @@ router.post('/register', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/track/confirm-sent
- * Mark a tracked email as sent.
- */
-router.post('/confirm-sent', async (req: Request, res: Response) => {
-  try {
-    const { trackingToken } = req.body;
-
-    if (!trackingToken) {
-      res.status(400).json({ error: 'trackingToken is required' });
-      return;
-    }
-
-    const trackedEmail = await TrackedEmail.findOne({
-      where: { trackingToken, userId: req.user!.id },
-    });
-
-    if (!trackedEmail) {
-      res.status(404).json({ error: 'Tracked email not found' });
-      return;
-    }
-
-    const sentAt = new Date();
-    await trackedEmail.update({ status: 'sent', sentAt });
-    await purgePreSendOpens(trackedEmail, sentAt);
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('[PostMail API] Error in POST /api/track/confirm-sent:', error);
-    res.status(500).json({ error: 'Failed to confirm sent' });
-  }
-});
-
-/**
  * POST /api/track/update
  * Update a tracked email's subject, recipients, and mailboxId.
  * Accepts optional senderEmail and provider for mailbox resolution.
@@ -297,13 +264,27 @@ async function verifySentEmail(
     return;
   }
 
-  if (result.found && trackedEmail && (trackedEmail.status === 'pending' || trackedEmail.status === 'discarded')) {
-    // Update pending emails and recover prematurely discarded ones
-    const sentAt = result.sentAt || new Date();
-    const updates: Record<string, unknown> = { status: 'sent', sentAt };
-    if (result.messageId) updates.messageId = result.messageId;
-    await trackedEmail.update(updates);
-    await purgePreSendOpens(trackedEmail, sentAt);
+  if (result.found && trackedEmail) {
+    const updates: Record<string, unknown> = {};
+
+    // Transition pending/discarded → sent
+    if (trackedEmail.status === 'pending' || trackedEmail.status === 'discarded') {
+      updates.status = 'sent';
+      updates.sentAt = result.sentAt || new Date();
+    }
+
+    // Always backfill missing IDs, even if already sent
+    if (result.messageId && !trackedEmail.messageId) updates.messageId = result.messageId;
+    if (result.threadId && !trackedEmail.threadId) updates.threadId = result.threadId;
+    if (result.conversationId && !trackedEmail.conversationId) updates.conversationId = result.conversationId;
+
+    if (Object.keys(updates).length > 0) {
+      await trackedEmail.update(updates);
+    }
+
+    if (updates.sentAt) {
+      await purgePreSendOpens(trackedEmail, updates.sentAt as Date);
+    }
   }
 
   res.json({ found: result.found });
