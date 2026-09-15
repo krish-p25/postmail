@@ -51,17 +51,26 @@ export class OutlookInboxTracker {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+  private onEmailSent = () => { this.refresh(); };
+  private onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') this.refresh();
+  };
+
   async start(): Promise<void> {
     injectBadgeStyles();
     await this.refresh();
     this.observeDOM();
     this.refreshTimer = setInterval(() => this.refresh(), REFRESH_INTERVAL_MS);
+    document.addEventListener('postmail:email-sent', this.onEmailSent);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
   }
 
   stop(): void {
     this.observer?.disconnect();
     if (this.refreshTimer) clearInterval(this.refreshTimer);
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    document.removeEventListener('postmail:email-sent', this.onEmailSent);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
   }
 
   private async refresh(): Promise<void> {

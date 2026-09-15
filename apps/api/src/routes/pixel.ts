@@ -61,7 +61,7 @@ router.get('/:token', async (req: Request, res: Response) => {
       where: { trackingToken: req.params.token },
     });
 
-    if (!trackedEmail) {
+    if (!trackedEmail || trackedEmail.status !== 'sent') {
       sendPixel(res);
       return;
     }

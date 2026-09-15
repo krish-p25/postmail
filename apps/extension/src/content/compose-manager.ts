@@ -207,6 +207,7 @@ export class ComposeManager {
 
           if (response?.found) {
             toast.update('success', data);
+            document.dispatchEvent(new CustomEvent('postmail:email-sent'));
             return;
           }
 
@@ -216,6 +217,9 @@ export class ComposeManager {
             }, 2000);
           } else {
             toast.update('draft', data);
+            // Refresh inbox tracker even on failure — resolvePendingEmails
+            // may pick it up on the next API call
+            document.dispatchEvent(new CustomEvent('postmail:email-sent'));
           }
         },
       );
