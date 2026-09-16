@@ -53,6 +53,7 @@ export class ComposeManager {
   private config: ComposeManagerConfig;
   private nextId = 0;
   private trackingEnabled = true;
+  private linkedEmails: Set<string> | null = null;
 
   constructor(config: ComposeManagerConfig) {
     this.config = config;
@@ -79,6 +80,12 @@ export class ComposeManager {
     this.trackingEnabled = enabled;
   }
 
+  setLinkedEmails(emails: string[]): void {
+    this.linkedEmails = new Set(emails.map((e) => e.toLowerCase()));
+  }
+
+  onUnlinkedCompose: (() => void) | null = null;
+
   getComposeCount(): number {
     return this.composes.size;
   }
@@ -87,8 +94,19 @@ export class ComposeManager {
     return Array.from(this.composes.values()).map((instance) => instance.tracker.getInfo());
   }
 
+  private isSenderLinked(): boolean {
+    if (!this.linkedEmails) return false;
+    const sender = this.config.getSenderEmail()?.toLowerCase();
+    if (!sender) return false;
+    return this.linkedEmails.has(sender);
+  }
+
   private handleComposeDetected(element: HTMLElement): void {
     if (!this.trackingEnabled) return;
+    if (!this.isSenderLinked()) {
+      if (this.linkedEmails && this.onUnlinkedCompose) this.onUnlinkedCompose();
+      return;
+    }
 
     const id = `compose-${++this.nextId}`;
 
