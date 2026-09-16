@@ -4,6 +4,8 @@ import { RecipientReader } from '../recipient-reader';
 import { findComposeBody } from '../selectors';
 import { ComposeTrackingState, TRACKING_PIXEL_ATTR } from '@postmail/shared';
 
+const SENDER = 'me@example.com';
+
 function buildGmailConfig(): ComposeManagerConfig {
   return {
     createDetector: (callbacks) => new ComposeDetector(callbacks),
@@ -13,7 +15,7 @@ function buildGmailConfig(): ComposeManagerConfig {
       const input = composeElement.querySelector('input[name="subjectbox"]') as HTMLInputElement;
       return input?.value || '';
     },
-    getSenderEmail: () => null,
+    getSenderEmail: () => SENDER,
     provider: 'gmail',
   };
 }
@@ -87,6 +89,7 @@ describe('ComposeManager', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
     manager = new ComposeManager(buildGmailConfig());
+    manager.setLinkedEmails([SENDER]);
   });
 
   afterEach(() => {
@@ -230,5 +233,70 @@ describe('ComposeManager', () => {
     await flush();
 
     expect(manager.getComposeCount()).toBe(0);
+  });
+});
+
+describe('ComposeManager linked-mailbox gate', () => {
+  function managerFor(sender: string | null): ComposeManager {
+    return new ComposeManager({ ...buildGmailConfig(), getSenderEmail: () => sender });
+  }
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('does not track or inject a pixel when the sender is not a linked mailbox', async () => {
+    const manager = managerFor('someone-else@example.com');
+    const onUnlinked = jest.fn();
+    manager.onUnlinkedCompose = onUnlinked;
+    manager.setLinkedEmails([SENDER]);
+    manager.start();
+
+    const dialog = createFullComposeDialog(['alice@example.com']);
+    document.body.appendChild(dialog);
+    await flush();
+
+    expect(manager.getComposeCount()).toBe(0);
+    expect(dialog.querySelector(`img[${TRACKING_PIXEL_ATTR}]`)).toBeNull();
+    expect(onUnlinked).toHaveBeenCalledTimes(1);
+    manager.stop();
+  });
+
+  it('matches linked mailboxes case-insensitively', async () => {
+    const manager = managerFor('Me@Example.com');
+    manager.setLinkedEmails(['ME@example.COM']);
+    manager.start();
+
+    document.body.appendChild(createFullComposeDialog(['alice@example.com']));
+    await flush();
+
+    expect(manager.getComposeCount()).toBe(1);
+    manager.stop();
+  });
+
+  it('does not track before linked mailboxes are known, and does not prompt setup', async () => {
+    const manager = managerFor(SENDER);
+    const onUnlinked = jest.fn();
+    manager.onUnlinkedCompose = onUnlinked;
+    manager.start();
+
+    document.body.appendChild(createFullComposeDialog(['alice@example.com']));
+    await flush();
+
+    expect(manager.getComposeCount()).toBe(0);
+    expect(onUnlinked).not.toHaveBeenCalled();
+    manager.stop();
+  });
+
+  it('does not track when the sender address cannot be detected', async () => {
+    const manager = managerFor(null);
+    manager.setLinkedEmails([SENDER]);
+    manager.start();
+
+    document.body.appendChild(createFullComposeDialog(['alice@example.com']));
+    await flush();
+
+    expect(manager.getComposeCount()).toBe(0);
+    manager.stop();
   });
 });

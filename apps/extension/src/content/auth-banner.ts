@@ -43,8 +43,8 @@ function injectBannerStyles(): void {
 
 export type BannerMode = 'ready' | 'setup' | 'expired';
 
-export function showBanner(mode: BannerMode): void {
-  if (dismissedThisSession) return;
+export function showBanner(mode: BannerMode, force = false): void {
+  if (!force && dismissedThisSession) return;
   if (document.getElementById(BANNER_ID)) return;
 
   injectBannerStyles();

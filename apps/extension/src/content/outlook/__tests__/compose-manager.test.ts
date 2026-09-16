@@ -4,6 +4,8 @@ import { OutlookRecipientReader } from '../recipient-reader';
 import { findComposeBody, findComposeSubject, findReplySubject } from '../selectors';
 import { ComposeTrackingState } from '@postmail/shared';
 
+const SENDER = 'me@example.com';
+
 function buildOutlookConfig(): ComposeManagerConfig {
   return {
     createDetector: (callbacks) => new OutlookComposeDetector(callbacks),
@@ -14,7 +16,7 @@ function buildOutlookConfig(): ComposeManagerConfig {
       if (subject) return subject;
       return findReplySubject(composeElement);
     },
-    getSenderEmail: () => null,
+    getSenderEmail: () => SENDER,
     provider: 'outlook',
   };
 }
@@ -87,6 +89,7 @@ describe('Outlook ComposeManager', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
     manager = new ComposeManager(buildOutlookConfig());
+    manager.setLinkedEmails([SENDER]);
   });
 
   afterEach(() => {

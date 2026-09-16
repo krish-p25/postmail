@@ -1,6 +1,6 @@
 import { ComposeManager, ComposeManagerConfig } from './compose-manager';
 import { ExtensionMessage } from '../shared/messaging';
-import { showAuthBanner, removeAuthBanner } from './auth-banner';
+import { showAuthBanner, showBanner, removeAuthBanner } from './auth-banner';
 import { getSenderEmail as gmailGetCurrentEmail } from './gmail/selectors';
 import { getSenderEmail as outlookGetCurrentEmail } from './outlook/selectors';
 import { InboxTracker } from './gmail/inbox-tracker';
@@ -67,12 +67,16 @@ function buildOutlookConfig(): ComposeManagerConfig {
   };
 }
 
+let activeManager: ComposeManager | null = null;
+
 function init(): void {
   const provider = getProvider();
   if (!provider) return;
 
   const config = provider === 'gmail' ? buildGmailConfig() : buildOutlookConfig();
   const manager = new ComposeManager(config);
+  manager.onUnlinkedCompose = () => showBanner('setup', true);
+  activeManager = manager;
 
   // Load initial tracking state
   try {
@@ -132,6 +136,7 @@ function runAuthPreflight(): void {
 
       if (response?.ok) {
         const linkedEmails: string[] = response.linkedEmails || [];
+        if (activeManager) activeManager.setLinkedEmails(linkedEmails);
         // Retry email detection — SPA DOM may not be ready yet
         detectEmailWithRetry(provider, 6, 500).then((currentEmail) => {
           showAuthBanner('ok', linkedEmails, currentEmail);
