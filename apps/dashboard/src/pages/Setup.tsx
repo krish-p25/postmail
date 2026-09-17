@@ -62,7 +62,7 @@ export default function Setup() {
       description: 'The PostMail extension listens to your inbox to monitor your emails.',
       done: status.extension,
       action: !status.extension
-        ? { label: 'How to install', onClick: () => window.open('https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked', '_blank') }
+        ? { label: 'Add to Chrome', onClick: () => window.open('https://chromewebstore.google.com/detail/postmail-%E2%80%93-email-open-tra/aecejojkfehdlopfphoddbhbafkgagon', '_blank') }
         : null,
     },
     {
