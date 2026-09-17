@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import { config } from '../config/env';
 import { User, UserSetting, LinkedMailbox } from '../db/models';
 import { createVerification, verifyCode } from '../services/verification';
 import { sendVerificationEmail } from '../services/email';
 import { withRLS } from '../middleware/rls';
+import { signToken } from '../services/tokens';
 
 const router = Router();
 
@@ -17,12 +17,6 @@ const googleClient = new OAuth2Client(
   config.googleClientSecret,
   config.googleRedirectUri,
 );
-
-function signToken(user: { id: string; email: string }): string {
-  return jwt.sign({ sub: user.id, email: user.email }, config.jwtSecret, {
-    expiresIn: '7d',
-  });
-}
 
 /**
  * Store Outlook tokens in LinkedMailbox and auto-connect the mailbox
