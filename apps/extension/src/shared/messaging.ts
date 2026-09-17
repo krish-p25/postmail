@@ -8,7 +8,9 @@ export type ExtensionMessage =
   | { type: 'DISCARD_TRACKED_EMAIL'; trackingToken: string }
   | { type: 'UPDATE_TRACKED_EMAIL'; trackingToken: string; recipients: string[]; subject: string; senderEmail: string | null; provider: string }
   | { type: 'CHECK_AUTH' }
-  | { type: 'GET_TRACKED_EMAILS' };
+  | { type: 'GET_TRACKED_EMAILS' }
+  | { type: 'REGISTER_MAIL_TAB'; accountEmail: string }
+  | { type: 'UNREGISTER_MAIL_TAB' };
 
 export interface TrackingStateResponse {
   trackingEnabled: boolean;
