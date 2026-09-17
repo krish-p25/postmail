@@ -7,6 +7,7 @@ import { createVerification, verifyCode } from '../services/verification';
 import { sendVerificationEmail } from '../services/email';
 import { signToken } from '../services/tokens';
 import { forUser } from '../db/scoped';
+import { verifiedGoogleEmail, verifiedMicrosoftEmail, microsoftMailboxEmail } from '../services/identity';
 
 const router = Router();
 
@@ -148,12 +149,13 @@ router.post('/verify', async (req: Request, res: Response) => {
       });
 
       const payload = ticket.getPayload();
-      if (!payload || !payload.email) {
-        res.status(400).json({ error: 'Google token expired. Please try again.' });
+      const googleEmail = verifiedGoogleEmail(payload);
+      if (!payload || !googleEmail) {
+        res.status(400).json({ error: 'Google token expired or email not verified. Please try again.' });
         return;
       }
 
-      const user = await User.findOne({ where: { email: payload.email } });
+      const user = await User.findOne({ where: { email: googleEmail } });
       if (!user) {
         res.status(404).json({ error: 'Account not found' });
         return;
@@ -170,12 +172,14 @@ router.post('/verify', async (req: Request, res: Response) => {
         accessToken: storedAccessToken,
         refreshToken: storedRefreshToken,
         tokenExpiry: storedTokenExpiry,
+        mailboxEmail: storedMailboxEmail,
       } = result.data as {
         microsoftId: string;
         displayName: string | null;
         accessToken: string;
         refreshToken: string | null;
         tokenExpiry: string | null;
+        mailboxEmail: string | null;
       };
 
       const user = await User.findOne({ where: { email } });
@@ -192,7 +196,7 @@ router.post('/verify', async (req: Request, res: Response) => {
           refreshToken: storedRefreshToken,
           tokenExpiry: storedTokenExpiry ? new Date(storedTokenExpiry) : null,
         },
-        email,
+        storedMailboxEmail || email,
       );
 
       const token = signToken(user);
@@ -271,13 +275,13 @@ router.post('/google', async (req: Request, res: Response) => {
     });
 
     const payload = ticket.getPayload();
-    if (!payload || !payload.email) {
-      res.status(400).json({ error: 'Failed to get user info from Google' });
+    const email = verifiedGoogleEmail(payload);
+    if (!payload || !email) {
+      res.status(400).json({ error: 'Your Google account email is not verified' });
       return;
     }
 
     const googleId = payload.sub;
-    const email = payload.email;
     const displayName = payload.name || null;
 
     // Find by googleId first, then by email
@@ -333,12 +337,13 @@ router.post('/google/link', async (req: Request, res: Response) => {
     });
 
     const payload = ticket.getPayload();
-    if (!payload || !payload.email) {
-      res.status(400).json({ error: 'Invalid Google token' });
+    const googleEmail = verifiedGoogleEmail(payload);
+    if (!payload || !googleEmail) {
+      res.status(400).json({ error: 'Invalid Google token or unverified email' });
       return;
     }
 
-    const user = await User.findOne({ where: { email: payload.email } });
+    const user = await User.findOne({ where: { email: googleEmail } });
     if (!user || !user.passwordHash) {
       res.status(401).json({ error: 'Account not found' });
       return;
@@ -350,10 +355,10 @@ router.post('/google/link', async (req: Request, res: Response) => {
       return;
     }
 
-    const code = createVerification(payload.email, 'google-link', { idToken: rawIdToken });
-    await sendVerificationEmail(payload.email, code);
+    const code = createVerification(googleEmail, 'google-link', { idToken: rawIdToken });
+    await sendVerificationEmail(googleEmail, code);
 
-    res.json({ requiresVerification: true, email: payload.email });
+    res.json({ requiresVerification: true, email: googleEmail });
   } catch (error) {
     console.error('[PostMail API] Google link error:', error);
     res.status(500).json({ error: 'Failed to link Google account' });
@@ -421,13 +426,16 @@ router.post('/microsoft', async (req: Request, res: Response) => {
 
     const profile = await profileRes.json();
     const microsoftId = profile.id;
-    const email: string = (profile.mail || profile.userPrincipalName || '').toLowerCase();
+    const email = verifiedMicrosoftEmail(profile);
     const displayName: string | null = profile.displayName || null;
 
     if (!email) {
-      res.status(400).json({ error: 'Could not retrieve email from Microsoft account' });
+      res.status(400).json({ error: 'Could not verify the email on this Microsoft account' });
       return;
     }
+
+    // Identity uses the verified UPN; the mailbox keeps its real SMTP address.
+    const mailboxEmail = microsoftMailboxEmail(profile) ?? email;
 
     // Find by microsoftId first, then by email
     let user = await User.findOne({ where: { microsoftId } });
@@ -443,14 +451,14 @@ router.post('/microsoft', async (req: Request, res: Response) => {
         }
         // No password set — safe to auto-link
         await user.update({ microsoftId, displayName: displayName || user.displayName });
-        await storeOutlookTokensAndConnect(user, { accessToken, refreshToken, tokenExpiry }, email);
+        await storeOutlookTokensAndConnect(user, { accessToken, refreshToken, tokenExpiry }, mailboxEmail);
       } else {
         // Create new user and store tokens in LinkedMailbox
         user = await User.create({ email, microsoftId, displayName });
         const scope = forUser(user.id);
         await scope.linkedMailboxes.create({
           provider: 'outlook',
-          email,
+          email: mailboxEmail,
           accessToken,
           refreshToken,
           tokenExpiry,
@@ -458,7 +466,7 @@ router.post('/microsoft', async (req: Request, res: Response) => {
         await scope.userSettings.create({
           mailboxConnected: true,
           mailboxProvider: 'outlook',
-          mailboxEmail: email,
+          mailboxEmail,
           mailboxConnectedAt: new Date(),
         });
       }
@@ -467,7 +475,7 @@ router.post('/microsoft', async (req: Request, res: Response) => {
       if (displayName && user.displayName !== displayName) {
         await user.update({ displayName });
       }
-      await storeOutlookTokensAndConnect(user, { accessToken, refreshToken, tokenExpiry }, email);
+      await storeOutlookTokensAndConnect(user, { accessToken, refreshToken, tokenExpiry }, mailboxEmail);
     }
 
     const token = signToken(user);
@@ -504,10 +512,10 @@ router.post('/microsoft/link', async (req: Request, res: Response) => {
     }
 
     const profile = await profileRes.json();
-    const email: string = (profile.mail || profile.userPrincipalName || '').toLowerCase();
+    const email = verifiedMicrosoftEmail(profile);
 
     if (!email) {
-      res.status(400).json({ error: 'Could not retrieve email from Microsoft account' });
+      res.status(400).json({ error: 'Could not verify the email on this Microsoft account' });
       return;
     }
 
@@ -529,6 +537,7 @@ router.post('/microsoft/link', async (req: Request, res: Response) => {
       accessToken,
       refreshToken: refreshToken || null,
       tokenExpiry: tokenExpiry || null,
+      mailboxEmail: microsoftMailboxEmail(profile),
     });
     await sendVerificationEmail(email, code);
 
