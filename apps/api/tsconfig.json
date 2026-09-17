@@ -5,6 +5,8 @@
     "esModuleInterop": true,
     "rootDir": "./src",
     "outDir": "./dist",
+    // Application, not a library: no .d.ts output (also avoids TS4058 on inferred generic helpers)
+    "declaration": false,
     "paths": {
       "@postmail/shared": ["../../packages/shared/src"],
       "@postmail/shared/*": ["../../packages/shared/src/*"]
