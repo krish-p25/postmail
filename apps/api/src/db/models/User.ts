@@ -8,11 +8,12 @@ interface UserAttributes {
   googleId: string | null;
   microsoftId: string | null;
   displayName: string | null;
+  tokenVersion: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
-interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'passwordHash' | 'googleId' | 'microsoftId' | 'displayName' | 'createdAt' | 'updatedAt'> {}
+interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'passwordHash' | 'googleId' | 'microsoftId' | 'displayName' | 'tokenVersion' | 'createdAt' | 'updatedAt'> {}
 
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   declare id: string;
@@ -21,6 +22,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   declare googleId: string | null;
   declare microsoftId: string | null;
   declare displayName: string | null;
+  declare tokenVersion: number;
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -58,6 +60,12 @@ User.init(
       type: DataTypes.STRING,
       allowNull: true,
       field: 'display_name',
+    },
+    tokenVersion: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      field: 'token_version',
     },
     createdAt: {
       type: DataTypes.DATE,

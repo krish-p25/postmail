@@ -91,6 +91,12 @@ export const auth = {
     localStorage.removeItem(TOKEN_KEY);
   },
 
+  /** Replace the stored JWT (e.g. after a password change) and hand it to the extension. */
+  storeToken(token: string): void {
+    localStorage.setItem(TOKEN_KEY, token);
+    document.dispatchEvent(new CustomEvent('postmail-token-sync', { detail: token }));
+  },
+
   /** Exchange Microsoft authorization code for user info via API. */
   async microsoftLogin(code: string): Promise<AuthResponse | { requiresPassword: true; email: string; accessToken: string; refreshToken: string | null; tokenExpiry: string | null }> {
     const res = await fetch(`${API_URL}/auth/microsoft`, {

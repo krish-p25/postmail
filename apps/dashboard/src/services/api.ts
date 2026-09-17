@@ -98,7 +98,7 @@ export const api = {
       const data = await res.json();
       throw new Error(data.error || 'Failed to set password');
     }
-    return res.json();
+    return res.json() as Promise<{ success: boolean; token: string }>;
   },
 
   async changePassword(currentPassword: string, newPassword: string) {
@@ -110,7 +110,7 @@ export const api = {
       const data = await res.json();
       throw new Error(data.error || 'Failed to change password');
     }
-    return res.json();
+    return res.json() as Promise<{ success: boolean; token: string }>;
   },
 
   async getEmails() {
