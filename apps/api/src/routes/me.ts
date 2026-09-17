@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import { User } from '../db/models';
 import { sendPasswordChangedEmail } from '../services/email';
 import { rotateTokens } from '../services/tokens';
+import { passwordLimiter } from '../middleware/rate-limit';
 
 const router = Router();
 const SALT_ROUNDS = 10;
@@ -38,7 +39,7 @@ router.get('/', async (req: Request, res: Response) => {
  * Allows a user without a password (e.g. Google-only) to add one.
  * Body: { password }
  */
-router.post('/set-password', async (req: Request, res: Response) => {
+router.post('/set-password', passwordLimiter, async (req: Request, res: Response) => {
   try {
     const { password } = req.body;
 
@@ -80,7 +81,7 @@ router.post('/set-password', async (req: Request, res: Response) => {
  * Changes password for a user who already has one.
  * Body: { currentPassword, newPassword }
  */
-router.post('/change-password', async (req: Request, res: Response) => {
+router.post('/change-password', passwordLimiter, async (req: Request, res: Response) => {
   try {
     const { currentPassword, newPassword } = req.body;
 

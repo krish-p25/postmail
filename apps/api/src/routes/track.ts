@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { Attributes, Op, WhereOptions } from 'sequelize';
 import type { LinkedMailbox, TrackedEmail } from '../db/models';
 import { forUser, UserScope } from '../db/scoped';
+import { selfViewLimiter } from '../middleware/rate-limit';
 import { searchSentFolder } from '../services/sent-folder-search';
 
 const router = Router();
@@ -293,7 +294,7 @@ const SELF_VIEW_LOOKAHEAD_MS = 1_000;
  * for one of this user's pixels. Labels that token's recent opens "Likely You".
  * 204 when the token isn't the user's or the account isn't one of their linked mailboxes.
  */
-router.post('/self-view', async (req: Request, res: Response) => {
+router.post('/self-view', selfViewLimiter, async (req: Request, res: Response) => {
   try {
     const { trackingToken, accountEmail } = req.body ?? {};
     if (

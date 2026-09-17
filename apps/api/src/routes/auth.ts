@@ -7,6 +7,14 @@ import { createVerification, verifyCode } from '../services/verification';
 import { sendVerificationEmail } from '../services/email';
 import { signToken } from '../services/tokens';
 import { forUser } from '../db/scoped';
+import {
+  loginIpLimiter,
+  loginEmailLimiter,
+  registerLimiter,
+  verifyLimiter,
+  oauthLimiter,
+  linkLimiter,
+} from '../middleware/rate-limit';
 import { verifiedGoogleEmail, verifiedMicrosoftEmail, microsoftMailboxEmail } from '../services/identity';
 
 const router = Router();
@@ -65,7 +73,7 @@ async function storeOutlookTokensAndConnect(
  * Validates input, stores pending registration, sends verification code.
  * Returns { requiresVerification: true, email }.
  */
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', registerLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password, displayName } = req.body;
 
@@ -106,7 +114,7 @@ router.post('/register', async (req: Request, res: Response) => {
  *
  * Verifies the emailed code and completes the pending action.
  */
-router.post('/verify', async (req: Request, res: Response) => {
+router.post('/verify', verifyLimiter, async (req: Request, res: Response) => {
   try {
     const { email, code, type } = req.body;
 
@@ -214,7 +222,7 @@ router.post('/verify', async (req: Request, res: Response) => {
  * POST /auth/login
  * Body: { email, password }
  */
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', loginIpLimiter, loginEmailLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
@@ -250,7 +258,7 @@ router.post('/login', async (req: Request, res: Response) => {
  * Exchanges a Google OAuth authorization code for user info,
  * finds or creates the local user, and returns a JWT.
  */
-router.post('/google', async (req: Request, res: Response) => {
+router.post('/google', oauthLimiter, async (req: Request, res: Response) => {
   try {
     const { code } = req.body;
 
@@ -322,7 +330,7 @@ router.post('/google', async (req: Request, res: Response) => {
  * Validates the password, then sends a verification code.
  * Returns { requiresVerification: true, email }.
  */
-router.post('/google/link', async (req: Request, res: Response) => {
+router.post('/google/link', linkLimiter, async (req: Request, res: Response) => {
   try {
     const { idToken: rawIdToken, password } = req.body;
 
@@ -373,7 +381,7 @@ router.post('/google/link', async (req: Request, res: Response) => {
  * calls Graph API to get user info, finds or creates the local user,
  * and returns a JWT.
  */
-router.post('/microsoft', async (req: Request, res: Response) => {
+router.post('/microsoft', oauthLimiter, async (req: Request, res: Response) => {
   try {
     const { code } = req.body;
 
@@ -493,7 +501,7 @@ router.post('/microsoft', async (req: Request, res: Response) => {
  * Validates the password using a previously obtained access token,
  * then sends a verification code.
  */
-router.post('/microsoft/link', async (req: Request, res: Response) => {
+router.post('/microsoft/link', linkLimiter, async (req: Request, res: Response) => {
   try {
     const { accessToken, password, refreshToken, tokenExpiry } = req.body;
 
