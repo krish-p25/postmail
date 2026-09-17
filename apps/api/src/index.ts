@@ -3,6 +3,7 @@ import { config } from './config/env';
 import { sequelize } from './db/sequelize';
 import { runMigrations } from './db/migrate';
 import { backfillAllIds } from './services/backfill-ids';
+import { verifySmtp } from './services/email';
 
 // Initialize database and start server
 async function start(): Promise<void> {
@@ -25,6 +26,9 @@ async function start(): Promise<void> {
 
       // Backfill missing threadId/conversationId (non-blocking)
       backfillAllIds().catch(() => {});
+
+      // Log clearly if Gmail SMTP is misconfigured (non-blocking)
+      verifySmtp().catch(() => {});
     });
   } catch (error) {
     console.error('[PostMail API] Failed to start:', error);

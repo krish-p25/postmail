@@ -20,6 +20,11 @@ services:
       MICROSOFT_REDIRECT_URI: ${MICROSOFT_REDIRECT_URI:-http://localhost:3006/outlook/callback}
       OUTLOOK_MAILBOX_REDIRECT_URI: ${OUTLOOK_MAILBOX_REDIRECT_URI:-http://localhost:3006/outlook/callback}
       DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3006}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
     networks:
       - shared-db
 
