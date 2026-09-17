@@ -115,7 +115,7 @@ export interface TrackedEmailInfo {
   recipient: string | null;
   status: string;
   sentAt: string | null;
-  opens: { id: string; opened_at: string; dismissed: boolean }[];
+  opens: { id: string; opened_at: string; dismissed: boolean; likely_self?: boolean }[];
 }
 
 export async function getTrackedEmails(): Promise<TrackedEmailInfo[]> {
@@ -146,4 +146,21 @@ export async function verifyEmailSent(
     throw new Error(`Failed to verify: ${res.status} ${text}`);
   }
   return res.json();
+}
+
+export type SelfViewResult = 'labelled' | 'ignored' | 'unauthorized' | 'failed';
+
+/** Tell the API a linked tab loaded this pixel, so its recent opens are labelled "Likely You". */
+export async function reportSelfView(trackingToken: string, accountEmail: string): Promise<SelfViewResult> {
+  try {
+    const res = await authFetch('/track/self-view', {
+      method: 'POST',
+      body: JSON.stringify({ trackingToken, accountEmail }),
+    });
+    if (res.status === 401) return 'unauthorized';
+    if (res.status === 204) return 'ignored';
+    return res.ok ? 'labelled' : 'failed';
+  } catch {
+    return 'failed';
+  }
 }

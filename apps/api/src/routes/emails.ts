@@ -5,7 +5,7 @@ import { resolvePendingEmails, backfillConversationIds } from '../services/resol
 
 const router = Router();
 
-const OPEN_ATTRIBUTES = ['id', 'opened_at', 'user_agent', 'ip_address', 'dismissed'] as const;
+const OPEN_ATTRIBUTES = ['id', 'opened_at', 'user_agent', 'ip_address', 'dismissed', 'likely_self'] as const;
 
 /**
  * GET /api/emails

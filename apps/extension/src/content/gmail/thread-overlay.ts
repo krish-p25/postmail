@@ -6,7 +6,7 @@
  * Matches by normalized subject against the tracked emails map.
  */
 
-import { TrackedEmailSummary, buildBadgeConfig, parseDevice } from '../shared/inbox-badge';
+import { TrackedEmailSummary, buildBadgeConfig, parseDevice, likelySelfCount, createLikelyYouTag } from '../shared/inbox-badge';
 
 export const OVERLAY_ATTR = 'data-postmail-thread-overlay';
 
@@ -111,72 +111,59 @@ export function createThreadOverlay(tracked: TrackedEmailSummary): HTMLElement {
   const overlay = document.createElement('div');
   overlay.setAttribute(OVERLAY_ATTR, tracked.id);
   overlay.setAttribute('data-opens', String(tracked.openCount));
+  overlay.setAttribute('data-likely-self', String(likelySelfCount(tracked)));
   const config = buildBadgeConfig(tracked.openCount);
   overlay.className = `postmail-thread-overlay postmail-overlay-${config.variant}`;
-  overlay.innerHTML = buildOverlayContent(tracked);
+  appendOverlayContent(overlay, tracked);
   return overlay;
 }
 
 export function isOverlayCurrent(overlay: Element, tracked: TrackedEmailSummary): boolean {
   return (
     overlay.getAttribute(OVERLAY_ATTR) === tracked.id &&
-    overlay.getAttribute('data-opens') === String(tracked.openCount)
+    overlay.getAttribute('data-opens') === String(tracked.openCount) &&
+    overlay.getAttribute('data-likely-self') === String(likelySelfCount(tracked))
   );
 }
 
-// TODO(human): Build the overlay inner HTML for tracked vs opened states.
-//
-// tracked.openCount === 0 → purple "Tracked" state (no opens yet)
-// tracked.openCount > 0   → green "Opened" state (list each open event)
-//
-// Data:  tracked.openCount, tracked.sentAt, tracked.opens[].{opened_at, user_agent, ip_address}
-// Utils: parseDevice(ua) → "Chrome on Windows", buildBadgeConfig(n) → { label, variant }
-//
-// CSS classes available (see styles above):
-//   .postmail-overlay-header, .postmail-overlay-status, .postmail-overlay-status-text,
-//   .postmail-overlay-brand, .postmail-overlay-subtitle, .postmail-overlay-opens,
-//   .postmail-overlay-open-row, .postmail-overlay-open-time, .postmail-overlay-open-sep,
-//   .postmail-overlay-open-device
-function buildOverlayContent(tracked: TrackedEmailSummary): string {
-  if (!tracked) return ''
-  else if (tracked && tracked.opens.length === 0) {
-    return `
-    <div class="postmail-overlay-header">
-      <div class="postmail-overlay-status">
-        <span class="postmail-overlay-status-text">
-          Tracked - No Opens yet
-        </span>
-      </div>
-    </div>
-    `
-  }
-  else if (tracked && tracked.opens.length > 0) {
-    return `
-    <div class="postmail-overlay-header">
-      <div class="postmail-overlay-status">
-        <span class="postmail-overlay-status-text">
-          Opened ${tracked.openCount} time${tracked.openCount > 1 ? 's' : ''}
-        </span>
-      </div>
-    </div>
+/** Built with createElement/textContent: open data (e.g. IPs) must never be parsed as HTML. */
+function appendOverlayContent(overlay: HTMLElement, tracked: TrackedEmailSummary): void {
+  const header = document.createElement('div');
+  header.className = 'postmail-overlay-header';
+  const status = document.createElement('div');
+  status.className = 'postmail-overlay-status';
+  const statusText = document.createElement('span');
+  statusText.className = 'postmail-overlay-status-text';
+  statusText.textContent =
+    tracked.opens.length === 0
+      ? 'Tracked - No Opens yet'
+      : `Opened ${tracked.openCount} time${tracked.openCount === 1 ? '' : 's'}`;
+  status.appendChild(statusText);
+  header.appendChild(status);
+  overlay.appendChild(header);
 
-      <div class="postmail-overlay-opens">
-          ${[...tracked.opens].sort((a, b) => new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime()).map(o => {
-            return `
-              <div class="postmail-overlay-open-row">
-                <span class="postmail-overlay-open-time">
-                  ${new Date(o.opened_at).toLocaleString()}
-                </span>
+  if (tracked.opens.length === 0) return;
 
-                <span class="postmail-overlay-open-device">
-                  ${parseDevice(o.user_agent)} - ${o.ip_address || ''}
-                </span>
-              </div>
-            `
-          }).join('')}
-      </div>
-      
-    `
+  const list = document.createElement('div');
+  list.className = 'postmail-overlay-opens';
+  const sorted = [...tracked.opens].sort((a, b) => new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime());
+
+  for (const open of sorted) {
+    const row = document.createElement('div');
+    row.className = 'postmail-overlay-open-row';
+
+    const time = document.createElement('span');
+    time.className = 'postmail-overlay-open-time';
+    time.textContent = new Date(open.opened_at).toLocaleString();
+    if (open.likely_self) time.appendChild(createLikelyYouTag());
+    row.appendChild(time);
+
+    const device = document.createElement('span');
+    device.className = 'postmail-overlay-open-device';
+    device.textContent = `${parseDevice(open.user_agent)}${open.ip_address ? ` - ${open.ip_address}` : ''}`;
+    row.appendChild(device);
+
+    list.appendChild(row);
   }
-  return ''
+  overlay.appendChild(list);
 }

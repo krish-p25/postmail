@@ -9,10 +9,11 @@ interface EmailOpenAttributes {
   userAgent: string | null;
   ipAddress: string | null;
   dismissed: boolean;
+  likelySelf: boolean;
   createdAt: Date;
 }
 
-interface EmailOpenCreation extends Optional<EmailOpenAttributes, 'id' | 'openedAt' | 'userAgent' | 'ipAddress' | 'dismissed' | 'createdAt'> {}
+interface EmailOpenCreation extends Optional<EmailOpenAttributes, 'id' | 'openedAt' | 'userAgent' | 'ipAddress' | 'dismissed' | 'likelySelf' | 'createdAt'> {}
 
 class EmailOpen extends Model<EmailOpenAttributes, EmailOpenCreation> implements EmailOpenAttributes {
   declare id: string;
@@ -22,6 +23,7 @@ class EmailOpen extends Model<EmailOpenAttributes, EmailOpenCreation> implements
   declare userAgent: string | null;
   declare ipAddress: string | null;
   declare dismissed: boolean;
+  declare likelySelf: boolean;
   declare createdAt: Date;
 }
 
@@ -63,6 +65,12 @@ EmailOpen.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    likelySelf: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'likely_self',
     },
     createdAt: {
       type: DataTypes.DATE,

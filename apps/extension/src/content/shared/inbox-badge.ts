@@ -16,7 +16,7 @@ export interface TrackedEmailSummary {
   messageId: string | null;
   threadId: string | null;
   conversationId: string | null;
-  opens: { opened_at: string; ip_address: string | null; user_agent: string | null }[];
+  opens: { opened_at: string; ip_address: string | null; user_agent: string | null; likely_self: boolean }[];
 }
 
 export interface BadgeConfig {
@@ -78,6 +78,7 @@ export function fetchTrackedEmails(): Promise<TrackedEmailSummary[]> {
                 opened_at: o.opened_at,
                 ip_address: o.ip_address || null,
                 user_agent: o.user_agent || null,
+                likely_self: o.likely_self === true,
               })),
             })),
           );
@@ -104,12 +105,13 @@ export function createBadgeElement(tracked: TrackedEmailSummary): HTMLSpanElemen
     const sorted = [...tracked.opens].sort((a, b) => new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime());
     const times = sorted.map((o) => {
       const d = new Date(o.opened_at);
-      return d.toLocaleString(undefined, {
+      const time = d.toLocaleString(undefined, {
         month: 'short',
         day: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
       });
+      return o.likely_self ? `${time} (Likely You)` : time;
     });
     badge.title = `Opened ${times.length}x:\n${times.join('\n')}`;
   }
@@ -142,6 +144,20 @@ export function isBadgeCurrent(badge: Element, tracked: TrackedEmailSummary): bo
     badge.getAttribute(BADGE_ATTR) === tracked.id &&
     badge.getAttribute('data-opens') === String(tracked.openCount)
   );
+}
+
+/** Number of opens labelled "Likely You"; part of the overlay/badge freshness check. */
+export function likelySelfCount(tracked: TrackedEmailSummary): number {
+  return tracked.opens.filter((o) => o.likely_self).length;
+}
+
+/** Small "Likely You" pill used in thread overlays and reading-pane badges. */
+export function createLikelyYouTag(): HTMLSpanElement {
+  const tag = document.createElement('span');
+  tag.className = 'postmail-likely-you';
+  tag.textContent = 'Likely You';
+  tag.title = 'Opened in a browser signed in to one of your linked mailboxes';
+  return tag;
 }
 
 export function injectBadgeStyles(): void {
@@ -248,6 +264,27 @@ export function injectBadgeStyles(): void {
     }
     .postmail-reading-badge .postmail-open-row .postmail-open-device {
       opacity: 0.7;
+    }
+    /* Time + "Likely You" tag sit on one centred line inside each open row. */
+    .postmail-overlay-open-time,
+    .postmail-reading-badge .postmail-open-row .postmail-open-time {
+      display: inline-flex;
+      align-items: center;
+    }
+    /* Same indigo as the unauthenticated setup banner (auth-banner.ts). */
+    .postmail-likely-you {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 6px;
+      padding: 1px 7px;
+      border-radius: 9999px;
+      border: 1px solid rgba(79, 70, 229, 0.25);
+      background: rgba(79, 70, 229, 0.12);
+      color: #3730a3;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 14px;
+      white-space: nowrap;
     }
   `;
   document.head.appendChild(style);

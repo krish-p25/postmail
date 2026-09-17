@@ -27,6 +27,7 @@ export interface EmailTrackingData {
     user_agent: string | null;
     ip_address: string | null;
     dismissed: boolean;
+    likely_self: boolean;
   }>;
 }
 
@@ -249,6 +250,7 @@ export const api = {
           user_agent: string | null;
           ip_address: string | null;
           dismissed: boolean;
+          likely_self: boolean;
         }>;
       }>;
     }>;
@@ -272,6 +274,7 @@ export const api = {
           user_agent: string | null;
           ip_address: string | null;
           dismissed: boolean;
+          likely_self: boolean;
         }>;
       };
     }>;

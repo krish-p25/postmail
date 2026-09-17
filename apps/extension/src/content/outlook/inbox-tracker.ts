@@ -24,6 +24,8 @@ import {
   injectBadgeStyles,
   buildBadgeConfig,
   parseDevice,
+  likelySelfCount,
+  createLikelyYouTag,
 } from '../shared/inbox-badge';
 
 /** Selectors for top-level message list rows. */
@@ -271,7 +273,8 @@ export class OutlookInboxTracker {
     if (existingBadge) {
       if (
         existingBadge.getAttribute(READING_BADGE_ATTR) === matched.id &&
-        existingBadge.getAttribute('data-opens') === String(matched.openCount)
+        existingBadge.getAttribute('data-opens') === String(matched.openCount) &&
+        existingBadge.getAttribute('data-likely-self') === String(likelySelfCount(matched))
       ) return;
       existingBadge.remove();
     }
@@ -289,6 +292,7 @@ export class OutlookInboxTracker {
     container.className = `postmail-reading-badge postmail-reading-${variant}`;
     container.setAttribute(READING_BADGE_ATTR, tracked.id);
     container.setAttribute('data-opens', String(tracked.openCount));
+    container.setAttribute('data-likely-self', String(likelySelfCount(tracked)));
 
     // Header with status text
     const header = document.createElement('div');
@@ -317,6 +321,7 @@ export class OutlookInboxTracker {
         const time = document.createElement('span');
         time.className = 'postmail-open-time';
         time.textContent = new Date(open.opened_at).toLocaleString();
+        if (open.likely_self) time.appendChild(createLikelyYouTag());
         row.appendChild(time);
 
         const device = document.createElement('span');

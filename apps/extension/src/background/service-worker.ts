@@ -1,10 +1,16 @@
 import { ExtensionMessage, TrackingStateResponse, RegisterResponse, VerifyResponse } from '../shared/messaging';
 import { getTrackingEnabled, setTrackingEnabled } from '../shared/storage';
 import { registerTrackedEmail, updateTrackedEmail, verifyEmailSent, discardTrackedEmail, checkAuth, getTrackedEmails, PreflightResult, TrackedEmailInfo } from '../shared/api';
+import { registerSelfViewDetector } from './self-view-detector';
+import { registerTab, unregisterTab, watchLinkedTabLifecycle } from './linked-tabs';
+
+// Event listeners must be registered synchronously at startup.
+registerSelfViewDetector();
+watchLinkedTabLifecycle();
 
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener(
-  (message: ExtensionMessage, _sender, sendResponse: (response: TrackingStateResponse | RegisterResponse | VerifyResponse | { success: boolean } | PreflightResult | { emails: TrackedEmailInfo[] }) => void) => {
+  (message: ExtensionMessage, sender, sendResponse: (response: TrackingStateResponse | RegisterResponse | VerifyResponse | { success: boolean } | PreflightResult | { emails: TrackedEmailInfo[] }) => void) => {
 
     if (message.type === 'GET_TRACKING_STATE') {
       getTrackingEnabled().then((enabled) => sendResponse({ trackingEnabled: enabled }));
@@ -62,6 +68,25 @@ chrome.runtime.onMessage.addListener(
         .then(() => sendResponse({ success: true }))
         .catch(() => sendResponse({ success: false }));
       return true;
+    }
+
+    if (message.type === 'REGISTER_MAIL_TAB') {
+      const tabId = sender.tab?.id;
+      if (tabId === undefined) {
+        sendResponse({ success: false });
+        return false;
+      }
+      registerTab(tabId, message.accountEmail)
+        .then((registered) => sendResponse({ success: registered }))
+        .catch(() => sendResponse({ success: false }));
+      return true;
+    }
+
+    if (message.type === 'UNREGISTER_MAIL_TAB') {
+      const tabId = sender.tab?.id;
+      if (tabId !== undefined) void unregisterTab(tabId);
+      sendResponse({ success: true });
+      return false;
     }
 
     return false;

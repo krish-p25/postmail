@@ -26,26 +26,14 @@ function ExtensionBanner() {
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-gray-900">Chrome extension not detected</h3>
           <p className="mt-1 text-sm text-gray-600">
-            Install the PostMail Chrome extension to start tracking email opens in Gmail.
+            Install the PostMail Chrome extension to start tracking email opens in Gmail and Outlook.
           </p>
-          <ol className="mt-3 space-y-2 text-sm text-gray-700">
-            <li className="flex gap-2.5">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">1</span>
-              <span>Open <code className="break-all rounded bg-white px-1.5 py-0.5 text-xs text-gray-800 ring-1 ring-gray-200">chrome://extensions</code> in your browser</span>
-            </li>
-            <li className="flex gap-2.5">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">2</span>
-              <span>Enable <strong className="font-medium text-gray-900">Developer mode</strong> (top-right toggle)</span>
-            </li>
-            <li className="flex gap-2.5">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">3</span>
-              <span>Click <strong className="font-medium text-gray-900">Load unpacked</strong> and select the <code className="break-all rounded bg-white px-1.5 py-0.5 text-xs text-gray-800 ring-1 ring-gray-200">apps/extension/dist</code> folder</span>
-            </li>
-            <li className="flex gap-2.5">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-800">4</span>
-              <span>Refresh this page to confirm detection</span>
-            </li>
-          </ol>
+          <button
+            onClick={() => window.open('https://chromewebstore.google.com/detail/postmail-%E2%80%93-email-open-tra/aecejojkfehdlopfphoddbhbafkgagon', '_blank')}
+            className="mt-3 min-h-[44px] rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-amber-700"
+          >
+            Add to Chrome
+          </button>
         </div>
       </div>
     </div>

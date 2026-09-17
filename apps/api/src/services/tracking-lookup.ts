@@ -1,7 +1,7 @@
 import { Op } from 'sequelize';
 import { TrackedEmail, EmailOpen } from '../db/models';
 
-const OPEN_ATTRIBUTES = ['id', 'opened_at', 'user_agent', 'ip_address', 'dismissed'] as const;
+const OPEN_ATTRIBUTES = ['id', 'opened_at', 'user_agent', 'ip_address', 'dismissed', 'likely_self'] as const;
 
 interface TrackingData {
   id: string;
@@ -14,6 +14,7 @@ interface TrackingData {
     user_agent: string | null;
     ip_address: string | null;
     dismissed: boolean;
+    likely_self: boolean;
   }>;
 }
 

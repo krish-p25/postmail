@@ -290,4 +290,66 @@ async function verifySentEmail(
   res.json({ found: result.found });
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Window around the report (server time) in which opens are labelled. Opens are stored ~45 ms before the extension reports. */
+const SELF_VIEW_LOOKBACK_MS = 15_000;
+const SELF_VIEW_LOOKAHEAD_MS = 1_000;
+
+/**
+ * POST /api/track/self-view
+ * Body: { trackingToken, accountEmail }
+ *
+ * Sent by the extension when a tab signed in to a linked mailbox completed a request
+ * for one of this user's pixels. Labels that token's recent opens "Likely You".
+ * 204 when the token isn't the user's or the account isn't one of their linked mailboxes.
+ */
+router.post('/self-view', async (req: Request, res: Response) => {
+  try {
+    const { trackingToken, accountEmail } = req.body ?? {};
+    if (
+      typeof trackingToken !== 'string' ||
+      !UUID_RE.test(trackingToken) ||
+      typeof accountEmail !== 'string' ||
+      !accountEmail.includes('@') ||
+      accountEmail.length > 320
+    ) {
+      res.status(400).json({ error: 'trackingToken (uuid) and accountEmail are required' });
+      return;
+    }
+
+    const userId = req.user!.id;
+
+    const trackedEmail = await TrackedEmail.findOne({ where: { trackingToken, userId }, attributes: ['id'] });
+    if (!trackedEmail) {
+      res.status(204).end();
+      return;
+    }
+
+    const mailboxes = await LinkedMailbox.findAll({ where: { userId }, attributes: ['email'] });
+    const account = accountEmail.trim().toLowerCase();
+    if (!mailboxes.some((m) => m.email.toLowerCase() === account)) {
+      res.status(204).end();
+      return;
+    }
+
+    const now = Date.now();
+    const [labelled] = await EmailOpen.update(
+      { likelySelf: true },
+      {
+        where: {
+          trackedEmailId: trackedEmail.id,
+          userId,
+          likelySelf: false,
+          openedAt: { [Op.between]: [new Date(now - SELF_VIEW_LOOKBACK_MS), new Date(now + SELF_VIEW_LOOKAHEAD_MS)] },
+        },
+      },
+    );
+
+    res.json({ labelled });
+  } catch (error) {
+    console.error('[PostMail API] Error in POST /api/track/self-view:', error);
+    res.status(500).json({ error: 'Failed to record self view' });
+  }
+});
+
 export default router;

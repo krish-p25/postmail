@@ -5,6 +5,7 @@ import { getSenderEmail as gmailGetCurrentEmail } from './gmail/selectors';
 import { getSenderEmail as outlookGetCurrentEmail } from './outlook/selectors';
 import { InboxTracker } from './gmail/inbox-tracker';
 import { OutlookInboxTracker } from './outlook/inbox-tracker';
+import { MailTabRegistration } from './mail-tab-registration';
 
 // Gmail imports
 import { ComposeDetector as GmailComposeDetector } from './gmail/compose-detector';
@@ -137,6 +138,10 @@ function runAuthPreflight(): void {
       if (response?.ok) {
         const linkedEmails: string[] = response.linkedEmails || [];
         if (activeManager) activeManager.setLinkedEmails(linkedEmails);
+        new MailTabRegistration({
+          getAccountEmail: () => getCurrentEmail(provider),
+          linkedEmails,
+        }).start();
         // Retry email detection — SPA DOM may not be ready yet
         detectEmailWithRetry(provider, 6, 500).then((currentEmail) => {
           showAuthBanner('ok', linkedEmails, currentEmail);

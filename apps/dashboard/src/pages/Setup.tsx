@@ -59,10 +59,11 @@ export default function Setup() {
     {
       key: 'extension' as const,
       title: 'Install the Chrome extension',
-      description: 'The PostMail extension listens to your inbox to monitor your emails.',
+      description:
+        'The PostMail extension tracks emails you send from linked mailboxes. It also watches image requests in those mailboxes so opens of your own sent emails are marked "Likely You". After updating, accept the new permission in Chrome.',
       done: status.extension,
       action: !status.extension
-        ? { label: 'How to install', onClick: () => window.open('https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked', '_blank') }
+        ? { label: 'Add to Chrome', onClick: () => window.open('https://chromewebstore.google.com/detail/postmail-%E2%80%93-email-open-tra/aecejojkfehdlopfphoddbhbafkgagon', '_blank') }
         : null,
     },
     {
