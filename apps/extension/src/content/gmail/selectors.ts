@@ -108,33 +108,22 @@ export function findRecipientChips(composeElement: Element): string[] {
   return [...new Set(emails)];
 }
 
+/** Gmail titles end with " - <account> - Gmail"; the subject before it may contain other addresses. */
+const GMAIL_TITLE_ACCOUNT_RE = /\s-\s([^\s@]+@[^\s@]+\.[^\s@]+)\s-\sGmail$/;
+const EMAIL_RE = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/;
+
 /**
- * Attempt to read the logged-in Gmail address from the page DOM.
- * Returns null if not found.
+ * Read the signed-in Gmail account's address.
+ * Verified 2026-09-16: both sources are correct across /u/N accounts and open threads.
+ * Deliberately does not read [data-email] or [title] attributes, which can belong to contacts.
  */
 export function getSenderEmail(): string | null {
-  // Strategy 1: [data-email] on the account/profile element
-  const emailAttr = document.querySelector('[data-email]');
-  if (emailAttr) {
-    const email = emailAttr.getAttribute('data-email');
-    if (email && email.includes('@')) return email;
-  }
+  const titleMatch = document.title.match(GMAIL_TITLE_ACCOUNT_RE);
+  if (titleMatch) return titleMatch[1];
 
-  // Strategy 2: aria-label on the account button (e.g. "Google Account: user@gmail.com")
-  const accountBtn = document.querySelector('a[aria-label*="@"][href*="accounts.google.com"]');
-  if (accountBtn) {
-    const label = accountBtn.getAttribute('aria-label') || '';
-    const match = label.match(/[\w.+-]+@[\w.-]+\.\w+/);
-    if (match) return match[0];
-  }
-
-  // Strategy 3: title attribute with email pattern
-  const titled = document.querySelector('[title*="@gmail.com"], [title*="@googlemail.com"]');
-  if (titled) {
-    const title = titled.getAttribute('title') || '';
-    const match = title.match(/[\w.+-]+@[\w.-]+\.\w+/);
-    if (match) return match[0];
-  }
+  const accountButton = document.querySelector('a[aria-label*="@"][href*="accounts.google.com"]');
+  const labelMatch = accountButton?.getAttribute('aria-label')?.match(EMAIL_RE);
+  if (labelMatch) return labelMatch[0];
 
   return null;
 }

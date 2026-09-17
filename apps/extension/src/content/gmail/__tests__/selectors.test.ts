@@ -1,4 +1,4 @@
-import { SELECTORS, isComposeDialog, findComposeBody, findRecipientChips } from '../selectors';
+import { SELECTORS, isComposeDialog, findComposeBody, findRecipientChips, getSenderEmail } from '../selectors';
 
 /**
  * Helper: build a minimal Gmail compose dialog DOM structure.
@@ -109,5 +109,44 @@ describe('findRecipientChips', () => {
   it('returns empty array when no recipients', () => {
     const dialog = createMockComposeDialog();
     expect(findRecipientChips(dialog)).toEqual([]);
+  });
+});
+
+describe('getSenderEmail', () => {
+  afterEach(() => {
+    document.title = '';
+    document.body.innerHTML = '';
+  });
+
+  function addAccountButton(label: string): void {
+    const a = document.createElement('a');
+    a.setAttribute('href', 'https://accounts.google.com/SignOutOptions?hl=en&continue=https://mail.google.com');
+    a.setAttribute('aria-label', label);
+    document.body.appendChild(a);
+  }
+
+  it('reads the account from the trailing part of the Gmail title', () => {
+    document.title = 'Inbox (3) - me@gmail.com - Gmail';
+    expect(getSenderEmail()).toBe('me@gmail.com');
+  });
+
+  it('ignores addresses in the subject part of the title', () => {
+    document.title = 'Re: invoice for bob@acme.com - me@gmail.com - Gmail';
+    expect(getSenderEmail()).toBe('me@gmail.com');
+  });
+
+  it('falls back to the Google account button label', () => {
+    document.title = 'Gmail';
+    addAccountButton('Google Account: Krish P  \n(me@gmail.com)');
+    expect(getSenderEmail()).toBe('me@gmail.com');
+  });
+
+  it('ignores contact chips and title attributes', () => {
+    document.title = 'Gmail';
+    const chip = document.createElement('span');
+    chip.setAttribute('data-email', 'contact@example.com');
+    chip.setAttribute('title', 'contact@gmail.com');
+    document.body.appendChild(chip);
+    expect(getSenderEmail()).toBeNull();
   });
 });
