@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import { google } from 'googleapis';
 import { config } from '../config/env';
-import { LinkedMailbox } from '../db/models';
+import type { LinkedMailbox } from '../db/models';
+import { forUser } from '../db/scoped';
 import { lookupTrackingByMessageIds } from '../services/tracking-lookup';
 import { resolvePendingEmails } from '../services/resolve-pending';
 
@@ -85,13 +86,12 @@ function createOAuth2Client(): OAuth2Client {
  * Find the Gmail LinkedMailbox — by mailboxId if provided, otherwise first Gmail mailbox for the user.
  */
 async function findGmailMailbox(userId: string, mailboxId?: string): Promise<LinkedMailbox | null> {
+  const scope = forUser(userId);
   if (mailboxId) {
-    return LinkedMailbox.findOne({
-      where: { id: mailboxId, userId, provider: 'gmail' },
-    });
+    return scope.linkedMailboxes.findOne({ where: { id: mailboxId, provider: 'gmail' } });
   }
-  return LinkedMailbox.findOne({
-    where: { userId, provider: 'gmail' },
+  return scope.linkedMailboxes.findOne({
+    where: { provider: 'gmail' },
     order: [['createdAt', 'ASC']],
   });
 }
@@ -112,7 +112,7 @@ function createAuthenticatedClient(mailbox: LinkedMailbox): OAuth2Client {
     if (tokens.access_token) updates.accessToken = tokens.access_token;
     if (tokens.expiry_date) updates.tokenExpiry = new Date(tokens.expiry_date);
     if (Object.keys(updates).length > 0) {
-      await LinkedMailbox.update(updates, { where: { id: mailbox.id } });
+      await mailbox.update(updates);
     }
   });
 
@@ -177,10 +177,9 @@ router.post('/callback', async (req: Request, res: Response) => {
     }
 
     // Create or update LinkedMailbox
-    const [mailbox, created] = await LinkedMailbox.findOrCreate({
-      where: { userId: req.user!.id, email: mailboxEmail },
+    const [mailbox, created] = await forUser(req.user!.id).linkedMailboxes.findOrCreate({
+      where: { email: mailboxEmail },
       defaults: {
-        userId: req.user!.id,
         provider: 'gmail',
         email: mailboxEmail,
         accessToken: tokens.access_token,
@@ -437,9 +436,7 @@ router.get('/emails/:messageId/attachments/:attachmentId', async (req: Request, 
  */
 router.post('/disconnect', async (req: Request, res: Response) => {
   try {
-    const mailboxes = await LinkedMailbox.findAll({
-      where: { userId: req.user!.id, provider: 'gmail' },
-    });
+    const mailboxes = await forUser(req.user!.id).linkedMailboxes.findAll({ where: { provider: 'gmail' } });
 
     for (const mailbox of mailboxes) {
       if (mailbox.refreshToken) {

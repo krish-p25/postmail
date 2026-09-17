@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
-import { TrackedEmail, EmailOpen, LinkedMailbox } from '../db/models';
+import type { TrackedEmail } from '../db/models';
+import { forUser } from '../db/scoped';
 import { batchSearchSentFolder, getOutlookAccessToken } from './sent-folder-search';
 
 const MAX_PENDING_AGE_MS = 60 * 60 * 1000; // 1 hour
@@ -14,8 +15,9 @@ function ts(): string {
  * Discards emails older than 1 hour that remain unmatched.
  */
 export async function resolvePendingEmails(userId: string): Promise<number> {
-  const pendingEmails = await TrackedEmail.findAll({
-    where: { userId, status: 'pending' },
+  const scope = forUser(userId);
+  const pendingEmails = await scope.trackedEmails.findAll({
+    where: { status: 'pending' },
     order: [['created_at', 'ASC']],
   });
 
@@ -36,10 +38,7 @@ export async function resolvePendingEmails(userId: string): Promise<number> {
   }
 
   if (unassigned.length > 0) {
-    const fallback = await LinkedMailbox.findOne({
-      where: { userId },
-      order: [['createdAt', 'ASC']],
-    });
+    const fallback = await scope.linkedMailboxes.findOne({ order: [['createdAt', 'ASC']] });
     if (fallback) {
       const group = byMailbox.get(fallback.id) || [];
       group.push(...unassigned);
@@ -49,8 +48,8 @@ export async function resolvePendingEmails(userId: string): Promise<number> {
 
   // Fetch all needed mailboxes in one query
   const mailboxIds = [...byMailbox.keys()];
-  const mailboxes = await LinkedMailbox.findAll({
-    where: { id: { [Op.in]: mailboxIds }, userId },
+  const mailboxes = await scope.linkedMailboxes.findAll({
+    where: { id: { [Op.in]: mailboxIds } },
   });
   const mailboxMap = new Map(mailboxes.map(m => [m.id, m]));
 
@@ -77,10 +76,9 @@ export async function resolvePendingEmails(userId: string): Promise<number> {
           if (!email.mailboxId) updates.mailboxId = mailboxId;
           await email.update(updates);
 
-          await EmailOpen.destroy({
+          await scope.emailOpens.destroy({
             where: {
               trackedEmailId: email.id,
-              userId,
               openedAt: { [Op.lt]: sentAt },
             },
           });
@@ -110,9 +108,9 @@ const MS_GRAPH_URL = 'https://graph.microsoft.com/v1.0';
  */
 export async function backfillConversationIds(userId: string): Promise<void> {
   try {
-    const emails = await TrackedEmail.findAll({
+    const scope = forUser(userId);
+    const emails = await scope.trackedEmails.findAll({
       where: {
-        userId,
         status: 'sent',
         messageId: { [Op.not]: null },
         conversationId: { [Op.is]: null as any },
@@ -130,7 +128,7 @@ export async function backfillConversationIds(userId: string): Promise<void> {
     }
 
     for (const [mailboxId, emailGroup] of byMailbox) {
-      const mailbox = await LinkedMailbox.findByPk(mailboxId);
+      const mailbox = await scope.linkedMailboxes.findById(mailboxId);
       if (!mailbox || mailbox.provider !== 'outlook') continue;
 
       const accessToken = await getOutlookAccessToken(mailbox);

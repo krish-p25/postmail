@@ -2,11 +2,11 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
 import { config } from '../config/env';
-import { User, UserSetting, LinkedMailbox } from '../db/models';
+import { User } from '../db/models';
 import { createVerification, verifyCode } from '../services/verification';
 import { sendVerificationEmail } from '../services/email';
-import { withRLS } from '../middleware/rls';
 import { signToken } from '../services/tokens';
+import { forUser } from '../db/scoped';
 
 const router = Router();
 
@@ -27,10 +27,10 @@ async function storeOutlookTokensAndConnect(
   tokens: { accessToken: string; refreshToken: string | null; tokenExpiry: Date | null },
   mailboxEmail: string,
 ) {
-  const [mailbox] = await LinkedMailbox.findOrCreate({
-    where: { userId: user.id, email: mailboxEmail },
+  const scope = forUser(user.id);
+  const [mailbox] = await scope.linkedMailboxes.findOrCreate({
+    where: { email: mailboxEmail },
     defaults: {
-      userId: user.id,
       provider: 'outlook',
       email: mailboxEmail,
       accessToken: tokens.accessToken,
@@ -46,18 +46,13 @@ async function storeOutlookTokensAndConnect(
     tokenExpiry: tokens.tokenExpiry,
   });
 
-  const settings = await UserSetting.findOne({ where: { userId: user.id } });
+  const settings = await scope.userSettings.findOne();
   if (settings && !settings.mailboxConnected) {
-    await withRLS(user.id, async (transaction) => {
-      await UserSetting.update(
-        {
-          mailboxConnected: true,
-          mailboxProvider: 'outlook',
-          mailboxEmail,
-          mailboxConnectedAt: new Date(),
-        },
-        { where: { userId: user.id }, transaction },
-      );
+    await settings.update({
+      mailboxConnected: true,
+      mailboxProvider: 'outlook',
+      mailboxEmail,
+      mailboxConnectedAt: new Date(),
     });
   }
 }
@@ -140,7 +135,7 @@ router.post('/verify', async (req: Request, res: Response) => {
       }
 
       const user = await User.create({ email, passwordHash, displayName });
-      await UserSetting.create({ userId: user.id });
+      await forUser(user.id).userSettings.create({});
 
       const token = signToken(user);
       res.status(201).json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
@@ -302,7 +297,7 @@ router.post('/google', async (req: Request, res: Response) => {
       } else {
         // Create new user
         user = await User.create({ email, googleId, displayName });
-        await UserSetting.create({ userId: user.id });
+        await forUser(user.id).userSettings.create({});
       }
     } else if (displayName && user.displayName !== displayName) {
       await user.update({ displayName });
@@ -452,16 +447,15 @@ router.post('/microsoft', async (req: Request, res: Response) => {
       } else {
         // Create new user and store tokens in LinkedMailbox
         user = await User.create({ email, microsoftId, displayName });
-        await LinkedMailbox.create({
-          userId: user.id,
+        const scope = forUser(user.id);
+        await scope.linkedMailboxes.create({
           provider: 'outlook',
           email,
           accessToken,
           refreshToken,
           tokenExpiry,
         });
-        await UserSetting.create({
-          userId: user.id,
+        await scope.userSettings.create({
           mailboxConnected: true,
           mailboxProvider: 'outlook',
           mailboxEmail: email,

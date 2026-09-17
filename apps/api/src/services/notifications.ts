@@ -1,6 +1,6 @@
 import TrackedEmail from '../db/models/TrackedEmail';
 import EmailOpen from '../db/models/EmailOpen';
-import UserSetting from '../db/models/UserSetting';
+import { forUser } from '../db/scoped';
 
 /**
  * Dispatch notifications for an email open event.
@@ -12,9 +12,7 @@ export async function notifyEmailOpened(
   open: EmailOpen,
 ): Promise<void> {
   try {
-    const settings = await UserSetting.findOne({
-      where: { userId: trackedEmail.userId },
-    });
+    const settings = await forUser(trackedEmail.userId).userSettings.findOne();
     if (!settings) return;
 
     const channels: Array<() => Promise<void>> = [];

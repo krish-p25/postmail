@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { config } from '../config/env';
-import { LinkedMailbox } from '../db/models';
+import type { LinkedMailbox } from '../db/models';
+import { forUser } from '../db/scoped';
 import { lookupTrackingByMessageIds } from '../services/tracking-lookup';
 import { resolvePendingEmails } from '../services/resolve-pending';
 
@@ -15,13 +16,12 @@ const SCOPES = 'offline_access Mail.Read User.Read';
  * Find the Outlook LinkedMailbox — by mailboxId if provided, otherwise first Outlook mailbox for the user.
  */
 async function findOutlookMailbox(userId: string, mailboxId?: string): Promise<LinkedMailbox | null> {
+  const scope = forUser(userId);
   if (mailboxId) {
-    return LinkedMailbox.findOne({
-      where: { id: mailboxId, userId, provider: 'outlook' },
-    });
+    return scope.linkedMailboxes.findOne({ where: { id: mailboxId, provider: 'outlook' } });
   }
-  return LinkedMailbox.findOne({
-    where: { userId, provider: 'outlook' },
+  return scope.linkedMailboxes.findOne({
+    where: { provider: 'outlook' },
     order: [['createdAt', 'ASC']],
   });
 }
@@ -158,10 +158,9 @@ router.post('/callback', async (req: Request, res: Response) => {
     }
 
     // Create or update LinkedMailbox
-    const [mailbox, created] = await LinkedMailbox.findOrCreate({
-      where: { userId: req.user!.id, email: mailboxEmail },
+    const [mailbox, created] = await forUser(req.user!.id).linkedMailboxes.findOrCreate({
+      where: { email: mailboxEmail },
       defaults: {
-        userId: req.user!.id,
         provider: 'outlook',
         email: mailboxEmail,
         accessToken: tokens.access_token,
@@ -510,9 +509,7 @@ router.get('/emails/:messageId/attachments/:attachmentId', async (req: Request, 
  */
 router.post('/disconnect', async (req: Request, res: Response) => {
   try {
-    const mailboxes = await LinkedMailbox.findAll({
-      where: { userId: req.user!.id, provider: 'outlook' },
-    });
+    const mailboxes = await forUser(req.user!.id).linkedMailboxes.findAll({ where: { provider: 'outlook' } });
 
     for (const mailbox of mailboxes) {
       await mailbox.destroy();

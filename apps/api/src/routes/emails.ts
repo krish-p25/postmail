@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { TrackedEmail, EmailOpen } from '../db/models';
-import { withRLS } from '../middleware/rls';
+import { EmailOpen } from '../db/models';
+import { forUser } from '../db/scoped';
 import { resolvePendingEmails, backfillConversationIds } from '../services/resolve-pending';
 
 const router = Router();
@@ -11,7 +11,6 @@ const OPEN_ATTRIBUTES = ['id', 'opened_at', 'user_agent', 'ip_address', 'dismiss
  * GET /api/emails
  * Returns all tracked emails for the authenticated user.
  * Before returning, resolves any pending tracked emails by searching sent folders.
- * Uses RLS to ensure tenant isolation.
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -21,19 +20,9 @@ router.get('/', async (req: Request, res: Response) => {
     // Backfill conversation IDs for existing emails (fire-and-forget)
     backfillConversationIds(req.user!.id).catch(() => {});
 
-    const emails = await withRLS(req.user!.id, async (transaction) => {
-      return TrackedEmail.findAll({
-        where: { userId: req.user!.id },
-        transaction,
-        order: [['created_at', 'DESC']],
-        include: [
-          {
-            model: EmailOpen,
-            as: 'opens',
-            attributes: [...OPEN_ATTRIBUTES],
-          },
-        ],
-      });
+    const emails = await forUser(req.user!.id).trackedEmails.findAll({
+      order: [['created_at', 'DESC']],
+      include: [{ model: EmailOpen, as: 'opens', attributes: [...OPEN_ATTRIBUTES] }],
     });
 
     res.json({ emails });
@@ -49,18 +38,8 @@ router.get('/', async (req: Request, res: Response) => {
  */
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const email = await withRLS(req.user!.id, async (transaction) => {
-      return TrackedEmail.findOne({
-        where: { id: req.params.id, userId: req.user!.id },
-        transaction,
-        include: [
-          {
-            model: EmailOpen,
-            as: 'opens',
-            attributes: [...OPEN_ATTRIBUTES],
-          },
-        ],
-      });
+    const email = await forUser(req.user!.id).trackedEmails.findById(req.params.id, {
+      include: [{ model: EmailOpen, as: 'opens', attributes: [...OPEN_ATTRIBUTES] }],
     });
 
     if (!email) {
@@ -81,9 +60,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post('/opens/:openId/dismiss', async (req: Request, res: Response) => {
   try {
-    const open = await EmailOpen.findOne({
-      where: { id: req.params.openId, userId: req.user!.id },
-    });
+    const open = await forUser(req.user!.id).emailOpens.findById(req.params.openId);
 
     if (!open) {
       res.status(404).json({ error: 'Open not found' });

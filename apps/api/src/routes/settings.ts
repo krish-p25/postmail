@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { UserSetting, LinkedMailbox } from '../db/models';
-import { withRLS } from '../middleware/rls';
+import { forUser } from '../db/scoped';
 
 const router = Router();
 
@@ -11,15 +10,10 @@ const router = Router();
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
+    const scope = forUser(req.user!.id);
     const [settings, mailboxes] = await Promise.all([
-      withRLS(req.user!.id, async (transaction) => {
-        return UserSetting.findOne({
-          where: { userId: req.user!.id },
-          transaction,
-        });
-      }),
-      LinkedMailbox.findAll({
-        where: { userId: req.user!.id },
+      scope.userSettings.findOne(),
+      scope.linkedMailboxes.findAll({
         attributes: ['id', 'provider', 'email'],
         order: [['createdAt', 'ASC']],
       }),
@@ -27,7 +21,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     const firstMailbox = mailboxes[0] || null;
 
-    const data = {
+    res.json({
       discordWebhookUrl: settings?.discordWebhookUrl ?? null,
       // Backward compat: derived from LinkedMailbox
       mailboxConnected: mailboxes.length > 0,
@@ -39,9 +33,7 @@ router.get('/', async (req: Request, res: Response) => {
         provider: m.provider,
         email: m.email,
       })),
-    };
-
-    res.json(data);
+    });
   } catch (error) {
     console.error('[PostMail API] Error in GET /api/settings:', error);
     res.status(500).json({ error: 'Failed to fetch settings' });
@@ -57,15 +49,8 @@ router.put('/', async (req: Request, res: Response) => {
   try {
     const { discordWebhookUrl } = req.body;
 
-    const settings = await withRLS(req.user!.id, async (transaction) => {
-      const [setting] = await UserSetting.upsert(
-        {
-          userId: req.user!.id,
-          discordWebhookUrl: discordWebhookUrl ?? null,
-        },
-        { transaction },
-      );
-      return setting;
+    const [settings] = await forUser(req.user!.id).userSettings.upsert({
+      discordWebhookUrl: discordWebhookUrl ?? null,
     });
 
     res.json({ settings });
