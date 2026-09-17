@@ -300,7 +300,7 @@ const SELF_VIEW_LOOKAHEAD_MS = 1_000;
  * Body: { trackingToken, accountEmail }
  *
  * Sent by the extension when a tab signed in to a linked mailbox completed a request
- * for one of this user's pixels. Labels that token's recent opens "Likely you".
+ * for one of this user's pixels. Labels that token's recent opens "Likely You".
  * 204 when the token isn't the user's or the account isn't one of their linked mailboxes.
  */
 router.post('/self-view', async (req: Request, res: Response) => {

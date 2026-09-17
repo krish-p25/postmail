@@ -60,7 +60,7 @@ export default function Setup() {
       key: 'extension' as const,
       title: 'Install the Chrome extension',
       description:
-        'The PostMail extension tracks emails you send from linked mailboxes. It also watches image requests in those mailboxes so opens of your own sent emails are marked "Likely you". After updating, accept the new permission in Chrome.',
+        'The PostMail extension tracks emails you send from linked mailboxes. It also watches image requests in those mailboxes so opens of your own sent emails are marked "Likely You". After updating, accept the new permission in Chrome.',
       done: status.extension,
       action: !status.extension
         ? { label: 'Add to Chrome', onClick: () => window.open('https://chromewebstore.google.com/detail/postmail-%E2%80%93-email-open-tra/aecejojkfehdlopfphoddbhbafkgagon', '_blank') }

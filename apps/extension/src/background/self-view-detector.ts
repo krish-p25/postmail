@@ -3,7 +3,7 @@ import { clearLinkedState, getLinkedTab } from './linked-tabs';
 
 /**
  * Report pixel loads from mail tabs signed in to linked mailboxes, so the API can
- * label those opens "Likely you".
+ * label those opens "Likely You".
  *
  * Verified 2026-09-16:
  * - Gmail loads pixels through https://ciN.googleusercontent.com/meips/…#https://postmail…/api/o/<token>,
@@ -53,7 +53,7 @@ export async function handleCompletedRequest(details: chrome.webRequest.WebRespo
 /** Must be called synchronously at service worker startup (MV3 requirement for event listeners). */
 export function registerSelfViewDetector(): void {
   if (!chrome.webRequest) {
-    console.warn('[PostMail] webRequest permission missing; "Likely you" detection is disabled.');
+    console.warn('[PostMail] webRequest permission missing; "Likely You" detection is disabled.');
     return;
   }
   chrome.webRequest.onCompleted.addListener(

@@ -111,7 +111,7 @@ export function createBadgeElement(tracked: TrackedEmailSummary): HTMLSpanElemen
         hour: 'numeric',
         minute: '2-digit',
       });
-      return o.likely_self ? `${time} (likely you)` : time;
+      return o.likely_self ? `${time} (Likely You)` : time;
     });
     badge.title = `Opened ${times.length}x:\n${times.join('\n')}`;
   }
@@ -146,16 +146,16 @@ export function isBadgeCurrent(badge: Element, tracked: TrackedEmailSummary): bo
   );
 }
 
-/** Number of opens labelled "Likely you"; part of the overlay/badge freshness check. */
+/** Number of opens labelled "Likely You"; part of the overlay/badge freshness check. */
 export function likelySelfCount(tracked: TrackedEmailSummary): number {
   return tracked.opens.filter((o) => o.likely_self).length;
 }
 
-/** Small "Likely you" pill used in thread overlays and reading-pane badges. */
+/** Small "Likely You" pill used in thread overlays and reading-pane badges. */
 export function createLikelyYouTag(): HTMLSpanElement {
   const tag = document.createElement('span');
   tag.className = 'postmail-likely-you';
-  tag.textContent = 'Likely you';
+  tag.textContent = 'Likely You';
   tag.title = 'Opened in a browser signed in to one of your linked mailboxes';
   return tag;
 }
@@ -265,17 +265,26 @@ export function injectBadgeStyles(): void {
     .postmail-reading-badge .postmail-open-row .postmail-open-device {
       opacity: 0.7;
     }
+    /* Time + "Likely You" tag sit on one centred line inside each open row. */
+    .postmail-overlay-open-time,
+    .postmail-reading-badge .postmail-open-row .postmail-open-time {
+      display: inline-flex;
+      align-items: center;
+    }
+    /* Same indigo as the unauthenticated setup banner (auth-banner.ts). */
     .postmail-likely-you {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
       margin-left: 6px;
-      padding: 0 6px;
+      padding: 1px 7px;
       border-radius: 9999px;
-      background: #fef3c7;
-      color: #b45309;
+      border: 1px solid rgba(79, 70, 229, 0.25);
+      background: rgba(79, 70, 229, 0.12);
+      color: #3730a3;
       font-size: 10px;
       font-weight: 600;
-      line-height: 16px;
-      vertical-align: middle;
+      line-height: 14px;
+      white-space: nowrap;
     }
   `;
   document.head.appendChild(style);

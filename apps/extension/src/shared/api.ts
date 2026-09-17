@@ -150,7 +150,7 @@ export async function verifyEmailSent(
 
 export type SelfViewResult = 'labelled' | 'ignored' | 'unauthorized' | 'failed';
 
-/** Tell the API a linked tab loaded this pixel, so its recent opens are labelled "Likely you". */
+/** Tell the API a linked tab loaded this pixel, so its recent opens are labelled "Likely You". */
 export async function reportSelfView(trackingToken: string, accountEmail: string): Promise<SelfViewResult> {
   try {
     const res = await authFetch('/track/self-view', {

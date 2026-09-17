@@ -300,10 +300,10 @@ function MessageOpens({ tracking, onDismiss }: { tracking: TrackingData; onDismi
                 )}
                 {open.likely_self && !open.dismissed && (
                   <span
-                    className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+                    className="inline-flex items-center rounded-full border border-[rgba(79,70,229,0.25)] bg-[rgba(79,70,229,0.12)] px-2 py-0.5 text-xs font-medium text-[#3730a3]"
                     title="Opened in a browser signed in to one of your linked mailboxes"
                   >
-                    Likely you
+                    Likely You
                   </span>
                 )}
               </div>
@@ -317,7 +317,7 @@ function MessageOpens({ tracking, onDismiss }: { tracking: TrackingData; onDismi
                 onClick={() => onDismiss(open.id)}
                 className={`shrink-0 inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium transition ${
                   open.likely_self
-                    ? 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                    ? 'border-[rgba(79,70,229,0.25)] bg-[rgba(79,70,229,0.08)] text-[#3730a3] hover:bg-[rgba(79,70,229,0.16)]'
                     : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700'
                 }`}
               >

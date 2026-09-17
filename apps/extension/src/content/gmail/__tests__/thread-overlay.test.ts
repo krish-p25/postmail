@@ -17,7 +17,7 @@ function summary(opens: TrackedEmailSummary['opens']): TrackedEmailSummary {
   };
 }
 
-it('shows a Likely you tag only on self-view opens', () => {
+it('shows a Likely You tag only on self-view opens', () => {
   const overlay = createThreadOverlay(
     summary([
       { opened_at: '2026-09-16T21:00:00.000Z', ip_address: '81.102.41.64', user_agent: null, likely_self: true },
@@ -26,7 +26,7 @@ it('shows a Likely you tag only on self-view opens', () => {
   );
   const rows = overlay.querySelectorAll('.postmail-overlay-open-row');
   expect(rows).toHaveLength(2);
-  expect(rows[0].querySelector('.postmail-likely-you')?.textContent).toBe('Likely you');
+  expect(rows[0].querySelector('.postmail-likely-you')?.textContent).toBe('Likely You');
   expect(rows[1].querySelector('.postmail-likely-you')).toBeNull();
 });
 
