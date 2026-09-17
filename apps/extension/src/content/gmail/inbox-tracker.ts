@@ -169,9 +169,37 @@ export class InboxTracker {
 
     const messages = this.findThreadMessages();
     const matched = new Set<string>();
+    const assignments = new Map<HTMLElement, TrackedEmailSummary>();
+    const withoutId: HTMLElement[] = [];
+
+    // Pass 1: message IDs are authoritative. A message whose ID is not a tracked
+    // email stays empty — never guess, or a thread's opens land on the wrong message.
+    for (const msg of messages) {
+      const msgId = this.extractMessageId(msg);
+      if (!msgId) {
+        withoutId.push(msg);
+        continue;
+      }
+      const byId = this.messageIdMap.get(msgId);
+      if (byId && !matched.has(byId.id)) {
+        matched.add(byId.id);
+        assignments.set(msg, byId);
+      }
+    }
+
+    // Pass 2: only messages that expose no ID (older Gmail layouts, or an email
+    // whose messageId has not been backfilled) fall back to the thread's
+    // remaining tracked email. Runs after pass 1 so it can't steal a match.
+    for (const msg of withoutId) {
+      const unmatched = trackedList.filter((t) => !matched.has(t.id));
+      if (unmatched.length === 1) {
+        matched.add(unmatched[0].id);
+        assignments.set(msg, unmatched[0]);
+      }
+    }
 
     for (const msg of messages) {
-      this.processThreadMessage(msg, trackedList, matched);
+      this.renderThreadMessage(msg, assignments.get(msg) ?? null);
     }
 
     // Remove stale overlays
@@ -206,45 +234,14 @@ export class InboxTracker {
     return containers;
   }
 
-  /**
-   * Match a single thread message to a tracked email by ID and insert its overlay.
-   *
-   * Strategy:
-   *  1. Extract data-legacy-message-id or data-message-id from DOM → messageIdMap lookup
-   *  2. Fallback: if only one unmatched tracked email remains in the thread, use it
-   */
-  private processThreadMessage(
-    msg: HTMLElement,
-    trackedList: TrackedEmailSummary[],
-    matched: Set<string>,
-  ): void {
-    let trackedMatch: TrackedEmailSummary | null = null;
-
-    // Primary: match by message ID from DOM
-    const msgId = this.extractMessageId(msg);
-    if (msgId) {
-      const byId = this.messageIdMap.get(msgId);
-      if (byId && !matched.has(byId.id)) {
-        trackedMatch = byId;
-      }
-    }
-
-    // Fallback: if only one unmatched tracked email in the thread, use it
-    if (!trackedMatch) {
-      const unmatched = trackedList.filter((t) => !matched.has(t.id));
-      if (unmatched.length === 1) {
-        trackedMatch = unmatched[0];
-      }
-    }
-
+  /** Insert, refresh or remove the overlay for one thread message. */
+  private renderThreadMessage(msg: HTMLElement, trackedMatch: TrackedEmailSummary | null): void {
     const existing = msg.querySelector(`[${OVERLAY_ATTR}]`);
 
     if (!trackedMatch) {
       existing?.remove();
       return;
     }
-
-    matched.add(trackedMatch.id);
 
     if (existing && isOverlayCurrent(existing, trackedMatch)) return;
     existing?.remove();
@@ -263,8 +260,12 @@ export class InboxTracker {
 
   /**
    * Extract a Gmail API-compatible message ID from a message container.
-   * Checks for data-legacy-message-id and data-message-id attributes
-   * on the container and its descendants.
+   * Checks data-legacy-message-id and data-message-id on the container, its
+   * descendants, and its ancestors.
+   *
+   * Ancestors matter: Gmail puts the id on div.adn.ads, which wraps the
+   * div.gs container findThreadMessages selects (verified 2026-09-17), so
+   * ID matching failed for every thread holding more than one tracked email.
    */
   private extractMessageId(msg: HTMLElement): string | null {
     // Check the container itself
@@ -277,6 +278,13 @@ export class InboxTracker {
     if (el) {
       return el.getAttribute('data-legacy-message-id')
         || el.getAttribute('data-message-id');
+    }
+
+    // Check the nearest ancestor that carries a message ID
+    const ancestor = msg.parentElement?.closest('[data-legacy-message-id], [data-message-id]');
+    if (ancestor) {
+      return ancestor.getAttribute('data-legacy-message-id')
+        || ancestor.getAttribute('data-message-id');
     }
 
     return null;
