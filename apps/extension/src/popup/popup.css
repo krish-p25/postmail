@@ -186,3 +186,10 @@ input:checked + .slider::before {
   color: #6b7280;
   line-height: 1.5;
 }
+
+.permission-note {
+  margin: 12px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #6b7280;
+}
