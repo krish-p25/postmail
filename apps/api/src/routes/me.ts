@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import { User } from '../db/models';
 import { sendPasswordChangedEmail } from '../services/email';
+import { rotateTokens } from '../services/tokens';
+import { passwordLimiter } from '../middleware/rate-limit';
 
 const router = Router();
 const SALT_ROUNDS = 10;
@@ -34,10 +36,10 @@ router.get('/', async (req: Request, res: Response) => {
 
 /**
  * POST /me/set-password
- * Allows a user (e.g. Google-only) to add or change their password.
+ * Allows a user without a password (e.g. Google-only) to add one.
  * Body: { password }
  */
-router.post('/set-password', async (req: Request, res: Response) => {
+router.post('/set-password', passwordLimiter, async (req: Request, res: Response) => {
   try {
     const { password } = req.body;
 
@@ -52,14 +54,22 @@ router.post('/set-password', async (req: Request, res: Response) => {
       return;
     }
 
+    // Only for accounts without a password (e.g. Google/Microsoft sign-up).
+    // Changing an existing password must go through change-password.
+    if (user.passwordHash) {
+      res.status(409).json({ error: 'A password is already set. Use change password instead.' });
+      return;
+    }
+
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     await user.update({ passwordHash });
+    const token = await rotateTokens(user);
 
     sendPasswordChangedEmail(user.email).catch((err) =>
       console.error('[PostMail API] Failed to send password changed email:', err),
     );
 
-    res.json({ success: true });
+    res.json({ success: true, token });
   } catch (error) {
     console.error('[PostMail API] Error in POST /me/set-password:', error);
     res.status(500).json({ error: 'Failed to set password' });
@@ -71,7 +81,7 @@ router.post('/set-password', async (req: Request, res: Response) => {
  * Changes password for a user who already has one.
  * Body: { currentPassword, newPassword }
  */
-router.post('/change-password', async (req: Request, res: Response) => {
+router.post('/change-password', passwordLimiter, async (req: Request, res: Response) => {
   try {
     const { currentPassword, newPassword } = req.body;
 
@@ -99,12 +109,13 @@ router.post('/change-password', async (req: Request, res: Response) => {
 
     const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
     await user.update({ passwordHash });
+    const token = await rotateTokens(user);
 
     sendPasswordChangedEmail(user.email).catch((err) =>
       console.error('[PostMail API] Failed to send password changed email:', err),
     );
 
-    res.json({ success: true });
+    res.json({ success: true, token });
   } catch (error) {
     console.error('[PostMail API] Error in POST /me/change-password:', error);
     res.status(500).json({ error: 'Failed to change password' });

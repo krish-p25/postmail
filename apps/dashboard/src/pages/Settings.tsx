@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, LinkedMailboxInfo } from '../services/api';
+import { auth } from '../services/auth';
 import ConnectMailboxCard from '../components/ConnectMailboxCard';
 import { PasswordInput, PasswordStrengthMeter, getPasswordStrength } from '../components/PasswordInput';
 
@@ -232,7 +233,8 @@ export default function Settings() {
                             setAccountMessage(null);
                             setPasswordSaving(true);
                             try {
-                              await api.setPassword(newPassword);
+                              const { token } = await api.setPassword(newPassword);
+                              auth.storeToken(token);
                               setHasPassword(true);
                               setNewPassword('');
                               setConfirmPassword('');
@@ -296,7 +298,8 @@ export default function Settings() {
                             setAccountMessage(null);
                             setPasswordSaving(true);
                             try {
-                              await api.changePassword(currentPassword, newPassword);
+                              const { token } = await api.changePassword(currentPassword, newPassword);
+                              auth.storeToken(token);
                               setCurrentPassword('');
                               setNewPassword('');
                               setConfirmPassword('');

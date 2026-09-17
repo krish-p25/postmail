@@ -4,11 +4,8 @@ import { config } from '../config/env';
 /**
  * Sequelize instance connected to PostgreSQL.
  *
- * RLS Strategy:
- * Every tenant-scoped query must run inside a transaction that first calls
- * SET LOCAL app.current_user_id = '<uuid>'. The SET LOCAL is scoped to the
- * transaction and automatically resets when the transaction commits/rolls back.
- * This ensures connection-pool safety — no user context leaks between requests.
+ * Tenant isolation is enforced in application code: access user-owned
+ * tables through forUser() in ./scoped.ts, never through the models directly.
  */
 export const sequelize = new Sequelize(config.databaseUrl, {
   dialect: 'postgres',

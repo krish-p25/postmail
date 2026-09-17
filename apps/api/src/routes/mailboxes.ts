@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { LinkedMailbox } from '../db/models';
+import { forUser } from '../db/scoped';
 import { OAuth2Client } from 'google-auth-library';
 import { config } from '../config/env';
 
@@ -11,8 +11,7 @@ const router = Router();
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const mailboxes = await LinkedMailbox.findAll({
-      where: { userId: req.user!.id },
+    const mailboxes = await forUser(req.user!.id).linkedMailboxes.findAll({
       attributes: ['id', 'provider', 'email', 'createdAt'],
       order: [['createdAt', 'ASC']],
     });
@@ -36,9 +35,7 @@ router.get('/', async (req: Request, res: Response) => {
  */
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const mailbox = await LinkedMailbox.findOne({
-      where: { id: req.params.id, userId: req.user!.id },
-    });
+    const mailbox = await forUser(req.user!.id).linkedMailboxes.findById(req.params.id);
 
     if (!mailbox) {
       res.status(404).json({ error: 'Mailbox not found' });

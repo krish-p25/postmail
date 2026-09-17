@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
-import { TrackedEmail, EmailOpen } from '../db/models';
+import { EmailOpen } from '../db/models';
+import { forUser } from '../db/scoped';
 
 const OPEN_ATTRIBUTES = ['id', 'opened_at', 'user_agent', 'ip_address', 'dismissed', 'likely_self'] as const;
 
@@ -29,10 +30,9 @@ export async function lookupTrackingByMessageIds(
   const map = new Map<string, TrackingData>();
   if (messageIds.length === 0) return map;
 
-  const trackedEmails = await TrackedEmail.findAll({
+  const trackedEmails = await forUser(userId).trackedEmails.findAll({
     where: {
       messageId: { [Op.in]: messageIds },
-      userId,
     },
     include: [
       {

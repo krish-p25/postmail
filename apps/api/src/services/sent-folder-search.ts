@@ -1,7 +1,7 @@
 import { OAuth2Client } from 'google-auth-library';
 import { google } from 'googleapis';
 import { config } from '../config/env';
-import { LinkedMailbox } from '../db/models';
+import type { LinkedMailbox } from '../db/models';
 
 const MS_TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
 const MS_GRAPH_URL = 'https://graph.microsoft.com/v1.0';
@@ -72,7 +72,7 @@ function createGmailClient(mailbox: LinkedMailbox) {
     if (tokens.access_token) updates.accessToken = tokens.access_token;
     if (tokens.expiry_date) updates.tokenExpiry = new Date(tokens.expiry_date);
     if (Object.keys(updates).length) {
-      await LinkedMailbox.update(updates, { where: { id: mailbox.id } });
+      await mailbox.update(updates);
     }
   });
 

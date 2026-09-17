@@ -6,6 +6,7 @@ import { User } from '../db/models';
 interface JwtPayload {
   sub: string;
   email: string;
+  ver?: number;
   iat: number;
   exp: number;
 }
@@ -54,6 +55,13 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     const user = await User.findByPk(payload.sub);
     if (!user) {
       res.status(401).json({ error: 'User not found' });
+      return;
+    }
+
+    // Tokens issued before the last password change (or other rotation) are revoked.
+    // Tokens minted before `ver` existed count as version 0.
+    if ((payload.ver ?? 0) !== user.tokenVersion) {
+      res.status(401).json({ error: 'Invalid or expired token' });
       return;
     }
 

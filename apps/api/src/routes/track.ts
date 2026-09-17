@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { Op } from 'sequelize';
-import TrackedEmail from '../db/models/TrackedEmail';
-import { LinkedMailbox, EmailOpen } from '../db/models';
+import { Attributes, Op, WhereOptions } from 'sequelize';
+import type { LinkedMailbox, TrackedEmail } from '../db/models';
+import { forUser, UserScope } from '../db/scoped';
+import { selfViewLimiter } from '../middleware/rate-limit';
 import { searchSentFolder } from '../services/sent-folder-search';
 
 const router = Router();
@@ -11,42 +12,40 @@ const router = Router();
  * Priority: 1) existing mailboxId on TrackedEmail, 2) senderEmail+provider lookup,
  * 3) first mailbox for the provider, 4) first mailbox for the user.
  */
+type Provider = 'gmail' | 'outlook';
+
 async function resolveMailbox(
-  userId: string,
+  scope: UserScope,
   senderEmail?: string,
   provider?: string,
   trackedEmail?: TrackedEmail | null,
 ): Promise<LinkedMailbox | null> {
   // 1. If TrackedEmail already has a mailboxId, use it
   if (trackedEmail?.mailboxId) {
-    const mailbox = await LinkedMailbox.findOne({
-      where: { id: trackedEmail.mailboxId, userId },
-    });
+    const mailbox = await scope.linkedMailboxes.findById(trackedEmail.mailboxId);
     if (mailbox) return mailbox;
   }
 
-  // 2. If senderEmail is provided, look up by (userId, email)
+  // 2. If senderEmail is provided, look up by email (+ provider)
   if (senderEmail) {
-    const where: any = { userId, email: senderEmail };
-    if (provider) where.provider = provider;
-    const mailbox = await LinkedMailbox.findOne({ where });
+    const where: WhereOptions<Attributes<LinkedMailbox>> = provider
+      ? { email: senderEmail, provider: provider as Provider }
+      : { email: senderEmail };
+    const mailbox = await scope.linkedMailboxes.findOne({ where });
     if (mailbox) return mailbox;
   }
 
   // 3. Fallback: first mailbox matching the provider
   if (provider) {
-    const mailbox = await LinkedMailbox.findOne({
-      where: { userId, provider },
+    const mailbox = await scope.linkedMailboxes.findOne({
+      where: { provider: provider as Provider },
       order: [['createdAt', 'ASC']],
     });
     if (mailbox) return mailbox;
   }
 
   // 4. Fallback: first mailbox for the user
-  return LinkedMailbox.findOne({
-    where: { userId },
-    order: [['createdAt', 'ASC']],
-  });
+  return scope.linkedMailboxes.findOne({ order: [['createdAt', 'ASC']] });
 }
 
 /**
@@ -55,10 +54,7 @@ async function resolveMailbox(
  */
 router.get('/preflight', async (req: Request, res: Response) => {
   try {
-    const mailboxes = await LinkedMailbox.findAll({
-      where: { userId: req.user!.id },
-      attributes: ['email'],
-    });
+    const mailboxes = await forUser(req.user!.id).linkedMailboxes.findAll({ attributes: ['email'] });
     res.json({ ok: true, linkedEmails: mailboxes.map((m) => m.email) });
   } catch {
     res.json({ ok: true, linkedEmails: [] });
@@ -83,15 +79,16 @@ router.post('/register', async (req: Request, res: Response) => {
       ? recipients.join(', ')
       : recipients || null;
 
+    const scope = forUser(req.user!.id);
+
     // Resolve mailbox
     let mailboxId: string | null = null;
     if (senderEmail || provider) {
-      const mailbox = await resolveMailbox(req.user!.id, senderEmail, provider);
+      const mailbox = await resolveMailbox(scope, senderEmail, provider);
       if (mailbox) mailboxId = mailbox.id;
     }
 
-    const trackedEmail = await TrackedEmail.create({
-      userId: req.user!.id,
+    const trackedEmail = await scope.trackedEmails.create({
       trackingToken,
       recipient,
       subject: subject || null,
@@ -124,9 +121,8 @@ router.post('/update', async (req: Request, res: Response) => {
       return;
     }
 
-    const trackedEmail = await TrackedEmail.findOne({
-      where: { trackingToken, userId: req.user!.id },
-    });
+    const scope = forUser(req.user!.id);
+    const trackedEmail = await scope.trackedEmails.findOne({ where: { trackingToken } });
 
     if (!trackedEmail) {
       res.status(404).json({ error: 'Tracked email not found' });
@@ -143,7 +139,7 @@ router.post('/update', async (req: Request, res: Response) => {
 
     // Resolve mailboxId if not already set
     if (!trackedEmail.mailboxId && (senderEmail || provider)) {
-      const mailbox = await resolveMailbox(req.user!.id, senderEmail, provider, trackedEmail);
+      const mailbox = await resolveMailbox(scope, senderEmail, provider, trackedEmail);
       if (mailbox) updates.mailboxId = mailbox.id;
     }
 
@@ -171,9 +167,7 @@ router.post('/discard', async (req: Request, res: Response) => {
       return;
     }
 
-    const trackedEmail = await TrackedEmail.findOne({
-      where: { trackingToken, userId: req.user!.id },
-    });
+    const trackedEmail = await forUser(req.user!.id).trackedEmails.findOne({ where: { trackingToken } });
 
     if (!trackedEmail) {
       res.status(404).json({ error: 'Tracked email not found' });
@@ -204,12 +198,11 @@ router.post('/verify-sent', async (req: Request, res: Response) => {
       return;
     }
 
-    const trackedEmail = await TrackedEmail.findOne({
-      where: { trackingToken, userId: req.user!.id },
-    });
+    const scope = forUser(req.user!.id);
+    const trackedEmail = await scope.trackedEmails.findOne({ where: { trackingToken } });
 
     // Resolve mailbox
-    const mailbox = await resolveMailbox(req.user!.id, senderEmail, provider, trackedEmail);
+    const mailbox = await resolveMailbox(scope, senderEmail, provider, trackedEmail);
 
     if (!mailbox) {
       res.json({ found: false });
@@ -234,14 +227,12 @@ router.post('/verify-sent', async (req: Request, res: Response) => {
  * or image-proxy pre-fetches while the email sat in drafts.
  */
 async function purgePreSendOpens(trackedEmail: TrackedEmail, sentAt: Date): Promise<number> {
-  const deleted = await EmailOpen.destroy({
+  return forUser(trackedEmail.userId).emailOpens.destroy({
     where: {
       trackedEmailId: trackedEmail.id,
-      userId: trackedEmail.userId,
       openedAt: { [Op.lt]: sentAt },
     },
   });
-  return deleted;
 }
 
 /**
@@ -303,7 +294,7 @@ const SELF_VIEW_LOOKAHEAD_MS = 1_000;
  * for one of this user's pixels. Labels that token's recent opens "Likely You".
  * 204 when the token isn't the user's or the account isn't one of their linked mailboxes.
  */
-router.post('/self-view', async (req: Request, res: Response) => {
+router.post('/self-view', selfViewLimiter, async (req: Request, res: Response) => {
   try {
     const { trackingToken, accountEmail } = req.body ?? {};
     if (
@@ -317,15 +308,15 @@ router.post('/self-view', async (req: Request, res: Response) => {
       return;
     }
 
-    const userId = req.user!.id;
+    const scope = forUser(req.user!.id);
 
-    const trackedEmail = await TrackedEmail.findOne({ where: { trackingToken, userId }, attributes: ['id'] });
+    const trackedEmail = await scope.trackedEmails.findOne({ where: { trackingToken }, attributes: ['id'] });
     if (!trackedEmail) {
       res.status(204).end();
       return;
     }
 
-    const mailboxes = await LinkedMailbox.findAll({ where: { userId }, attributes: ['email'] });
+    const mailboxes = await scope.linkedMailboxes.findAll({ attributes: ['email'] });
     const account = accountEmail.trim().toLowerCase();
     if (!mailboxes.some((m) => m.email.toLowerCase() === account)) {
       res.status(204).end();
@@ -333,12 +324,11 @@ router.post('/self-view', async (req: Request, res: Response) => {
     }
 
     const now = Date.now();
-    const [labelled] = await EmailOpen.update(
+    const [labelled] = await scope.emailOpens.update(
       { likelySelf: true },
       {
         where: {
           trackedEmailId: trackedEmail.id,
-          userId,
           likelySelf: false,
           openedAt: { [Op.between]: [new Date(now - SELF_VIEW_LOOKBACK_MS), new Date(now + SELF_VIEW_LOOKAHEAD_MS)] },
         },
