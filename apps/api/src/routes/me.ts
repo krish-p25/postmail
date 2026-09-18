@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import { User } from '../db/models';
-import { sendPasswordChangedEmail } from '../services/email';
-import { rotateTokens } from '../services/tokens';
-import { passwordLimiter } from '../middleware/rate-limit';
+import { confirmChallenge, createChallenge, sendCodeInBackground } from '../services/challenges';
+import { applyPasswordHash, hashPassword, validateNewPassword } from '../services/passwords';
+import { codeConfirmLimiter, passwordLimiter } from '../middleware/rate-limit';
+import { handleRouteError } from './respond';
 
 const router = Router();
-const SALT_ROUNDS = 10;
 
 /**
  * GET /me
@@ -35,16 +35,19 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /me/set-password
- * Allows a user without a password (e.g. Google-only) to add one.
- * Body: { password }
+ * POST /me/password/request
+ * Body: { newPassword, currentPassword? }
+ *
+ * Emails a code to confirm creating (no existing password) or changing a password.
+ * currentPassword is required when the account already has one.
  */
-router.post('/set-password', passwordLimiter, async (req: Request, res: Response) => {
+router.post('/password/request', passwordLimiter, async (req: Request, res: Response) => {
   try {
-    const { password } = req.body;
+    const { newPassword, currentPassword } = req.body;
 
-    if (!password || password.length < 6) {
-      res.status(400).json({ error: 'Password must be at least 6 characters' });
+    const passwordProblem = validateNewPassword(newPassword);
+    if (passwordProblem) {
+      res.status(400).json({ error: passwordProblem });
       return;
     }
 
@@ -54,71 +57,54 @@ router.post('/set-password', passwordLimiter, async (req: Request, res: Response
       return;
     }
 
-    // Only for accounts without a password (e.g. Google/Microsoft sign-up).
-    // Changing an existing password must go through change-password.
     if (user.passwordHash) {
-      res.status(409).json({ error: 'A password is already set. Use change password instead.' });
-      return;
+      const valid = typeof currentPassword === 'string' && (await bcrypt.compare(currentPassword, user.passwordHash));
+      if (!valid) {
+        res.status(401).json({ error: 'Current password is incorrect' });
+        return;
+      }
     }
 
-    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-    await user.update({ passwordHash });
-    const token = await rotateTokens(user);
+    const { challenge, code } = await createChallenge({
+      purpose: 'set-password',
+      email: user.email,
+      userId: user.id,
+      payload: { passwordHash: await hashPassword(newPassword) },
+    });
+    sendCodeInBackground(challenge, code);
 
-    sendPasswordChangedEmail(user.email).catch((err) =>
-      console.error('[PostMail API] Failed to send password changed email:', err),
-    );
-
-    res.json({ success: true, token });
+    res.json({ challengeId: challenge.id, email: user.email });
   } catch (error) {
-    console.error('[PostMail API] Error in POST /me/set-password:', error);
-    res.status(500).json({ error: 'Failed to set password' });
+    handleRouteError(res, error, 'Error in POST /me/password/request', 'Failed to send verification code');
   }
 });
 
 /**
- * POST /me/change-password
- * Changes password for a user who already has one.
- * Body: { currentPassword, newPassword }
+ * POST /me/password/confirm
+ * Body: { challengeId, code }
+ *
+ * Applies the pending password, signs out other sessions, and returns a fresh token.
  */
-router.post('/change-password', passwordLimiter, async (req: Request, res: Response) => {
+router.post('/password/confirm', codeConfirmLimiter, async (req: Request, res: Response) => {
   try {
-    const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      res.status(400).json({ error: 'Current password and new password are required' });
+    const { challengeId, code } = req.body;
+    if (!challengeId || !code) {
+      res.status(400).json({ error: 'challengeId and code are required' });
       return;
     }
 
-    if (newPassword.length < 6) {
-      res.status(400).json({ error: 'New password must be at least 6 characters' });
-      return;
-    }
+    const challenge = await confirmChallenge(String(challengeId), 'set-password', String(code), { userId: req.user!.id });
 
     const user = await User.findByPk(req.user!.id);
-    if (!user || !user.passwordHash) {
-      res.status(400).json({ error: 'No password set on this account' });
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
       return;
     }
 
-    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!valid) {
-      res.status(401).json({ error: 'Current password is incorrect' });
-      return;
-    }
-
-    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-    await user.update({ passwordHash });
-    const token = await rotateTokens(user);
-
-    sendPasswordChangedEmail(user.email).catch((err) =>
-      console.error('[PostMail API] Failed to send password changed email:', err),
-    );
-
+    const token = await applyPasswordHash(user, String(challenge.payload.passwordHash));
     res.json({ success: true, token });
   } catch (error) {
-    console.error('[PostMail API] Error in POST /me/change-password:', error);
-    res.status(500).json({ error: 'Failed to change password' });
+    handleRouteError(res, error, 'Error in POST /me/password/confirm', 'Failed to update password');
   }
 });
 

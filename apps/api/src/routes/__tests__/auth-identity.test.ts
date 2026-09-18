@@ -14,7 +14,7 @@ jest.mock('google-auth-library', () => {
 
 jest.mock('../../services/email', () => ({
   sendPasswordChangedEmail: jest.fn().mockResolvedValue(undefined),
-  sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
+  sendChallengeEmail: jest.fn().mockResolvedValue(undefined),
 }));
 
 import request from 'supertest';

@@ -133,13 +133,6 @@ export async function sendPasswordChangedEmail(to: string): Promise<void> {
   });
 }
 
-/**
- * @deprecated Kept only until Task 4 moves callers to the challenge service.
- */
-export async function sendVerificationEmail(to: string, code: string): Promise<void> {
-  await sendChallengeEmail('register', to, code);
-}
-
 /** Check the Gmail login at startup so a bad config shows up in the logs, not as a failed signup. */
 export async function verifySmtp(): Promise<boolean> {
   if (!config.smtpUser || !config.smtpPass) {
