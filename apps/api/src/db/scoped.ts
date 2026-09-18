@@ -10,7 +10,7 @@ import {
   UpdateOptions,
   WhereOptions,
 } from 'sequelize';
-import { TrackedEmail, EmailOpen, LinkedMailbox, UserSetting } from './models';
+import { TrackedEmail, EmailOpen, LinkedMailbox, UserSetting, TrustedDevice } from './models';
 
 /**
  * Tenant-scoped data access. All reads and writes of user-owned tables in
@@ -69,6 +69,7 @@ export function forUser(userId: string) {
     emailOpens: scopeModel(EmailOpen, userId),
     linkedMailboxes: scopeModel(LinkedMailbox, userId),
     userSettings: scopeModel(UserSetting, userId),
+    trustedDevices: scopeModel(TrustedDevice, userId),
   };
 }
 
