@@ -7,80 +7,97 @@ export interface AuthUser {
   displayName: string | null;
 }
 
-interface AuthResponse {
+export interface AuthResponse {
   token: string;
   user: AuthUser;
 }
 
-interface VerificationRequired {
-  requiresVerification: true;
+/** A pending emailed code. */
+export interface CodeChallenge {
+  challengeId: string;
   email: string;
 }
 
-async function handleResponse(res: Response): Promise<AuthResponse> {
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+/** API error with the server's machine-readable code (e.g. ACCOUNT_EXISTS, incorrect_code). */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+async function postJson<T>(path: string, body: unknown, fallbackError: string): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin', // sends the pm_device cookie on /auth routes
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(data.error || fallbackError, res.status, data.code);
+  return data as T;
+}
+
+function signIn(data: AuthResponse): AuthResponse {
+  auth.storeToken(data.token);
   return data;
 }
 
 export const auth = {
-  async register(email: string, password: string): Promise<VerificationRequired> {
-    const res = await fetch(`${API_URL}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Registration failed');
-    return { requiresVerification: true, email: data.email };
+  async register(email: string, password: string): Promise<CodeChallenge> {
+    const data = await postJson<CodeChallenge>('/auth/register', { email, password }, 'Registration failed');
+    return { challengeId: data.challengeId, email: data.email };
   },
 
-  async verifyEmail(email: string, code: string, type: 'register' | 'google-link' | 'microsoft-link'): Promise<AuthResponse> {
-    const res = await fetch(`${API_URL}/auth/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, code, type }),
-    });
-    const data = await handleResponse(res);
-    localStorage.setItem(TOKEN_KEY, data.token);
-    return data;
+  /** Confirm a sign-up, Google-link or Microsoft-link code. */
+  async verifyEmail(challengeId: string, code: string): Promise<AuthResponse> {
+    return signIn(await postJson<AuthResponse>('/auth/verify', { challengeId, code }, 'Verification failed'));
   },
 
-  async login(email: string, password: string): Promise<AuthResponse> {
-    const res = await fetch(`${API_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await handleResponse(res);
-    localStorage.setItem(TOKEN_KEY, data.token);
-    return data;
+  async resendCode(challengeId: string): Promise<void> {
+    await postJson(`/auth/challenges/${encodeURIComponent(challengeId)}/resend`, {}, 'Could not resend the code');
+  },
+
+  async login(email: string, password: string): Promise<AuthResponse | ({ requiresCode: true } & CodeChallenge)> {
+    const data = await postJson<AuthResponse | ({ requiresCode: true } & CodeChallenge)>(
+      '/auth/login',
+      { email, password },
+      'Sign in failed',
+    );
+    return 'requiresCode' in data ? data : signIn(data);
+  },
+
+  async confirmLogin(challengeId: string, code: string, rememberDevice: boolean): Promise<AuthResponse> {
+    return signIn(await postJson<AuthResponse>('/auth/login/confirm', { challengeId, code, rememberDevice }, 'Verification failed'));
+  },
+
+  async requestPasswordReset(email: string): Promise<CodeChallenge> {
+    const data = await postJson<{ challengeId: string }>('/auth/password-reset/request', { email }, 'Could not start password reset');
+    return { challengeId: data.challengeId, email };
+  },
+
+  async confirmPasswordReset(challengeId: string, code: string, newPassword: string): Promise<AuthResponse> {
+    return signIn(
+      await postJson<AuthResponse>('/auth/password-reset/confirm', { challengeId, code, newPassword }, 'Password reset failed'),
+    );
   },
 
   async googleLogin(code: string): Promise<AuthResponse | { requiresPassword: true; email: string; idToken: string }> {
-    const res = await fetch(`${API_URL}/auth/google`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Google sign-in failed');
-    if (data.requiresPassword) {
-      return { requiresPassword: true, email: data.email, idToken: data.idToken };
-    }
-    localStorage.setItem(TOKEN_KEY, data.token);
-    return data;
+    const data = await postJson<AuthResponse | { requiresPassword: true; email: string; idToken: string }>(
+      '/auth/google',
+      { code },
+      'Google sign-in failed',
+    );
+    return 'requiresPassword' in data ? data : signIn(data);
   },
 
-  async googleLink(idToken: string, password: string): Promise<VerificationRequired> {
-    const res = await fetch(`${API_URL}/auth/google/link`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idToken, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to link Google account');
-    return { requiresVerification: true, email: data.email };
+  async googleLink(idToken: string, password: string): Promise<CodeChallenge> {
+    const data = await postJson<CodeChallenge>('/auth/google/link', { idToken, password }, 'Failed to link Google account');
+    return { challengeId: data.challengeId, email: data.email };
   },
 
   getToken(): string | null {
@@ -99,29 +116,21 @@ export const auth = {
 
   /** Exchange Microsoft authorization code for user info via API. */
   async microsoftLogin(code: string): Promise<AuthResponse | { requiresPassword: true; email: string; accessToken: string; refreshToken: string | null; tokenExpiry: string | null }> {
-    const res = await fetch(`${API_URL}/auth/microsoft`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Microsoft sign-in failed');
-    if (data.requiresPassword) {
-      return { requiresPassword: true, email: data.email, accessToken: data.accessToken, refreshToken: data.refreshToken || null, tokenExpiry: data.tokenExpiry || null };
-    }
-    localStorage.setItem(TOKEN_KEY, data.token);
-    return data;
+    const data = await postJson<AuthResponse | { requiresPassword: true; email: string; accessToken: string; refreshToken: string | null; tokenExpiry: string | null }>(
+      '/auth/microsoft',
+      { code },
+      'Microsoft sign-in failed',
+    );
+    return 'requiresPassword' in data ? data : signIn(data);
   },
 
-  async microsoftLink(accessToken: string, password: string, refreshToken?: string | null, tokenExpiry?: string | null): Promise<VerificationRequired> {
-    const res = await fetch(`${API_URL}/auth/microsoft/link`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accessToken, password, refreshToken, tokenExpiry }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Failed to link Microsoft account');
-    return { requiresVerification: true, email: data.email };
+  async microsoftLink(accessToken: string, password: string, refreshToken?: string | null, tokenExpiry?: string | null): Promise<CodeChallenge> {
+    const data = await postJson<CodeChallenge>(
+      '/auth/microsoft/link',
+      { accessToken, password, refreshToken, tokenExpiry },
+      'Failed to link Microsoft account',
+    );
+    return { challengeId: data.challengeId, email: data.email };
   },
 
   /** Build Google OAuth consent URL and redirect the browser to it. */

@@ -12,3 +12,7 @@ if (!/\/[^/?]+_test(\?|$)/.test(url)) {
 process.env.DATABASE_URL = url;
 process.env.JWT_SECRET = 'test-secret';
 process.env.NODE_ENV = 'test';
+
+process.env.SMTP_USER = 'test-sender@gmail.com';
+process.env.SMTP_PASS = 'test-app-password';
+process.env.SMTP_FROM = 'PostMail <test-sender@gmail.com>';

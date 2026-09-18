@@ -24,3 +24,15 @@ export function bearer(user: User): string {
 export async function closeDatabase(): Promise<void> {
   await sequelize.close();
 }
+
+/** Latest code passed to a mocked sendChallengeEmail for this address. */
+export function lastEmailedCode(sendMock: jest.Mock, email: string): string {
+  const calls = sendMock.mock.calls.filter((call) => call[1] === email.toLowerCase());
+  if (calls.length === 0) throw new Error(`No code was emailed to ${email}`);
+  return calls[calls.length - 1][2] as string;
+}
+
+/** A 6-digit code guaranteed to differ from `code`. */
+export function wrongCode(code: string): string {
+  return code === '000000' ? '111111' : '000000';
+}

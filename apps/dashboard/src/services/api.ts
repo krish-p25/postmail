@@ -89,28 +89,24 @@ export const api = {
     }>;
   },
 
-  async setPassword(password: string) {
-    const res = await authFetch('/me/set-password', {
+  async requestPasswordChange(newPassword: string, currentPassword?: string) {
+    const res = await authFetch('/me/password/request', {
       method: 'POST',
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ newPassword, currentPassword }),
     });
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.error || 'Failed to set password');
-    }
-    return res.json() as Promise<{ success: boolean; token: string }>;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to send verification code');
+    return data as { challengeId: string; email: string };
   },
 
-  async changePassword(currentPassword: string, newPassword: string) {
-    const res = await authFetch('/me/change-password', {
+  async confirmPasswordChange(challengeId: string, code: string) {
+    const res = await authFetch('/me/password/confirm', {
       method: 'POST',
-      body: JSON.stringify({ currentPassword, newPassword }),
+      body: JSON.stringify({ challengeId, code }),
     });
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.error || 'Failed to change password');
-    }
-    return res.json() as Promise<{ success: boolean; token: string }>;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to update password');
+    return data as { success: boolean; token: string };
   },
 
   async getEmails() {

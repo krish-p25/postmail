@@ -4,6 +4,8 @@ import EmailOpen from './EmailOpen';
 import EmailClick from './EmailClick';
 import UserSetting from './UserSetting';
 import LinkedMailbox from './LinkedMailbox';
+import EmailChallenge from './EmailChallenge';
+import TrustedDevice from './TrustedDevice';
 
 // Associations — use camelCase attribute names (not snake_case column names)
 // to avoid Sequelize creating duplicate attributes on the model instances.
@@ -25,4 +27,10 @@ LinkedMailbox.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 TrackedEmail.belongsTo(LinkedMailbox, { foreignKey: 'mailboxId', as: 'linkedMailbox' });
 LinkedMailbox.hasMany(TrackedEmail, { foreignKey: 'mailboxId', as: 'trackedEmails' });
 
-export { User, TrackedEmail, EmailOpen, EmailClick, UserSetting, LinkedMailbox };
+User.hasMany(TrustedDevice, { foreignKey: 'userId', as: 'trustedDevices', onDelete: 'CASCADE' });
+TrustedDevice.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+// EmailChallenge has no association: it is keyed on an email address and may
+// exist before (or without) a user row, and only services/challenges.ts reads it.
+
+export { User, TrackedEmail, EmailOpen, EmailClick, UserSetting, LinkedMailbox, EmailChallenge, TrustedDevice };

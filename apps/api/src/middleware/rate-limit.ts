@@ -32,9 +32,14 @@ export const loginIpLimiter = limiter(30, FIFTEEN_MINUTES);
 // Only failed logins count toward the per-email lock.
 export const loginEmailLimiter = limiter(10, FIFTEEN_MINUTES, { keyGenerator: byEmail, skipSuccessfulRequests: true });
 export const registerLimiter = limiter(5, ONE_HOUR);
-export const verifyLimiter = limiter(10, FIFTEEN_MINUTES, { keyGenerator: byEmail });
 export const oauthLimiter = limiter(30, FIFTEEN_MINUTES);
 export const linkLimiter = limiter(10, FIFTEEN_MINUTES);
 export const passwordLimiter = limiter(5, FIFTEEN_MINUTES, { keyGenerator: byUser });
 // The extension reports every completed pixel request in a linked tab (no client-side dedupe).
 export const selfViewLimiter = limiter(60, 60 * 1000, { keyGenerator: byUser });
+
+// Code confirmation endpoints carry a challengeId, not an email, so they are limited per IP.
+export const codeConfirmLimiter = limiter(20, FIFTEEN_MINUTES);
+export const resendLimiter = limiter(10, FIFTEEN_MINUTES);
+export const resetRequestIpLimiter = limiter(5, FIFTEEN_MINUTES);
+export const resetRequestEmailLimiter = limiter(3, ONE_HOUR, { keyGenerator: byEmail });

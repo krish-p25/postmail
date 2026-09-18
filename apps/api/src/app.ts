@@ -1,4 +1,5 @@
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
@@ -39,6 +40,9 @@ api.use(cors({
 
 // Body parsing
 api.use(express.json());
+
+// Cookies (only pm_device on /api/auth is used)
+api.use(cookieParser());
 
 // Health check
 api.get('/health', (_req, res) => {

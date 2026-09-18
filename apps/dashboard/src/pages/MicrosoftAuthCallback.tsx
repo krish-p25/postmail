@@ -13,7 +13,7 @@ export default function MicrosoftAuthCallback() {
   const [linkState, setLinkState] = useState<{ email: string; accessToken: string; refreshToken: string | null; tokenExpiry: string | null } | null>(null);
   const [password, setPassword] = useState('');
   const [linking, setLinking] = useState(false);
-  const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
+  const [pendingVerify, setPendingVerify] = useState<{ challengeId: string; email: string } | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const exchanged = useRef(false);
 
@@ -88,8 +88,7 @@ export default function MicrosoftAuthCallback() {
     setError(null);
     setLinking(true);
     try {
-      await auth.microsoftLink(linkState.accessToken, password, linkState.refreshToken, linkState.tokenExpiry);
-      setVerifyEmail(linkState.email);
+      setPendingVerify(await auth.microsoftLink(linkState.accessToken, password, linkState.refreshToken, linkState.tokenExpiry));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to link account');
     } finally {
@@ -97,15 +96,16 @@ export default function MicrosoftAuthCallback() {
     }
   }
 
-  if (verifyEmail) {
+  if (pendingVerify) {
     return (
       <VerifyCodeForm
-        email={verifyEmail}
+        email={pendingVerify.email}
         error={verifyError}
+        onResend={() => auth.resendCode(pendingVerify.challengeId)}
         onVerify={async (code) => {
           setVerifyError(null);
           try {
-            const data = await auth.verifyEmail(verifyEmail, code, 'microsoft-link');
+            const data = await auth.verifyEmail(pendingVerify.challengeId, code);
             setUser(data.user);
             navigate('/dashboard', { replace: true });
           } catch (err) {

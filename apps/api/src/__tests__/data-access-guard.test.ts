@@ -3,7 +3,7 @@ import path from 'path';
 
 const SRC = path.resolve(__dirname, '..');
 
-const TENANT_MODELS = ['TrackedEmail', 'EmailOpen', 'EmailClick', 'LinkedMailbox', 'UserSetting'];
+const TENANT_MODELS = ['TrackedEmail', 'EmailOpen', 'EmailClick', 'LinkedMailbox', 'UserSetting', 'TrustedDevice'];
 const STATIC_METHODS = [
   'findAll', 'findOne', 'findByPk', 'findOrCreate', 'findAndCountAll',
   'count', 'create', 'bulkCreate', 'update', 'upsert', 'destroy',
@@ -38,6 +38,19 @@ it('tenant models are only queried through forUser()', () => {
     if (ALLOWED.has(rel)) continue;
     fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
       if (CALL.test(line)) violations.push(`${rel}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  expect(violations).toEqual([]);
+});
+
+it('EmailChallenge is only queried inside services/challenges.ts', () => {
+  const call = new RegExp(`\\bEmailChallenge\\.(${STATIC_METHODS.join('|')})\\(`);
+  const violations: string[] = [];
+  for (const file of sourceFiles(SRC)) {
+    const rel = path.relative(SRC, file).split(path.sep).join('/');
+    if (rel === 'services/challenges.ts') continue;
+    fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+      if (call.test(line)) violations.push(`${rel}:${i + 1}: ${line.trim()}`);
     });
   }
   expect(violations).toEqual([]);

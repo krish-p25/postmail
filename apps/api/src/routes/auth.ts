@@ -3,23 +3,27 @@ import bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
 import { config } from '../config/env';
 import { User } from '../db/models';
-import { createVerification, verifyCode } from '../services/verification';
-import { sendVerificationEmail } from '../services/email';
 import { signToken } from '../services/tokens';
 import { forUser } from '../db/scoped';
 import {
   loginIpLimiter,
   loginEmailLimiter,
   registerLimiter,
-  verifyLimiter,
+  codeConfirmLimiter,
+  resendLimiter,
   oauthLimiter,
   linkLimiter,
+  resetRequestIpLimiter,
+  resetRequestEmailLimiter,
 } from '../middleware/rate-limit';
 import { verifiedGoogleEmail, verifiedMicrosoftEmail, microsoftMailboxEmail } from '../services/identity';
+import type { ChallengePurpose } from '../services/challenge-purposes';
+import { createChallenge, confirmChallenge, resendChallenge, sendCodeInBackground, ChallengeError } from '../services/challenges';
+import { applyPasswordHash, hashPassword, validateNewPassword } from '../services/passwords';
+import { handleRouteError } from './respond';
+import { DEVICE_COOKIE, deviceCookieOptions, isTrustedDevice, trustDevice } from '../services/devices';
 
 const router = Router();
-
-const SALT_ROUNDS = 10;
 
 const googleClient = new OAuth2Client(
   config.googleClientId,
@@ -70,8 +74,8 @@ async function storeOutlookTokensAndConnect(
  * POST /auth/register
  * Body: { email, password, displayName? }
  *
- * Validates input, stores pending registration, sends verification code.
- * Returns { requiresVerification: true, email }.
+ * Emails a sign-up code. The account is created by POST /auth/verify.
+ * Returns { requiresVerification: true, email, challengeId }, or 409 ACCOUNT_EXISTS.
  */
 router.post('/register', registerLimiter, async (req: Request, res: Response) => {
   try {
@@ -82,55 +86,53 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
       return;
     }
 
-    if (password.length < 6) {
-      res.status(400).json({ error: 'Password must be at least 6 characters' });
+    const passwordProblem = validateNewPassword(password);
+    if (passwordProblem) {
+      res.status(400).json({ error: passwordProblem });
       return;
     }
 
     const existing = await User.findOne({ where: { email } });
     if (existing) {
-      res.status(409).json({ error: 'An account with this email already exists' });
+      res.status(409).json({ error: 'An account with this email already exists', code: 'ACCOUNT_EXISTS' });
       return;
     }
 
-    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-    const code = createVerification(email, 'register', {
+    const { challenge, code } = await createChallenge({
+      purpose: 'register',
       email,
-      passwordHash,
-      displayName: displayName || null,
+      userId: null,
+      payload: { email, passwordHash: await hashPassword(password), displayName: displayName || null },
     });
+    sendCodeInBackground(challenge, code);
 
-    await sendVerificationEmail(email, code);
-    res.json({ requiresVerification: true, email });
+    res.json({ requiresVerification: true, email, challengeId: challenge.id });
   } catch (error) {
-    console.error('[PostMail API] Register error:', error);
-    res.status(500).json({ error: 'Registration failed' });
+    handleRouteError(res, error, 'Register error', 'Registration failed');
   }
 });
 
+const VERIFY_PURPOSES: ChallengePurpose[] = ['register', 'google-link', 'microsoft-link'];
+
 /**
  * POST /auth/verify
- * Body: { email, code, type: 'register' | 'google-link' }
+ * Body: { challengeId, code }
  *
- * Verifies the emailed code and completes the pending action.
+ * Confirms a sign-up or account-link code and completes that action.
  */
-router.post('/verify', verifyLimiter, async (req: Request, res: Response) => {
+router.post('/verify', codeConfirmLimiter, async (req: Request, res: Response) => {
   try {
-    const { email, code, type } = req.body;
+    const { challengeId, code } = req.body;
 
-    if (!email || !code || !type) {
-      res.status(400).json({ error: 'Email, code, and type are required' });
+    if (!challengeId || !code) {
+      res.status(400).json({ error: 'challengeId and code are required' });
       return;
     }
 
-    const result = verifyCode(email, code, type);
-    if (!result.valid) {
-      res.status(400).json({ error: result.error });
-      return;
-    }
+    const challenge = await confirmChallenge(String(challengeId), VERIFY_PURPOSES, String(code));
 
-    if (type === 'register') {
-      const { passwordHash, displayName } = result.data as {
+    if (challenge.purpose === 'register') {
+      const { email, passwordHash, displayName } = challenge.payload as {
         email: string;
         passwordHash: string;
         displayName: string | null;
@@ -139,7 +141,7 @@ router.post('/verify', verifyLimiter, async (req: Request, res: Response) => {
       // Re-check for race condition
       const existing = await User.findOne({ where: { email } });
       if (existing) {
-        res.status(409).json({ error: 'An account with this email already exists' });
+        res.status(409).json({ error: 'An account with this email already exists', code: 'ACCOUNT_EXISTS' });
         return;
       }
 
@@ -148,40 +150,27 @@ router.post('/verify', verifyLimiter, async (req: Request, res: Response) => {
 
       const token = signToken(user);
       res.status(201).json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
-    } else if (type === 'google-link') {
-      const { idToken: storedIdToken } = result.data as { idToken: string };
+      return;
+    }
 
-      const ticket = await googleClient.verifyIdToken({
-        idToken: storedIdToken,
-        audience: config.googleClientId,
-      });
+    const user = challenge.userId ? await User.findByPk(challenge.userId) : null;
+    if (!user) {
+      throw new ChallengeError('invalid_or_expired');
+    }
 
+    if (challenge.purpose === 'google-link') {
+      const { idToken } = challenge.payload as { idToken: string };
+      const ticket = await googleClient.verifyIdToken({ idToken, audience: config.googleClientId });
       const payload = ticket.getPayload();
       const googleEmail = verifiedGoogleEmail(payload);
-      if (!payload || !googleEmail) {
+      if (!payload || !googleEmail || googleEmail !== user.email) {
         res.status(400).json({ error: 'Google token expired or email not verified. Please try again.' });
         return;
       }
 
-      const user = await User.findOne({ where: { email: googleEmail } });
-      if (!user) {
-        res.status(404).json({ error: 'Account not found' });
-        return;
-      }
-
       await user.update({ googleId: payload.sub, displayName: payload.name || user.displayName });
-
-      const token = signToken(user);
-      res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
-    } else if (type === 'microsoft-link') {
-      const {
-        microsoftId: storedMicrosoftId,
-        displayName: storedDisplayName,
-        accessToken: storedAccessToken,
-        refreshToken: storedRefreshToken,
-        tokenExpiry: storedTokenExpiry,
-        mailboxEmail: storedMailboxEmail,
-      } = result.data as {
+    } else {
+      const { microsoftId, displayName, accessToken, refreshToken, tokenExpiry, mailboxEmail } = challenge.payload as {
         microsoftId: string;
         displayName: string | null;
         accessToken: string;
@@ -190,37 +179,41 @@ router.post('/verify', verifyLimiter, async (req: Request, res: Response) => {
         mailboxEmail: string | null;
       };
 
-      const user = await User.findOne({ where: { email } });
-      if (!user) {
-        res.status(404).json({ error: 'Account not found' });
-        return;
-      }
-
-      await user.update({ microsoftId: storedMicrosoftId, displayName: storedDisplayName || user.displayName });
+      await user.update({ microsoftId, displayName: displayName || user.displayName });
       await storeOutlookTokensAndConnect(
         user,
-        {
-          accessToken: storedAccessToken,
-          refreshToken: storedRefreshToken,
-          tokenExpiry: storedTokenExpiry ? new Date(storedTokenExpiry) : null,
-        },
-        storedMailboxEmail || email,
+        { accessToken, refreshToken, tokenExpiry: tokenExpiry ? new Date(tokenExpiry) : null },
+        mailboxEmail || challenge.email,
       );
-
-      const token = signToken(user);
-      res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
-    } else {
-      res.status(400).json({ error: 'Invalid verification type' });
     }
+
+    const token = signToken(user);
+    res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
   } catch (error) {
-    console.error('[PostMail API] Verify error:', error);
-    res.status(500).json({ error: 'Verification failed' });
+    handleRouteError(res, error, 'Verify error', 'Verification failed');
+  }
+});
+
+/**
+ * POST /auth/challenges/:id/resend
+ * Emails a new code for any challenge (same response whether or not an email was sent).
+ */
+router.post('/challenges/:id/resend', resendLimiter, async (req: Request, res: Response) => {
+  try {
+    const { challenge, code } = await resendChallenge(req.params.id);
+    sendCodeInBackground(challenge, code);
+    res.json({ ok: true });
+  } catch (error) {
+    handleRouteError(res, error, 'Resend code error', 'Failed to resend code');
   }
 });
 
 /**
  * POST /auth/login
  * Body: { email, password }
+ *
+ * Returns { token, user } for a remembered browser; otherwise emails a code and
+ * returns { requiresCode: true, challengeId, email }. Wrong passwords never send email.
  */
 router.post('/login', loginIpLimiter, loginEmailLimiter, async (req: Request, res: Response) => {
   try {
@@ -243,11 +236,43 @@ router.post('/login', loginIpLimiter, loginEmailLimiter, async (req: Request, re
       return;
     }
 
+    if (await isTrustedDevice(user.id, req.cookies?.[DEVICE_COOKIE])) {
+      const token = signToken(user);
+      res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+      return;
+    }
+
+    const { challenge, code } = await createChallenge({ purpose: 'login', email: user.email, userId: user.id });
+    sendCodeInBackground(challenge, code);
+    res.json({ requiresCode: true, challengeId: challenge.id, email: user.email });
+  } catch (error) {
+    handleRouteError(res, error, 'Login error', 'Login failed');
+  }
+});
+
+/**
+ * POST /auth/login/confirm
+ * Body: { challengeId, code, rememberDevice }
+ */
+router.post('/login/confirm', codeConfirmLimiter, async (req: Request, res: Response) => {
+  try {
+    const { challengeId, code, rememberDevice } = req.body;
+
+    const challenge = await confirmChallenge(String(challengeId ?? ''), 'login', String(code ?? ''));
+    const user = challenge.userId ? await User.findByPk(challenge.userId) : null;
+    if (!user) {
+      throw new ChallengeError('invalid_or_expired');
+    }
+
+    if (rememberDevice === true) {
+      const deviceToken = await trustDevice(user.id, req.headers['user-agent']);
+      res.cookie(DEVICE_COOKIE, deviceToken, deviceCookieOptions());
+    }
+
     const token = signToken(user);
     res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
   } catch (error) {
-    console.error('[PostMail API] Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    handleRouteError(res, error, 'Login confirm error', 'Sign in failed');
   }
 });
 
@@ -363,13 +388,17 @@ router.post('/google/link', linkLimiter, async (req: Request, res: Response) => 
       return;
     }
 
-    const code = createVerification(googleEmail, 'google-link', { idToken: rawIdToken });
-    await sendVerificationEmail(googleEmail, code);
+    const { challenge, code } = await createChallenge({
+      purpose: 'google-link',
+      email: googleEmail,
+      userId: user.id,
+      payload: { idToken: rawIdToken },
+    });
+    sendCodeInBackground(challenge, code);
 
-    res.json({ requiresVerification: true, email: googleEmail });
+    res.json({ requiresVerification: true, email: googleEmail, challengeId: challenge.id });
   } catch (error) {
-    console.error('[PostMail API] Google link error:', error);
-    res.status(500).json({ error: 'Failed to link Google account' });
+    handleRouteError(res, error, 'Google link error', 'Failed to link Google account');
   }
 });
 
@@ -539,20 +568,79 @@ router.post('/microsoft/link', linkLimiter, async (req: Request, res: Response) 
       return;
     }
 
-    const code = createVerification(email, 'microsoft-link', {
-      microsoftId: profile.id,
-      displayName: profile.displayName || null,
-      accessToken,
-      refreshToken: refreshToken || null,
-      tokenExpiry: tokenExpiry || null,
-      mailboxEmail: microsoftMailboxEmail(profile),
+    const { challenge, code } = await createChallenge({
+      purpose: 'microsoft-link',
+      email,
+      userId: user.id,
+      payload: {
+        microsoftId: profile.id,
+        displayName: profile.displayName || null,
+        accessToken,
+        refreshToken: refreshToken || null,
+        tokenExpiry: tokenExpiry || null,
+        mailboxEmail: microsoftMailboxEmail(profile),
+      },
     });
-    await sendVerificationEmail(email, code);
+    sendCodeInBackground(challenge, code);
 
-    res.json({ requiresVerification: true, email });
+    res.json({ requiresVerification: true, email, challengeId: challenge.id });
   } catch (error) {
-    console.error('[PostMail API] Microsoft link error:', error);
-    res.status(500).json({ error: 'Failed to link Microsoft account' });
+    handleRouteError(res, error, 'Microsoft link error', 'Failed to link Microsoft account');
+  }
+});
+
+/**
+ * POST /auth/password-reset/request
+ * Body: { email }
+ *
+ * Always returns 200 { challengeId }. A code is emailed only if the account exists;
+ * otherwise the challenge can never be confirmed but behaves identically.
+ */
+router.post('/password-reset/request', resetRequestIpLimiter, resetRequestEmailLimiter, async (req: Request, res: Response) => {
+  try {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+    if (!email || !email.includes('@')) {
+      res.status(400).json({ error: 'A valid email is required' });
+      return;
+    }
+
+    const user = await User.findOne({ where: { email } });
+    const { challenge, code } = await createChallenge({ purpose: 'password-reset', email, userId: user?.id ?? null });
+    sendCodeInBackground(challenge, code);
+
+    res.json({ challengeId: challenge.id });
+  } catch (error) {
+    handleRouteError(res, error, 'Password reset request error', 'Could not start password reset');
+  }
+});
+
+/**
+ * POST /auth/password-reset/confirm
+ * Body: { challengeId, code, newPassword }
+ *
+ * Sets the new password, signs out other sessions, and signs this browser in.
+ */
+router.post('/password-reset/confirm', codeConfirmLimiter, async (req: Request, res: Response) => {
+  try {
+    const { challengeId, code, newPassword } = req.body;
+
+    // Validate the password first so a typo doesn't burn a code attempt.
+    const passwordProblem = validateNewPassword(newPassword);
+    if (passwordProblem) {
+      res.status(400).json({ error: passwordProblem });
+      return;
+    }
+
+    const challenge = await confirmChallenge(String(challengeId ?? ''), 'password-reset', String(code ?? ''));
+    const user = challenge.userId ? await User.findByPk(challenge.userId) : null;
+    if (!user) {
+      throw new ChallengeError('invalid_or_expired');
+    }
+
+    const token = await applyPasswordHash(user, await hashPassword(newPassword));
+    res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+  } catch (error) {
+    handleRouteError(res, error, 'Password reset confirm error', 'Password reset failed');
   }
 });
 

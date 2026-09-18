@@ -33,12 +33,13 @@ export const config = {
   // Tracking pixel
   trackingBaseUrl: process.env.TRACKING_BASE_URL || 'http://localhost:3005',
 
-  // SMTP (for verification emails)
-  smtpHost: process.env.SMTP_HOST || '',
-  smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
+  // SMTP (Gmail with an app password). Gmail rewrites From to SMTP_USER unless it is a verified alias.
+  smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
+  smtpPort: parseInt(process.env.SMTP_PORT || '465', 10),
   smtpUser: process.env.SMTP_USER || '',
-  smtpPass: process.env.SMTP_PASS || '',
-  smtpFrom: process.env.SMTP_FROM || 'PostMail <noreply@postmail.krishrp.xyz>',
+  // Google shows app passwords as "abcd efgh ijkl mnop"; strip the spaces.
+  smtpPass: (process.env.SMTP_PASS || '').replace(/\s+/g, ''),
+  smtpFrom: process.env.SMTP_FROM || (process.env.SMTP_USER ? `PostMail <${process.env.SMTP_USER}>` : ''),
 
   // CORS
   dashboardUrl: process.env.DASHBOARD_URL || 'http://localhost:3006',
