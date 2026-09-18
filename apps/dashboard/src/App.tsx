@@ -4,6 +4,7 @@ import { AuthGuard } from './components/AuthGuard';
 import DashboardLayout from './components/DashboardLayout';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import ForgotPassword from './pages/ForgotPassword';
 import Emails from './pages/Emails';
 import Settings from './pages/Settings';
 import OAuthCallback from './pages/OAuthCallback';
@@ -22,6 +23,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/oauth/callback" element={<OAuthCallback />} />
         <Route path="/microsoft/callback" element={<MicrosoftAuthCallback />} />
         <Route path="/gmail/callback" element={<AuthGuard><GmailCallback /></AuthGuard>} />

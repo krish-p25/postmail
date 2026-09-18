@@ -1,7 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { auth } from '../services/auth';
+import { auth, ApiError } from '../services/auth';
 import { PasswordInput, PasswordStrengthMeter, getPasswordStrength } from '../components/PasswordInput';
 import VerifyCodeForm from '../components/VerifyCodeForm';
 import LoadingScreen from '../components/LoadingScreen';
@@ -14,7 +14,8 @@ export default function Signup() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
+  const [pendingVerify, setPendingVerify] = useState<{ challengeId: string; email: string } | null>(null);
+  const [accountExists, setAccountExists] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
   if (!loading && user) {
@@ -22,15 +23,16 @@ export default function Signup() {
   }
 
   // Verification step
-  if (verifyEmail) {
+  if (pendingVerify) {
     return (
       <VerifyCodeForm
-        email={verifyEmail}
+        email={pendingVerify.email}
         error={verifyError}
+        onResend={() => auth.resendCode(pendingVerify.challengeId)}
         onVerify={async (code) => {
           setVerifyError(null);
           try {
-            const data = await auth.verifyEmail(verifyEmail, code, 'register');
+            const data = await auth.verifyEmail(pendingVerify.challengeId, code);
             setUser(data.user);
             navigate('/dashboard', { replace: true });
           } catch (err) {
@@ -52,11 +54,15 @@ export default function Signup() {
     setError(null);
     setIsSubmitting(true);
 
+    setAccountExists(false);
     try {
-      await auth.register(email, password);
-      setVerifyEmail(email);
+      setPendingVerify(await auth.register(email, password));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Sign up failed');
+      if (err instanceof ApiError && err.code === 'ACCOUNT_EXISTS') {
+        setAccountExists(true);
+      } else {
+        setError(err instanceof Error ? err.message : 'Sign up failed');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -165,6 +171,18 @@ export default function Signup() {
 
             {error && (
               <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</div>
+            )}
+
+            {accountExists && (
+              <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                An account with this email already exists.{' '}
+                <Link
+                  to={`/forgot-password?email=${encodeURIComponent(email)}`}
+                  className="font-medium underline hover:text-amber-900"
+                >
+                  Reset your password
+                </Link>
+              </div>
             )}
 
             <button

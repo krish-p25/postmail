@@ -12,7 +12,7 @@ export default function OAuthCallback() {
   const [linkState, setLinkState] = useState<{ email: string; idToken: string } | null>(null);
   const [password, setPassword] = useState('');
   const [linking, setLinking] = useState(false);
-  const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
+  const [pendingVerify, setPendingVerify] = useState<{ challengeId: string; email: string } | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const exchanged = useRef(false);
 
@@ -54,8 +54,7 @@ export default function OAuthCallback() {
     setError(null);
     setLinking(true);
     try {
-      await auth.googleLink(linkState.idToken, password);
-      setVerifyEmail(linkState.email);
+      setPendingVerify(await auth.googleLink(linkState.idToken, password));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to link account');
     } finally {
@@ -64,15 +63,16 @@ export default function OAuthCallback() {
   }
 
   // Verification step
-  if (verifyEmail) {
+  if (pendingVerify) {
     return (
       <VerifyCodeForm
-        email={verifyEmail}
+        email={pendingVerify.email}
         error={verifyError}
+        onResend={() => auth.resendCode(pendingVerify.challengeId)}
         onVerify={async (code) => {
           setVerifyError(null);
           try {
-            const data = await auth.verifyEmail(verifyEmail, code, 'google-link');
+            const data = await auth.verifyEmail(pendingVerify.challengeId, code);
             setUser(data.user);
             navigate('/dashboard', { replace: true });
           } catch (err) {

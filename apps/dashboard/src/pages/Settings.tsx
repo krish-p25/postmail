@@ -4,6 +4,7 @@ import { api, LinkedMailboxInfo } from '../services/api';
 import { auth } from '../services/auth';
 import ConnectMailboxCard from '../components/ConnectMailboxCard';
 import { PasswordInput, PasswordStrengthMeter, getPasswordStrength } from '../components/PasswordInput';
+import VerifyCodeForm from '../components/VerifyCodeForm';
 
 export default function Settings() {
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
@@ -29,6 +30,8 @@ export default function Settings() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const passwordContentRef = useRef<HTMLDivElement>(null);
   const [passwordHeight, setPasswordHeight] = useState(0);
+  const [pendingPasswordChange, setPendingPasswordChange] = useState<{ challengeId: string; email: string; mode: 'create' | 'change' } | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   const measurePasswordHeight = useCallback(() => {
     if (passwordContentRef.current) {
@@ -38,7 +41,7 @@ export default function Settings() {
 
   useEffect(() => {
     if (passwordOpen) measurePasswordHeight();
-  }, [passwordOpen, newPassword, confirmPassword, currentPassword, passwordSaving, accountMessage, measurePasswordHeight]);
+  }, [passwordOpen, newPassword, confirmPassword, currentPassword, passwordSaving, accountMessage, pendingPasswordChange, codeError, measurePasswordHeight]);
 
   const settingsFetched = useRef(false);
   useEffect(() => {
@@ -217,8 +220,48 @@ export default function Settings() {
                   style={{ height: passwordOpen ? `${passwordHeight}px` : '0px' }}
                 >
                   <div ref={passwordContentRef}>
+                    {pendingPasswordChange && (
+                      <div className="border-t border-gray-100 px-3 py-3 sm:px-4">
+                        <VerifyCodeForm
+                          variant="inline"
+                          email={pendingPasswordChange.email}
+                          error={codeError}
+                          submitLabel={pendingPasswordChange.mode === 'create' ? 'Create password' : 'Change password'}
+                          onResend={() => auth.resendCode(pendingPasswordChange.challengeId)}
+                          onVerify={async (code) => {
+                            setCodeError(null);
+                            try {
+                              const { token } = await api.confirmPasswordChange(pendingPasswordChange.challengeId, code);
+                              auth.storeToken(token);
+                              const created = pendingPasswordChange.mode === 'create';
+                              setPendingPasswordChange(null);
+                              setHasPassword(true);
+                              setCurrentPassword('');
+                              setNewPassword('');
+                              setConfirmPassword('');
+                              setAccountMessage({
+                                type: 'success',
+                                text: created ? 'Password created successfully.' : 'Password changed successfully. Other sessions were signed out.',
+                              });
+                            } catch (err) {
+                              setCodeError(err instanceof Error ? err.message : 'Verification failed');
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingPasswordChange(null);
+                            setCodeError(null);
+                          }}
+                          className="mt-3 text-xs font-medium text-gray-500 hover:text-gray-700"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
                     {/* Create password form (for Google-only users) */}
-                    {!hasPassword && (() => {
+                    {!pendingPasswordChange && !hasPassword && (() => {
                       const isStrong = getPasswordStrength(newPassword).label === 'Strong';
                       const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
                       const showMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
@@ -233,12 +276,9 @@ export default function Settings() {
                             setAccountMessage(null);
                             setPasswordSaving(true);
                             try {
-                              const { token } = await api.setPassword(newPassword);
-                              auth.storeToken(token);
-                              setHasPassword(true);
-                              setNewPassword('');
-                              setConfirmPassword('');
-                              setAccountMessage({ type: 'success', text: 'Password created successfully.' });
+                              const challenge = await api.requestPasswordChange(newPassword);
+                              setCodeError(null);
+                              setPendingPasswordChange({ ...challenge, mode: 'create' });
                             } catch (err) {
                               setAccountMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to set password.' });
                             } finally {
@@ -283,7 +323,7 @@ export default function Settings() {
                     })()}
 
                     {/* Change password form (for email/password users) */}
-                    {hasPassword && (() => {
+                    {!pendingPasswordChange && hasPassword && (() => {
                       const isStrong = getPasswordStrength(newPassword).label === 'Strong';
                       const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
                       const showMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
@@ -298,12 +338,9 @@ export default function Settings() {
                             setAccountMessage(null);
                             setPasswordSaving(true);
                             try {
-                              const { token } = await api.changePassword(currentPassword, newPassword);
-                              auth.storeToken(token);
-                              setCurrentPassword('');
-                              setNewPassword('');
-                              setConfirmPassword('');
-                              setAccountMessage({ type: 'success', text: 'Password changed successfully.' });
+                              const challenge = await api.requestPasswordChange(newPassword, currentPassword);
+                              setCodeError(null);
+                              setPendingPasswordChange({ ...challenge, mode: 'change' });
                             } catch (err) {
                               setAccountMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to change password.' });
                             } finally {

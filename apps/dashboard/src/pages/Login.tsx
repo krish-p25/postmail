@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../services/auth';
 import { PasswordInput } from '../components/PasswordInput';
 import LoadingScreen from '../components/LoadingScreen';
+import VerifyCodeForm from '../components/VerifyCodeForm';
 
 export default function Login() {
   const { user, loading, setUser } = useAuth();
@@ -12,9 +13,48 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingLogin, setPendingLogin] = useState<{ challengeId: string; email: string } | null>(null);
+  const [rememberDevice, setRememberDevice] = useState(true);
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   if (!loading && user) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  if (pendingLogin) {
+    return (
+      <VerifyCodeForm
+        email={pendingLogin.email}
+        message={
+          <>
+            We don&apos;t recognise this browser. Enter the 6-digit code we sent to{' '}
+            <span className="font-medium text-gray-900">{pendingLogin.email}</span>
+          </>
+        }
+        error={codeError}
+        onResend={() => auth.resendCode(pendingLogin.challengeId)}
+        onVerify={async (code) => {
+          setCodeError(null);
+          try {
+            const data = await auth.confirmLogin(pendingLogin.challengeId, code, rememberDevice);
+            setUser(data.user);
+            navigate('/dashboard', { replace: true });
+          } catch (err) {
+            setCodeError(err instanceof Error ? err.message : 'Verification failed');
+          }
+        }}
+      >
+        <label className="mt-6 flex items-center justify-center gap-2 text-sm text-gray-600">
+          <input
+            type="checkbox"
+            checked={rememberDevice}
+            onChange={(e) => setRememberDevice(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+          Remember this browser for 30 days
+        </label>
+      </VerifyCodeForm>
+    );
   }
 
   async function handleEmailLogin(e: FormEvent) {
@@ -24,6 +64,11 @@ export default function Login() {
 
     try {
       const data = await auth.login(email, password);
+      if ('requiresCode' in data) {
+        setCodeError(null);
+        setPendingLogin({ challengeId: data.challengeId, email: data.email });
+        return;
+      }
       setUser(data.user);
       navigate('/dashboard');
     } catch (err: unknown) {
@@ -112,6 +157,14 @@ export default function Login() {
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 placeholder="••••••••"
               />
+              <div className="mt-1 text-right">
+                <Link
+                  to={`/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ''}`}
+                  className="text-xs font-medium text-primary-600 hover:text-primary-700"
+                >
+                  Forgot password?
+                </Link>
+              </div>
             </div>
 
             {error && (
