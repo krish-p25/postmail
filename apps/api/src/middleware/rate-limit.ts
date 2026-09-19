@@ -42,4 +42,6 @@ export const selfViewLimiter = limiter(60, 60 * 1000, { keyGenerator: byUser });
 export const codeConfirmLimiter = limiter(20, FIFTEEN_MINUTES);
 export const resendLimiter = limiter(10, FIFTEEN_MINUTES);
 export const resetRequestIpLimiter = limiter(5, FIFTEEN_MINUTES);
+// Applying a password reset is ticket-gated, so this only caps brute-forcing the ticket itself.
+export const passwordApplyLimiter = limiter(10, FIFTEEN_MINUTES);
 export const resetRequestEmailLimiter = limiter(3, ONE_HOUR, { keyGenerator: byEmail });
