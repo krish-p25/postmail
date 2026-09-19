@@ -5,6 +5,15 @@ import { auth } from '../services/auth';
 import ConnectMailboxCard from '../components/ConnectMailboxCard';
 import { PasswordInput, PasswordStrengthMeter, getPasswordStrength } from '../components/PasswordInput';
 import VerifyCodeForm from '../components/VerifyCodeForm';
+import StepMorph from '../components/StepMorph';
+import HighlightPing from '../components/HighlightPing';
+
+const HIGHLIGHT_TARGETS = ['mailbox', 'password'] as const;
+type HighlightTarget = (typeof HIGHLIGHT_TARGETS)[number];
+
+function isHighlightTarget(value: string | null): value is HighlightTarget {
+  return value !== null && (HIGHLIGHT_TARGETS as readonly string[]).includes(value);
+}
 
 export default function Settings() {
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
@@ -15,8 +24,9 @@ export default function Settings() {
 
   // Highlight mailbox card when navigating from Setup
   const [searchParams, setSearchParams] = useSearchParams();
-  const [highlightMailbox, setHighlightMailbox] = useState(false);
+  const [highlighted, setHighlighted] = useState<HighlightTarget | null>(null);
   const mailboxRef = useRef<HTMLDivElement>(null);
+  const passwordSectionRef = useRef<HTMLDivElement>(null);
 
   // Account security state
   const [hasPassword, setHasPassword] = useState(false);
@@ -28,20 +38,39 @@ export default function Settings() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [accountMessage, setAccountMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [passwordOpen, setPasswordOpen] = useState(false);
-  const passwordContentRef = useRef<HTMLDivElement>(null);
+  // Callback ref, not useRef: the whole section mounts after `loading` flips, so an
+  // effect running on mount would find no node and never attach the observer below.
+  const [passwordContent, setPasswordContent] = useState<HTMLDivElement | null>(null);
   const [passwordHeight, setPasswordHeight] = useState(0);
-  const [pendingPasswordChange, setPendingPasswordChange] = useState<{ challengeId: string; email: string; mode: 'create' | 'change' } | null>(null);
+  const [passwordChallenge, setPasswordChallenge] = useState<{ challengeId: string; email: string } | null>(null);
+  const [passwordTicket, setPasswordTicket] = useState<string | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
 
   const measurePasswordHeight = useCallback(() => {
-    if (passwordContentRef.current) {
-      setPasswordHeight(passwordContentRef.current.scrollHeight);
-    }
-  }, []);
+    if (passwordContent) setPasswordHeight(passwordContent.scrollHeight);
+  }, [passwordContent]);
 
   useEffect(() => {
     if (passwordOpen) measurePasswordHeight();
-  }, [passwordOpen, newPassword, confirmPassword, currentPassword, passwordSaving, accountMessage, pendingPasswordChange, codeError, measurePasswordHeight]);
+  }, [passwordOpen, newPassword, confirmPassword, currentPassword, passwordSaving, accountMessage, passwordChallenge, passwordTicket, codeError, measurePasswordHeight]);
+
+  // The step morph resizes over ~2s, so follow the panel's real height rather than
+  // sampling it at a few known moments.
+  useEffect(() => {
+    if (!passwordContent || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => setPasswordHeight(passwordContent.scrollHeight));
+    observer.observe(passwordContent);
+    return () => observer.disconnect();
+  }, [passwordContent]);
+
+  function resetPasswordFlow() {
+    setPasswordChallenge(null);
+    setPasswordTicket(null);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setCodeError(null);
+  }
 
   const settingsFetched = useRef(false);
   useEffect(() => {
@@ -62,18 +91,25 @@ export default function Settings() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Scroll to mailbox card and highlight when ?highlight=mailbox is present
+  // Scroll to a deep-linked section and ping it: ?highlight=mailbox | password
   useEffect(() => {
-    if (loading || searchParams.get('highlight') !== 'mailbox') return;
+    const target = searchParams.get('highlight');
+    if (loading || !isHighlightTarget(target)) return;
+
+    // The password panel has to be open before it is worth scrolling to.
+    if (target === 'password') setPasswordOpen(true);
+    const sectionRef = target === 'password' ? passwordSectionRef : mailboxRef;
+    // Wait out the accordion's 300ms open transition so the section is at its final height.
+    const scrollDelay = target === 'password' ? 350 : 100;
 
     const scrollTimer = setTimeout(() => {
-      mailboxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 100);
+      sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, scrollDelay);
 
     const highlightTimer = setTimeout(() => {
-      setHighlightMailbox(true);
+      setHighlighted(target);
       setSearchParams({}, { replace: true });
-    }, 600);
+    }, scrollDelay + 500);
 
     return () => {
       clearTimeout(scrollTimer);
@@ -196,7 +232,9 @@ export default function Settings() {
               )}
 
               {/* Password section */}
-              <div className="overflow-hidden rounded-lg border border-gray-200">
+              <div ref={passwordSectionRef} className="relative">
+                {highlighted === 'password' && <HighlightPing rounded="rounded-lg" onDone={() => setHighlighted(null)} />}
+                <div className="overflow-hidden rounded-lg border border-gray-200">
                 <button
                   type="button"
                   onClick={() => setPasswordOpen((prev) => !prev)}
@@ -219,177 +257,139 @@ export default function Settings() {
                   className="overflow-hidden transition-[height] duration-300 ease-in-out"
                   style={{ height: passwordOpen ? `${passwordHeight}px` : '0px' }}
                 >
-                  <div ref={passwordContentRef}>
-                    {pendingPasswordChange && (
-                      <div className="border-t border-gray-100 px-3 py-3 sm:px-4">
-                        <VerifyCodeForm
-                          variant="inline"
-                          email={pendingPasswordChange.email}
-                          error={codeError}
-                          submitLabel={pendingPasswordChange.mode === 'create' ? 'Create password' : 'Change password'}
-                          onResend={() => auth.resendCode(pendingPasswordChange.challengeId)}
-                          onVerify={async (code) => {
+                  <div ref={setPasswordContent}>
+                    {!passwordChallenge ? (
+                      <form
+                        className="space-y-3 border-t border-gray-100 px-3 py-3 sm:px-4"
+                        onSubmit={async (e: FormEvent) => {
+                          e.preventDefault();
+                          if (passwordSaving || (hasPassword && currentPassword.length === 0)) return;
+                          setAccountMessage(null);
+                          setPasswordSaving(true);
+                          try {
+                            const challenge = await api.requestPasswordChange(hasPassword ? currentPassword : undefined);
                             setCodeError(null);
-                            try {
-                              const { token } = await api.confirmPasswordChange(pendingPasswordChange.challengeId, code);
-                              auth.storeToken(token);
-                              const created = pendingPasswordChange.mode === 'create';
-                              setPendingPasswordChange(null);
-                              setHasPassword(true);
-                              setCurrentPassword('');
-                              setNewPassword('');
-                              setConfirmPassword('');
-                              setAccountMessage({
-                                type: 'success',
-                                text: created ? 'Password created successfully.' : 'Password changed successfully. Other sessions were signed out.',
-                              });
-                            } catch (err) {
-                              setCodeError(err instanceof Error ? err.message : 'Verification failed');
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPendingPasswordChange(null);
-                            setCodeError(null);
-                          }}
-                          className="mt-3 text-xs font-medium text-gray-500 hover:text-gray-700"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    )}
-                    {/* Create password form (for Google-only users) */}
-                    {!pendingPasswordChange && !hasPassword && (() => {
-                      const isStrong = getPasswordStrength(newPassword).label === 'Strong';
-                      const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
-                      const showMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
-                      const canSubmit = isStrong && passwordsMatch && !passwordSaving;
-
-                      return (
-                        <form
-                          className="space-y-3 border-t border-gray-100 px-3 py-3 sm:px-4"
-                          onSubmit={async (e: FormEvent) => {
-                            e.preventDefault();
-                            if (!canSubmit) return;
-                            setAccountMessage(null);
-                            setPasswordSaving(true);
-                            try {
-                              const challenge = await api.requestPasswordChange(newPassword);
-                              setCodeError(null);
-                              setPendingPasswordChange({ ...challenge, mode: 'create' });
-                            } catch (err) {
-                              setAccountMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to set password.' });
-                            } finally {
-                              setPasswordSaving(false);
-                            }
-                          }}
-                        >
-                          <PasswordInput
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            placeholder="New password"
-                            className="block w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                          />
-                          <PasswordStrengthMeter password={newPassword} />
-                          <PasswordInput
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            placeholder="Confirm password"
-                            className={`block w-full rounded-lg border px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-1 ${
-                              showMismatch
-                                ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
-                                : passwordsMatch
-                                  ? 'border-green-300 focus:border-green-500 focus:ring-green-500'
-                                  : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
-                            }`}
-                          />
-                          {showMismatch && (
-                            <p className="text-xs text-red-500 -mt-1">Passwords do not match</p>
-                          )}
-                          {passwordsMatch && (
-                            <p className="text-xs text-green-500 -mt-1">Passwords match</p>
-                          )}
-                          <button
-                            type="submit"
-                            disabled={!canSubmit}
-                            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {passwordSaving ? 'Creating...' : 'Create password'}
-                          </button>
-                        </form>
-                      );
-                    })()}
-
-                    {/* Change password form (for email/password users) */}
-                    {!pendingPasswordChange && hasPassword && (() => {
-                      const isStrong = getPasswordStrength(newPassword).label === 'Strong';
-                      const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
-                      const showMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
-                      const canSubmit = currentPassword.length > 0 && isStrong && passwordsMatch && !passwordSaving;
-
-                      return (
-                        <form
-                          className="space-y-3 border-t border-gray-100 px-3 py-3 sm:px-4"
-                          onSubmit={async (e: FormEvent) => {
-                            e.preventDefault();
-                            if (!canSubmit) return;
-                            setAccountMessage(null);
-                            setPasswordSaving(true);
-                            try {
-                              const challenge = await api.requestPasswordChange(newPassword, currentPassword);
-                              setCodeError(null);
-                              setPendingPasswordChange({ ...challenge, mode: 'change' });
-                            } catch (err) {
-                              setAccountMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to change password.' });
-                            } finally {
-                              setPasswordSaving(false);
-                            }
-                          }}
-                        >
+                            setPasswordChallenge(challenge);
+                          } catch (err) {
+                            setAccountMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to send verification code.' });
+                          } finally {
+                            setPasswordSaving(false);
+                          }
+                        }}
+                      >
+                        <p className="text-xs text-gray-500">
+                          {hasPassword
+                            ? 'Confirm your current password and we will email you a 6-digit code.'
+                            : 'We will email you a 6-digit code to confirm it is you.'}
+                        </p>
+                        {hasPassword && (
                           <PasswordInput
                             value={currentPassword}
                             onChange={(e) => setCurrentPassword(e.target.value)}
                             placeholder="Current password"
                             className="block w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                           />
-                          <PasswordInput
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            placeholder="New password"
-                            className="block w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                          />
-                          <PasswordStrengthMeter password={newPassword} />
-                          <PasswordInput
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            placeholder="Confirm new password"
-                            className={`block w-full rounded-lg border px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-1 ${
-                              showMismatch
-                                ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
-                                : passwordsMatch
-                                  ? 'border-green-300 focus:border-green-500 focus:ring-green-500'
-                                  : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
-                            }`}
-                          />
-                          {showMismatch && (
-                            <p className="text-xs text-red-500 -mt-1">Passwords do not match</p>
-                          )}
-                          {passwordsMatch && (
-                            <p className="text-xs text-green-500 -mt-1">Passwords match</p>
-                          )}
-                          <button
-                            type="submit"
-                            disabled={!canSubmit}
-                            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {passwordSaving ? 'Changing...' : 'Change password'}
-                          </button>
-                        </form>
-                      );
-                    })()}
+                        )}
+                        <button
+                          type="submit"
+                          disabled={passwordSaving || (hasPassword && currentPassword.length === 0)}
+                          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {passwordSaving ? 'Sending code...' : 'Send verification code'}
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="border-t border-gray-100 px-3 py-3 sm:px-4">
+                        <StepMorph
+                          surface="plain"
+                          showSecond={passwordTicket !== null}
+                          onStageChange={measurePasswordHeight}
+                          first={
+                            <VerifyCodeForm
+                              variant="inline"
+                              email={passwordChallenge.email}
+                              error={codeError}
+                              onResend={() => auth.resendCode(passwordChallenge.challengeId)}
+                              onVerify={async (code) => {
+                                setCodeError(null);
+                                try {
+                                  setPasswordTicket(await api.verifyPasswordChange(passwordChallenge.challengeId, code));
+                                } catch (err) {
+                                  setCodeError(err instanceof Error ? err.message : 'Verification failed');
+                                }
+                              }}
+                            />
+                          }
+                          second={(() => {
+                            const isStrong = getPasswordStrength(newPassword).label === 'Strong';
+                            const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
+                            const showMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
+                            const canSubmit = isStrong && passwordsMatch && !passwordSaving;
+
+                            return (
+                              <form
+                                className="space-y-3"
+                                onSubmit={async (e: FormEvent) => {
+                                  e.preventDefault();
+                                  if (!canSubmit || !passwordTicket) return;
+                                  setAccountMessage(null);
+                                  setPasswordSaving(true);
+                                  try {
+                                    const { token } = await api.applyPasswordChange(passwordTicket, newPassword);
+                                    auth.storeToken(token);
+                                    const created = !hasPassword;
+                                    resetPasswordFlow();
+                                    setHasPassword(true);
+                                    setAccountMessage({
+                                      type: 'success',
+                                      text: created
+                                        ? 'Password created successfully.'
+                                        : 'Password changed successfully. Other sessions were signed out.',
+                                    });
+                                  } catch (err) {
+                                    setAccountMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to update password.' });
+                                  } finally {
+                                    setPasswordSaving(false);
+                                  }
+                                }}
+                              >
+                                <p className="text-xs text-gray-500">Verified. Choose your new password.</p>
+                                <PasswordInput
+                                  value={newPassword}
+                                  onChange={(e) => setNewPassword(e.target.value)}
+                                  placeholder="New password"
+                                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                                />
+                                <PasswordStrengthMeter password={newPassword} showChecksWhenEmpty />
+                                <PasswordInput
+                                  value={confirmPassword}
+                                  onChange={(e) => setConfirmPassword(e.target.value)}
+                                  placeholder="Confirm new password"
+                                  className={`block w-full rounded-lg border px-3 py-2 pr-9 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-1 ${
+                                    showMismatch
+                                      ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                                      : passwordsMatch
+                                        ? 'border-green-300 focus:border-green-500 focus:ring-green-500'
+                                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
+                                  }`}
+                                />
+                                {showMismatch && <p className="-mt-1 text-xs text-red-500">Passwords do not match</p>}
+                                {passwordsMatch && <p className="-mt-1 text-xs text-green-500">Passwords match</p>}
+                                <button
+                                  type="submit"
+                                  disabled={!canSubmit}
+                                  className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {passwordSaving ? 'Saving...' : hasPassword ? 'Change password' : 'Create password'}
+                                </button>
+                              </form>
+                            );
+                          })()}
+                        />
+                      </div>
+                    )}
                   </div>
+                </div>
                 </div>
               </div>
 
@@ -410,25 +410,7 @@ export default function Settings() {
 
         {/* Connect mailbox */}
         <div ref={mailboxRef} className="relative z-[60]">
-          {highlightMailbox && (
-            <>
-              <style>{`
-                @keyframes mailbox-pulse {
-                  0%, 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.5); }
-                  50% { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); }
-                }
-                @keyframes mailbox-fade {
-                  0% { opacity: 1; }
-                  100% { opacity: 0; }
-                }
-              `}</style>
-              <div
-                className="pointer-events-none absolute -inset-0.5 rounded-xl border-2 border-primary-500"
-                style={{ animation: 'mailbox-pulse 1.5s ease-in-out 2, mailbox-fade 0.6s ease-out 3s forwards' }}
-                onAnimationEnd={(e) => { if (e.animationName === 'mailbox-fade') setHighlightMailbox(false); }}
-              />
-            </>
-          )}
+          {highlighted === 'mailbox' && <HighlightPing onDone={() => setHighlighted(null)} />}
           <ConnectMailboxCard
             linkedMailboxes={linkedMailboxes}
             loading={loading}
