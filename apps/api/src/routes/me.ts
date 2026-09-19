@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import { User } from '../db/models';
 import { confirmChallenge, createChallenge, sendCodeInBackground } from '../services/challenges';
 import { applyPasswordHash, hashPassword, validateNewPassword } from '../services/passwords';
+import { issuePasswordTicket, readPasswordTicket } from '../services/password-tickets';
 import { codeConfirmLimiter, passwordLimiter } from '../middleware/rate-limit';
 import { handleRouteError } from './respond';
 
@@ -36,20 +37,15 @@ router.get('/', async (req: Request, res: Response) => {
 
 /**
  * POST /me/password/request
- * Body: { newPassword, currentPassword? }
+ * Body: { currentPassword? }
  *
  * Emails a code to confirm creating (no existing password) or changing a password.
- * currentPassword is required when the account already has one.
+ * currentPassword is required when the account already has one, so a hijacked
+ * session cannot send codes. The new password is chosen later, at /password/apply.
  */
 router.post('/password/request', passwordLimiter, async (req: Request, res: Response) => {
   try {
-    const { newPassword, currentPassword } = req.body;
-
-    const passwordProblem = validateNewPassword(newPassword);
-    if (passwordProblem) {
-      res.status(400).json({ error: passwordProblem });
-      return;
-    }
+    const { currentPassword } = req.body;
 
     const user = await User.findByPk(req.user!.id);
     if (!user) {
@@ -69,7 +65,6 @@ router.post('/password/request', passwordLimiter, async (req: Request, res: Resp
       purpose: 'set-password',
       email: user.email,
       userId: user.id,
-      payload: { passwordHash: await hashPassword(newPassword) },
     });
     sendCodeInBackground(challenge, code);
 
@@ -80,12 +75,12 @@ router.post('/password/request', passwordLimiter, async (req: Request, res: Resp
 });
 
 /**
- * POST /me/password/confirm
+ * POST /me/password/verify
  * Body: { challengeId, code }
  *
- * Applies the pending password, signs out other sessions, and returns a fresh token.
+ * Confirms the emailed code and returns a ticket authorising one password write.
  */
-router.post('/password/confirm', codeConfirmLimiter, async (req: Request, res: Response) => {
+router.post('/password/verify', codeConfirmLimiter, async (req: Request, res: Response) => {
   try {
     const { challengeId, code } = req.body;
     if (!challengeId || !code) {
@@ -93,7 +88,7 @@ router.post('/password/confirm', codeConfirmLimiter, async (req: Request, res: R
       return;
     }
 
-    const challenge = await confirmChallenge(String(challengeId), 'set-password', String(code), { userId: req.user!.id });
+    await confirmChallenge(String(challengeId), 'set-password', String(code), { userId: req.user!.id });
 
     const user = await User.findByPk(req.user!.id);
     if (!user) {
@@ -101,10 +96,43 @@ router.post('/password/confirm', codeConfirmLimiter, async (req: Request, res: R
       return;
     }
 
-    const token = await applyPasswordHash(user, String(challenge.payload.passwordHash));
+    res.json({
+      ticket: issuePasswordTicket({ userId: user.id, purpose: 'set-password', tokenVersion: user.tokenVersion }),
+    });
+  } catch (error) {
+    handleRouteError(res, error, 'Error in POST /me/password/verify', 'Failed to verify code');
+  }
+});
+
+/**
+ * POST /me/password/apply
+ * Body: { ticket, newPassword }
+ *
+ * Sets the password, signs out other sessions, and returns a fresh token.
+ */
+router.post('/password/apply', passwordLimiter, async (req: Request, res: Response) => {
+  try {
+    const { ticket, newPassword } = req.body;
+
+    // Validate the password first so a weak one doesn't burn the ticket.
+    const passwordProblem = validateNewPassword(newPassword);
+    if (passwordProblem) {
+      res.status(400).json({ error: passwordProblem });
+      return;
+    }
+
+    const claims = readPasswordTicket(ticket, 'set-password');
+    const user = claims && claims.sub === req.user!.id ? await User.findByPk(claims.sub) : null;
+    // A spent ticket no longer matches token_version, because applying a password bumps it.
+    if (!user || !claims || claims.ver !== user.tokenVersion) {
+      res.status(400).json({ error: 'This verification has expired. Request a new code.', code: 'ticket_invalid' });
+      return;
+    }
+
+    const token = await applyPasswordHash(user, await hashPassword(newPassword));
     res.json({ success: true, token });
   } catch (error) {
-    handleRouteError(res, error, 'Error in POST /me/password/confirm', 'Failed to update password');
+    handleRouteError(res, error, 'Error in POST /me/password/apply', 'Failed to update password');
   }
 });
 

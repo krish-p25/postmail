@@ -75,7 +75,17 @@ const STRENGTH_CONFIG: Record<string, { color: string; bg: string; width: string
   'Strong': { color: 'text-green-500', bg: 'bg-green-400', width: 'w-full' },
 };
 
-export function PasswordStrengthMeter({ password }: { password: string }) {
+interface StrengthMeterProps {
+  password: string;
+  /**
+   * Show the criteria before anything is typed. Used where the meter sits in a panel
+   * whose height is measured up front (see StepMorph), so the list appearing later
+   * cannot leave a gap or resize a settled box.
+   */
+  showChecksWhenEmpty?: boolean;
+}
+
+export function PasswordStrengthMeter({ password, showChecksWhenEmpty = false }: StrengthMeterProps) {
   const { label, checks } = getPasswordStrength(password);
   const config = STRENGTH_CONFIG[label] || STRENGTH_CONFIG[''];
 
@@ -96,7 +106,7 @@ export function PasswordStrengthMeter({ password }: { password: string }) {
       </div>
 
       {/* Criteria checklist */}
-      {password.length > 0 && (
+      {(password.length > 0 || showChecksWhenEmpty) && (
         <div className="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
           {checks.map((check) => (
             <div key={check.label} className="flex items-center gap-1.5">

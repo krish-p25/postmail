@@ -1,14 +1,18 @@
 import { useState, FormEvent } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../services/auth';
 import { PasswordInput } from '../components/PasswordInput';
 import LoadingScreen from '../components/LoadingScreen';
 import VerifyCodeForm from '../components/VerifyCodeForm';
+import { safeNextPath } from '../utils/next-path';
 
 export default function Login() {
   const { user, loading, setUser } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Where the user was heading before AuthGuard sent them here.
+  const next = safeNextPath(searchParams.get('next'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +22,7 @@ export default function Login() {
   const [codeError, setCodeError] = useState<string | null>(null);
 
   if (!loading && user) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={next ?? '/dashboard'} replace />;
   }
 
   if (pendingLogin) {
@@ -38,7 +42,7 @@ export default function Login() {
           try {
             const data = await auth.confirmLogin(pendingLogin.challengeId, code, rememberDevice);
             setUser(data.user);
-            navigate('/dashboard', { replace: true });
+            navigate(next ?? '/dashboard', { replace: true });
           } catch (err) {
             setCodeError(err instanceof Error ? err.message : 'Verification failed');
           }
@@ -70,7 +74,7 @@ export default function Login() {
         return;
       }
       setUser(data.user);
-      navigate('/dashboard');
+      navigate(next ?? '/dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Sign in failed');
     } finally {
@@ -95,7 +99,7 @@ export default function Login() {
         <div className="rounded-xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-gray-200">
           {/* Google Login */}
           <button
-            onClick={() => auth.redirectToGoogle()}
+            onClick={() => auth.redirectToGoogle(next)}
             className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -109,7 +113,7 @@ export default function Login() {
 
           {/* Microsoft Login */}
           <button
-            onClick={() => auth.redirectToMicrosoft()}
+            onClick={() => auth.redirectToMicrosoft(next)}
             className="mt-3 flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
           >
             <svg className="h-5 w-5" viewBox="0 0 21 21">

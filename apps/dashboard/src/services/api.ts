@@ -89,20 +89,33 @@ export const api = {
     }>;
   },
 
-  async requestPasswordChange(newPassword: string, currentPassword?: string) {
+  /** Step 1: check the current password (when there is one) and email a code. */
+  async requestPasswordChange(currentPassword?: string) {
     const res = await authFetch('/me/password/request', {
       method: 'POST',
-      body: JSON.stringify({ newPassword, currentPassword }),
+      body: JSON.stringify({ currentPassword }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to send verification code');
     return data as { challengeId: string; email: string };
   },
 
-  async confirmPasswordChange(challengeId: string, code: string) {
-    const res = await authFetch('/me/password/confirm', {
+  /** Step 2: confirm the code, returning a ticket authorising one password write. */
+  async verifyPasswordChange(challengeId: string, code: string) {
+    const res = await authFetch('/me/password/verify', {
       method: 'POST',
       body: JSON.stringify({ challengeId, code }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to verify code');
+    return (data as { ticket: string }).ticket;
+  },
+
+  /** Step 3: spend the ticket on the chosen password. */
+  async applyPasswordChange(ticket: string, newPassword: string) {
+    const res = await authFetch('/me/password/apply', {
+      method: 'POST',
+      body: JSON.stringify({ ticket, newPassword }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to update password');

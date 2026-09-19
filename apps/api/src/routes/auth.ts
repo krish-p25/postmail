@@ -15,12 +15,14 @@ import {
   linkLimiter,
   resetRequestIpLimiter,
   resetRequestEmailLimiter,
+  passwordApplyLimiter,
 } from '../middleware/rate-limit';
 import { verifiedGoogleEmail, verifiedMicrosoftEmail, microsoftMailboxEmail } from '../services/identity';
 import type { ChallengePurpose } from '../services/challenge-purposes';
 import { createChallenge, confirmChallenge, resendChallenge, sendCodeInBackground, ChallengeError } from '../services/challenges';
 import { applyPasswordHash, hashPassword, validateNewPassword } from '../services/passwords';
 import { handleRouteError } from './respond';
+import { issuePasswordTicket, readPasswordTicket } from '../services/password-tickets';
 import { DEVICE_COOKIE, deviceCookieOptions, isTrustedDevice, trustDevice } from '../services/devices';
 
 const router = Router();
@@ -615,21 +617,16 @@ router.post('/password-reset/request', resetRequestIpLimiter, resetRequestEmailL
 });
 
 /**
- * POST /auth/password-reset/confirm
- * Body: { challengeId, code, newPassword }
+ * POST /auth/password-reset/verify
+ * Body: { challengeId, code }
  *
- * Sets the new password, signs out other sessions, and signs this browser in.
+ * Confirms the emailed code and returns a ticket authorising one password write.
+ * A reset challenge for an unknown address can never match, so this responds the
+ * same way whether or not the account exists.
  */
-router.post('/password-reset/confirm', codeConfirmLimiter, async (req: Request, res: Response) => {
+router.post('/password-reset/verify', codeConfirmLimiter, async (req: Request, res: Response) => {
   try {
-    const { challengeId, code, newPassword } = req.body;
-
-    // Validate the password first so a typo doesn't burn a code attempt.
-    const passwordProblem = validateNewPassword(newPassword);
-    if (passwordProblem) {
-      res.status(400).json({ error: passwordProblem });
-      return;
-    }
+    const { challengeId, code } = req.body;
 
     const challenge = await confirmChallenge(String(challengeId ?? ''), 'password-reset', String(code ?? ''));
     const user = challenge.userId ? await User.findByPk(challenge.userId) : null;
@@ -637,10 +634,43 @@ router.post('/password-reset/confirm', codeConfirmLimiter, async (req: Request, 
       throw new ChallengeError('invalid_or_expired');
     }
 
+    res.json({
+      ticket: issuePasswordTicket({ userId: user.id, purpose: 'password-reset', tokenVersion: user.tokenVersion }),
+    });
+  } catch (error) {
+    handleRouteError(res, error, 'Password reset verify error', 'Password reset failed');
+  }
+});
+
+/**
+ * POST /auth/password-reset/apply
+ * Body: { ticket, newPassword }
+ *
+ * Sets the new password, signs out other sessions, and signs this browser in.
+ */
+router.post('/password-reset/apply', passwordApplyLimiter, async (req: Request, res: Response) => {
+  try {
+    const { ticket, newPassword } = req.body;
+
+    // Validate the password first so a weak one doesn't burn the ticket.
+    const passwordProblem = validateNewPassword(newPassword);
+    if (passwordProblem) {
+      res.status(400).json({ error: passwordProblem });
+      return;
+    }
+
+    const claims = readPasswordTicket(ticket, 'password-reset');
+    const user = claims ? await User.findByPk(claims.sub) : null;
+    // A spent ticket no longer matches token_version, because applying a password bumps it.
+    if (!user || !claims || claims.ver !== user.tokenVersion) {
+      res.status(400).json({ error: 'This verification has expired. Request a new code.', code: 'ticket_invalid' });
+      return;
+    }
+
     const token = await applyPasswordHash(user, await hashPassword(newPassword));
     res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
   } catch (error) {
-    handleRouteError(res, error, 'Password reset confirm error', 'Password reset failed');
+    handleRouteError(res, error, 'Password reset apply error', 'Password reset failed');
   }
 });
 

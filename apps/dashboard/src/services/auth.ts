@@ -80,10 +80,14 @@ export const auth = {
     return { challengeId: data.challengeId, email };
   },
 
-  async confirmPasswordReset(challengeId: string, code: string, newPassword: string): Promise<AuthResponse> {
-    return signIn(
-      await postJson<AuthResponse>('/auth/password-reset/confirm', { challengeId, code, newPassword }, 'Password reset failed'),
-    );
+  /** Confirms the emailed code and returns a ticket authorising one password write. */
+  async verifyPasswordReset(challengeId: string, code: string): Promise<string> {
+    const data = await postJson<{ ticket: string }>('/auth/password-reset/verify', { challengeId, code }, 'Verification failed');
+    return data.ticket;
+  },
+
+  async applyPasswordReset(ticket: string, newPassword: string): Promise<AuthResponse> {
+    return signIn(await postJson<AuthResponse>('/auth/password-reset/apply', { ticket, newPassword }, 'Password reset failed'));
   },
 
   async googleLogin(code: string): Promise<AuthResponse | { requiresPassword: true; email: string; idToken: string }> {
@@ -133,8 +137,13 @@ export const auth = {
     return { challengeId: data.challengeId, email: data.email };
   },
 
-  /** Build Google OAuth consent URL and redirect the browser to it. */
-  redirectToGoogle(): void {
+  /**
+   * Build Google OAuth consent URL and redirect the browser to it.
+   *
+   * `next` travels in `state`, never in redirect_uri: the API re-sends a fixed
+   * redirect_uri when exchanging the code, and the two must match exactly.
+   */
+  redirectToGoogle(next?: string | null): void {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     const redirectUri = encodeURIComponent(window.location.origin + '/oauth/callback');
     const scope = encodeURIComponent('openid email profile');
@@ -145,12 +154,18 @@ export const auth = {
       `&response_type=code` +
       `&scope=${scope}` +
       `&access_type=offline` +
-      `&prompt=consent`;
+      `&prompt=consent` +
+      (next ? `&state=${encodeURIComponent(next)}` : '');
     window.location.href = url;
   },
 
-  /** Build Microsoft OAuth consent URL and redirect the browser to it. */
-  redirectToMicrosoft(): void {
+  /**
+   * Build Microsoft OAuth consent URL and redirect the browser to it.
+   *
+   * `state` is shared with the mailbox-connect flow, which sends the literal
+   * 'connect-mailbox'. Handover values always start with '/', so they cannot collide.
+   */
+  redirectToMicrosoft(next?: string | null): void {
     const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID;
     const redirectUri = encodeURIComponent(window.location.origin + '/microsoft/callback');
     const scope = encodeURIComponent('openid email profile User.Read Mail.Read offline_access');
@@ -160,7 +175,8 @@ export const auth = {
       `&redirect_uri=${redirectUri}` +
       `&response_type=code` +
       `&scope=${scope}` +
-      `&response_mode=query`;
+      `&response_mode=query` +
+      (next ? `&state=${encodeURIComponent(next)}` : '');
     window.location.href = url;
   },
 };

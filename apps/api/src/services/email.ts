@@ -101,17 +101,30 @@ function codeTemplate(purpose: ChallengePurpose, code: string): string {
               </p>`);
 }
 
-function passwordChangedTemplate(): string {
+function passwordChangedTemplate(to: string): string {
   const now = new Date();
   const date = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
   const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', timeZoneName: 'short' });
+  // Points at the reset flow, not Settings: someone who did not make this change
+  // does not know the current password that Settings would ask them for.
+  const resetUrl = `${config.dashboardUrl}/forgot-password?email=${encodeURIComponent(to)}`;
   return layout(`
               <h2 style="margin:0 0 8px;font-size:20px;font-weight:600;color:#111827;text-align:center;">Password changed</h2>
               <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#6b7280;text-align:center;">
                 Your PostMail account password was changed on ${date} at ${time}. You have been signed out everywhere else.
               </p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:4px 0 8px;">
+                    <a href="${resetUrl}" style="display:inline-block;background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);border-radius:10px;padding:14px 28px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">
+                      This wasn't me &mdash; reset my password
+                    </a>
+                  </td>
+                </tr>
+              </table>
               <p style="margin:24px 0 0;font-size:13px;line-height:1.5;color:#9ca3af;">
-                If you did not make this change, reset your password immediately from the PostMail sign-in page.
+                If you made this change, no action is needed. Otherwise use the button above to set a new
+                password with a code emailed to this address, which signs out whoever made the change.
               </p>`);
 }
 
@@ -129,7 +142,7 @@ export async function sendPasswordChangedEmail(to: string): Promise<void> {
     from: config.smtpFrom,
     to,
     subject: 'Your PostMail password has been changed',
-    html: passwordChangedTemplate(),
+    html: passwordChangedTemplate(to),
   });
 }
 
