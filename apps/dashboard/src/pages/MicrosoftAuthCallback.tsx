@@ -5,6 +5,7 @@ import { api } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import VerifyCodeForm from '../components/VerifyCodeForm';
 import LoadingScreen from '../components/LoadingScreen';
+import { safeNextPath } from '../utils/next-path';
 
 export default function MicrosoftAuthCallback() {
   const navigate = useNavigate();
@@ -16,6 +17,8 @@ export default function MicrosoftAuthCallback() {
   const [pendingVerify, setPendingVerify] = useState<{ challengeId: string; email: string } | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const exchanged = useRef(false);
+  // Handed over by AuthGuard before sign-in, round-tripped through the OAuth `state`.
+  const next = safeNextPath(new URLSearchParams(window.location.search).get('state')) ?? '/dashboard';
 
   useEffect(() => {
     if (exchanged.current) return;
@@ -73,7 +76,7 @@ export default function MicrosoftAuthCallback() {
         } else {
           console.log('[Microsoft OAuth] Login successful, redirecting to dashboard');
           setUser(data.user);
-          navigate('/dashboard', { replace: true });
+          navigate(next, { replace: true });
         }
       })
       .catch((err) => {
@@ -107,7 +110,7 @@ export default function MicrosoftAuthCallback() {
           try {
             const data = await auth.verifyEmail(pendingVerify.challengeId, code);
             setUser(data.user);
-            navigate('/dashboard', { replace: true });
+            navigate(next, { replace: true });
           } catch (err) {
             setVerifyError(err instanceof Error ? err.message : 'Verification failed');
           }
