@@ -22,6 +22,8 @@ COPY .env ./
 
 WORKDIR /app/apps/dashboard
 RUN npx vite build
+RUN npx vite build --ssr src/entry-server.tsx --outDir dist-ssr
+RUN node scripts/prerender.mjs
 
 # Production stage — serve static files (.env is not copied here)
 FROM node:20-alpine

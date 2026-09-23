@@ -3,8 +3,99 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PostMail — Email Tracking Dashboard</title>
+    <title>PostMail — Email Open & Click Tracking for Gmail and Outlook</title>
+    <meta name="description" content="PostMail is email tracking software that tells you the moment a recipient opens your email or clicks a link. Works inside Gmail and Outlook, sends instant Discord/Slack notifications, and is free during its current beta." />
+    <link rel="canonical" href="https://postmail.app/" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PostMail" />
+    <meta property="og:title" content="PostMail — Email Open & Click Tracking for Gmail and Outlook" />
+    <meta property="og:description" content="Know the exact moment your email is opened. Real-time open and click tracking for Gmail and Outlook, with Discord/Slack notifications. Free during beta." />
+    <meta property="og:url" content="https://postmail.app/" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="PostMail — Email Open & Click Tracking for Gmail and Outlook" />
+    <meta name="twitter:description" content="Know the exact moment your email is opened. Real-time open and click tracking for Gmail and Outlook, with Discord/Slack notifications. Free during beta." />
+
+    <!-- Structured data for search/AI answer engines -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "PostMail",
+      "url": "https://postmail.app/",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web, Chrome",
+      "description": "PostMail is email tracking software for Gmail and Outlook. It detects when a recipient opens an email or clicks a link, and sends real-time notifications via Discord, Slack, or browser push.",
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "Starter",
+          "price": "0",
+          "priceCurrency": "USD",
+          "description": "50 tracked emails/mo, 1 connected account, basic dashboard."
+        },
+        {
+          "@type": "Offer",
+          "name": "Pro",
+          "price": "0",
+          "priceCurrency": "USD",
+          "description": "Unlimited tracking, 5 connected accounts, Discord & Slack notifications, link click tracking, 30-day analytics. Normally $12/mo, free while PostMail is in beta."
+        }
+      ],
+      "featureList": [
+        "Real-time email open tracking",
+        "Per-link click tracking",
+        "Gmail Chrome extension",
+        "Outlook OAuth integration",
+        "Discord and Slack open notifications",
+        "REST API"
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is PostMail?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "PostMail is email tracking software that shows you when a recipient opens your email or clicks a link inside it, with real-time notifications, for Gmail and Outlook."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is PostMail free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "PostMail's Starter plan is free permanently. The Pro plan, normally $12/mo, is free for everyone while PostMail is in public beta."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does PostMail work with Gmail and Outlook?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. PostMail has a Chrome extension for Gmail compose and a full OAuth integration for Outlook."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does PostMail detect email opens?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "PostMail injects an invisible tracking pixel into outgoing emails and records the open event when it loads, filtering out bot and proxy opens."
+          }
+        }
+      ]
+    }
+    </script>
   </head>
   <body class="min-h-screen bg-gray-50 antialiased">
     <div id="root"></div>

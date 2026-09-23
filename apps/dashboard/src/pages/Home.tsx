@@ -782,11 +782,13 @@ const TIERS = [
   },
   {
     name: 'Pro',
-    price: '$12',
+    price: 'Free',
+    originalPrice: '$12',
     period: '/mo',
+    badge: 'Beta',
     description: 'For professionals who need full visibility.',
     features: ['Unlimited tracking', 'Track 5 accounts', 'Discord & Slack notifications', 'Link click tracking', 'Priority support', '30-day analytics'],
-    cta: 'Start Free Trial',
+    cta: 'Get Started Free',
     highlighted: true,
   },
   {
@@ -811,7 +813,7 @@ function Pricing() {
             Simple, transparent pricing
           </h2>
           <p className="mt-4 text-lg" style={{ color: C.gray500 }}>
-            Start free. Upgrade when you need more.
+            We're in free beta — Pro is on us while we build. Lock in your account now.
           </p>
         </div>
 
@@ -833,9 +835,19 @@ function Pricing() {
                   Most Popular
                 </div>
               )}
-              <h3 className="text-xl font-bold" style={{ color: C.gray900 }}>{tier.name}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-xl font-bold" style={{ color: C.gray900 }}>{tier.name}</h3>
+                {tier.badge && (
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ color: C.orange, background: C.orangePastel }}>
+                    {tier.badge}
+                  </span>
+                )}
+              </div>
               <p className="mt-1 text-sm" style={{ color: C.gray500 }}>{tier.description}</p>
-              <div className="mt-6 flex items-baseline gap-1">
+              <div className="mt-6 flex items-baseline gap-2">
+                {tier.originalPrice && (
+                  <span className="text-2xl font-semibold line-through" style={{ color: C.gray400 }}>{tier.originalPrice}</span>
+                )}
                 <span className="text-4xl font-extrabold" style={{ color: C.gray900 }}>{tier.price}</span>
                 {tier.period && <span className="text-sm" style={{ color: C.gray500 }}>{tier.period}</span>}
               </div>
