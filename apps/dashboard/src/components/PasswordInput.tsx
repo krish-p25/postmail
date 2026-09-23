@@ -3,9 +3,11 @@ import { useState, InputHTMLAttributes } from 'react';
 interface PasswordInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  /** What the eye button reveals, for its accessible label ("Show <revealLabel>"). */
+  revealLabel?: string;
 }
 
-export function PasswordInput({ value, onChange, className, ...props }: PasswordInputProps) {
+export function PasswordInput({ value, onChange, className, revealLabel = 'password', ...props }: PasswordInputProps) {
   const [visible, setVisible] = useState(false);
 
   return (
@@ -22,7 +24,7 @@ export function PasswordInput({ value, onChange, className, ...props }: Password
         onClick={() => setVisible(!visible)}
         className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 transition hover:text-gray-600"
         tabIndex={-1}
-        aria-label={visible ? 'Hide password' : 'Show password'}
+        aria-label={`${visible ? 'Hide' : 'Show'} ${revealLabel}`}
       >
         {visible ? (
           <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">

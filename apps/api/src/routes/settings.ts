@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { forUser } from '../db/scoped';
+import { isDiscordWebhookUrl, maskDiscordWebhookUrl } from '../utils/discord-webhook';
 
 const router = Router();
 
@@ -22,7 +23,7 @@ router.get('/', async (req: Request, res: Response) => {
     const firstMailbox = mailboxes[0] || null;
 
     res.json({
-      discordWebhookUrl: settings?.discordWebhookUrl ?? null,
+      discordWebhook: maskDiscordWebhookUrl(settings?.discordWebhookUrl ?? null),
       // Backward compat: derived from LinkedMailbox
       mailboxConnected: mailboxes.length > 0,
       mailboxProvider: firstMailbox?.provider ?? null,
@@ -47,13 +48,21 @@ router.get('/', async (req: Request, res: Response) => {
  */
 router.put('/', async (req: Request, res: Response) => {
   try {
-    const { discordWebhookUrl } = req.body;
+    const raw = req.body?.discordWebhookUrl;
+    // null / empty string clears the webhook; anything else must be a Discord webhook URL.
+    const discordWebhookUrl = typeof raw === 'string' ? raw.trim() || null : raw ?? null;
 
-    const [settings] = await forUser(req.user!.id).userSettings.upsert({
-      discordWebhookUrl: discordWebhookUrl ?? null,
-    });
+    if (discordWebhookUrl !== null && !isDiscordWebhookUrl(discordWebhookUrl)) {
+      res.status(400).json({
+        error: 'Enter a Discord webhook URL, like https://discord.com/api/webhooks/…',
+        code: 'invalid_webhook_url',
+      });
+      return;
+    }
 
-    res.json({ settings });
+    await forUser(req.user!.id).userSettings.upsert({ discordWebhookUrl });
+
+    res.json({ discordWebhook: maskDiscordWebhookUrl(discordWebhookUrl) });
   } catch (error) {
     console.error('[PostMail API] Error in PUT /api/settings:', error);
     res.status(500).json({ error: 'Failed to update settings' });

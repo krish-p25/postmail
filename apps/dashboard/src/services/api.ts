@@ -8,6 +8,13 @@ export interface LinkedMailboxInfo {
   email: string;
 }
 
+/** A saved Discord webhook as the API returns it: the token is masked and never sent back. */
+export interface MaskedWebhook {
+  masked: string;
+  /** False for a URL saved before validation existed; notifications skip it. */
+  valid: boolean;
+}
+
 export interface EmailAttachment {
   attachmentId: string;
   messageId: string;
@@ -138,7 +145,7 @@ export const api = {
     const res = await authFetch('/settings');
     if (!res.ok) throw new Error('Failed to fetch settings');
     return res.json() as Promise<{
-      discordWebhookUrl: string | null;
+      discordWebhook: MaskedWebhook | null;
       mailboxConnected: boolean;
       mailboxProvider: string | null;
       mailboxEmail: string | null;
@@ -146,13 +153,14 @@ export const api = {
     }>;
   },
 
-  async updateSettings(data: { discordWebhookUrl?: string | null }) {
+  async updateSettings(data: { discordWebhookUrl: string | null }): Promise<{ discordWebhook: MaskedWebhook | null }> {
     const res = await authFetch('/settings', {
       method: 'PUT',
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error('Failed to update settings');
-    return res.json();
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || 'Failed to update settings');
+    return body;
   },
 
   async getGmailConnectUrl() {
