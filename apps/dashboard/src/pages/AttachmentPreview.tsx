@@ -1,6 +1,61 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import { auth } from '../services/auth';
+
+/**
+ * A .docx attachment can come from any external sender. mammoth converts its
+ * hyperlinks verbatim, including a `javascript:` href, which would otherwise
+ * run in the dashboard origin (see docs/security-review.md #3). Two independent
+ * layers, so a gap in either one alone isn't enough:
+ *
+ *  1. Sanitize the converted HTML — only http(s)/mailto links and `#` anchors
+ *     survive. `data:` images still work: DOMPurify allows `data:` on <img>
+ *     src independently of ALLOWED_URI_REGEXP (its DATA_URI_TAGS allowlist),
+ *     which is how mammoth embeds a document's inline images.
+ *  2. Render the sanitized HTML in an iframe sandboxed *without*
+ *     `allow-same-origin` — even a sanitizer gap can't reach the dashboard
+ *     origin from there, since `allow-scripts` is also never granted.
+ */
+let hookInstalled = false;
+function sanitizeDocxHtml(html: string): string {
+  if (!hookInstalled) {
+    // Registered once: DOMPurify.addHook appends to a shared list, so calling
+    // this per-render would re-run the same rewrite once per prior render.
+    DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+      if (node.tagName === 'A') {
+        node.setAttribute('target', '_blank');
+        node.setAttribute('rel', 'noopener noreferrer');
+      }
+    });
+    hookInstalled = true;
+  }
+  return DOMPurify.sanitize(html, {
+    // Blocks javascript:/vbscript:/data:text-html links; '#' keeps mammoth's
+    // internal footnote/comment anchors working.
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|#)/i,
+    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'link', 'meta', 'base'],
+    FORBID_ATTR: ['style'],
+  });
+}
+
+const DOCX_IFRAME_STYLES = `
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.65; color: #1f2937; margin: 0; padding: 24px; word-wrap: break-word; }
+  h1, h2, h3, h4, h5, h6 { font-weight: 600; line-height: 1.3; margin: 1.4em 0 0.5em; color: #111827; }
+  h1 { font-size: 1.5em; } h2 { font-size: 1.3em; } h3 { font-size: 1.15em; }
+  p { margin: 0 0 1em; }
+  a { color: #2563eb; text-decoration: underline; }
+  img { max-width: 100%; height: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 0 0 1em; }
+  th, td { border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left; }
+  ul, ol { margin: 0 0 1em; padding-left: 1.5em; }
+  blockquote { margin: 0 0 1em 0.5em; padding-left: 0.75em; border-left: 2px solid #d1d5db; color: #4b5563; }
+  code { font-family: 'Courier New', monospace; background: #f3f4f6; padding: 0.1em 0.3em; border-radius: 3px; }
+`;
+
+function docxPreviewDocument(sanitizedHtml: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${DOCX_IFRAME_STYLES}</style></head><body>${sanitizedHtml}</body></html>`;
+}
 
 function getFileCategory(mime: string, filename: string) {
   const ext = filename?.split('.').pop()?.toLowerCase() || '';
@@ -95,10 +150,14 @@ export default function AttachmentPreview() {
           blobRef.current = new Blob([arrayBuffer], { type: mime });
           const mammoth = await import('mammoth');
           const result = await mammoth.convertToHtml({ arrayBuffer });
-          setDocxHtml(result.value);
+          setDocxHtml(sanitizeDocxHtml(result.value));
         } else {
           const data = await res.arrayBuffer();
-          const contentType = res.headers.get('Content-Type') || mime;
+          // For PDFs, trust the extension-derived category over the server's
+          // Content-Type: a blob keeps the origin that created it, so a
+          // mislabelled file typed text/html would run as a page, not a PDF,
+          // if the blob URL were ever opened directly rather than embedded.
+          const contentType = category === 'pdf' ? 'application/pdf' : res.headers.get('Content-Type') || mime;
           const blob = new Blob([data], { type: contentType });
           blobRef.current = blob;
           const objUrl = URL.createObjectURL(blob);
@@ -231,12 +290,14 @@ export default function AttachmentPreview() {
 
     if (category === 'docx' && docxHtml !== null) {
       return (
-        <div className="w-full max-w-4xl overflow-auto rounded-lg border border-gray-200 bg-white p-8">
-          <div
-            className="prose prose-sm max-w-none"
-            dangerouslySetInnerHTML={{ __html: docxHtml }}
-          />
-        </div>
+        <iframe
+          // No allow-same-origin and no allow-scripts: even a sanitizer gap
+          // can't reach the dashboard origin from inside this frame.
+          sandbox="allow-popups allow-popups-to-escape-sandbox"
+          srcDoc={docxPreviewDocument(docxHtml)}
+          title={filename}
+          className="h-[calc(100vh-8rem)] w-full max-w-4xl rounded-lg border border-gray-200 bg-white"
+        />
       );
     }
 
