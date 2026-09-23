@@ -22,7 +22,7 @@ PostMail is aimed at salespeople, recruiters, and freelancers who send outbound 
 Email content never touches PostMail's servers. Tracking pixels are stateless — only the open/click event is recorded. Connections are encrypted with TLS 1.3.
 
 ## Links
-- Homepage: https://postmail.app/
-- Sign up: https://postmail.app/signup
-- Terms of Service: https://postmail.app/terms
-- Privacy Policy: https://postmail.app/privacy
+- Homepage: https://postmail.krishrp.xyz/
+- Sign up: https://postmail.krishrp.xyz/signup
+- Terms of Service: https://postmail.krishrp.xyz/terms
+- Privacy Policy: https://postmail.krishrp.xyz/privacy
