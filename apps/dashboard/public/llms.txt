@@ -1,0 +1,28 @@
+# PostMail
+
+> PostMail is email tracking software for Gmail and Outlook. It tells you the exact moment a recipient opens your email or clicks a link, and sends real-time notifications so you can follow up while you're top of mind.
+
+PostMail is aimed at salespeople, recruiters, and freelancers who send outbound email and need to know when it's been read.
+
+## What it does
+- Detects email opens in real time via an invisible tracking pixel (sub-second detection).
+- Tracks clicks on individual links inside an email, per-link.
+- Filters bot/proxy opens for accurate human-only metrics.
+- Sends notifications via Discord webhook, Slack webhook, or browser push when an email is opened.
+- Works as a Chrome extension inside Gmail compose, and via OAuth for Outlook — no separate app to check.
+- Provides a web dashboard with open/click history, engagement heatmaps by day and hour, and per-thread engagement graphs.
+- Offers a REST API and Zapier integration for connecting tracking events to other tools.
+
+## Pricing
+- Starter: $0/mo — 50 tracked emails/mo, 1 connected account, basic dashboard, 24h open history.
+- Pro: normally $12/mo, currently free while PostMail is in public beta — unlimited tracking, 5 connected accounts, Discord & Slack notifications, link click tracking, 30-day analytics.
+- Enterprise: custom pricing — SSO/SAML, dedicated account manager, custom API integrations, SLA, on-premise option.
+
+## Privacy
+Email content never touches PostMail's servers. Tracking pixels are stateless — only the open/click event is recorded. Connections are encrypted with TLS 1.3.
+
+## Links
+- Homepage: https://postmail.app/
+- Sign up: https://postmail.app/signup
+- Terms of Service: https://postmail.app/terms
+- Privacy Policy: https://postmail.app/privacy

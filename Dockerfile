@@ -30,6 +30,8 @@ COPY .env ./
 
 WORKDIR /app/apps/dashboard
 RUN npx vite build
+RUN npx vite build --ssr src/entry-server.tsx --outDir dist-ssr
+RUN node scripts/prerender.mjs
 
 # ── Stage 4: Build API (TypeScript) ─────────────────────
 FROM shared-build AS api-build
