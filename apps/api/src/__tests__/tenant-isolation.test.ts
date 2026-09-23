@@ -77,7 +77,7 @@ describe("tenant isolation: Bob cannot reach Alice's data", () => {
   it("GET /api/settings exposes none of Alice's settings", async () => {
     const res = await request(app).get('/api/settings').set('Authorization', asBob);
     expect(res.status).toBe(200);
-    expect(res.body.discordWebhookUrl).toBeNull();
+    expect(res.body.discordWebhook).toBeNull();
     expect(res.body.linkedMailboxes).toEqual([]);
   });
 
@@ -85,7 +85,7 @@ describe("tenant isolation: Bob cannot reach Alice's data", () => {
     const res = await request(app)
       .put('/api/settings')
       .set('Authorization', asBob)
-      .send({ discordWebhookUrl: 'https://discord.com/api/webhooks/bob' });
+      .send({ discordWebhookUrl: `https://discord.com/api/webhooks/1234567890123456789/${'b'.repeat(68)}` });
     expect(res.status).toBe(200);
     const aliceSetting = await UserSetting.findOne({ where: { userId: alice.id } });
     expect(aliceSetting!.discordWebhookUrl).toBe('https://discord.com/api/webhooks/alice');

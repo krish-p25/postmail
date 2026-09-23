@@ -1,6 +1,7 @@
 import TrackedEmail from '../db/models/TrackedEmail';
 import EmailOpen from '../db/models/EmailOpen';
 import { forUser } from '../db/scoped';
+import { isDiscordWebhookUrl } from '../utils/discord-webhook';
 
 /**
  * Dispatch notifications for an email open event.
@@ -17,10 +18,10 @@ export async function notifyEmailOpened(
 
     const channels: Array<() => Promise<void>> = [];
 
-    if (settings.discordWebhookUrl) {
-      channels.push(() =>
-        sendDiscordNotification(settings.discordWebhookUrl!, trackedEmail, open),
-      );
+    const webhookUrl = settings.discordWebhookUrl;
+    // Re-checked here so URLs saved before validation existed are never requested.
+    if (isDiscordWebhookUrl(webhookUrl)) {
+      channels.push(() => sendDiscordNotification(webhookUrl, trackedEmail, open));
     }
 
     await Promise.allSettled(channels.map((ch) => ch()));
@@ -54,6 +55,9 @@ async function sendDiscordNotification(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(embed),
+    // Never follow a redirect off Discord, and don't let a slow webhook hold the request open.
+    redirect: 'error',
+    signal: AbortSignal.timeout(5000),
   });
 
   if (!res.ok) {
