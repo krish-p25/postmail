@@ -3,6 +3,8 @@
   "compilerOptions": {
     "outDir": "./dist",
     "module": "ES2020",
+    // Application, not a library: without this ts-loader emits .d.ts files into dist/ and the store zip
+    "declaration": false,
     "paths": {
       "@postmail/shared": ["../../packages/shared/src"],
       "@postmail/shared/*": ["../../packages/shared/src/*"]
