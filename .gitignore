@@ -20,5 +20,7 @@ apps/dashboard/src/components/logo.svg
 
 # Video
 apps/video/
+# Packaged extension builds for the Chrome Web Store (npm run deploy in apps/extension)
+apps/extension/releases/
 # Marketing Content (never commit)
 marketing/

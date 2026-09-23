@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PostMail – Email Open Tracker for Gmail & Outlook",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Know when your emails are opened. Real-time read receipts and open tracking for Gmail and Outlook.",
   "homepage_url": "https://postmail.krishrp.xyz",
   "icons": {
@@ -35,8 +35,7 @@
     },
     {
       "matches": [
-        "https://postmail.krishrp.xyz/*",
-        "https://*.postmail.app/*"
+        "https://postmail.krishrp.xyz/*"
       ],
       "js": ["dashboard-marker.js"],
       "run_at": "document_start"
