@@ -20,5 +20,5 @@ apps/dashboard/src/components/logo.svg
 
 # Video
 apps/video/
-# Playwright session state for marketing captures (never commit)
-marketing/assets/**/.auth/
+# Marketing Content (never commit)
+marketing/
