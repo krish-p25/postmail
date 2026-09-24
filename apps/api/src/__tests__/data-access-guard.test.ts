@@ -56,6 +56,19 @@ it('EmailChallenge is only queried inside services/challenges.ts', () => {
   expect(violations).toEqual([]);
 });
 
+it('PendingAccountLink is only queried inside services/account-links.ts', () => {
+  const call = new RegExp(`\\bPendingAccountLink\\.(${STATIC_METHODS.join('|')})\\(`);
+  const violations: string[] = [];
+  for (const file of sourceFiles(SRC)) {
+    const rel = path.relative(SRC, file).split(path.sep).join('/');
+    if (rel === 'services/account-links.ts') continue;
+    fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+      if (call.test(line)) violations.push(`${rel}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  expect(violations).toEqual([]);
+});
+
 it('withRLS is no longer used', () => {
   const users = sourceFiles(SRC).filter((f) => fs.readFileSync(f, 'utf8').includes('withRLS'));
   expect(users).toEqual([]);

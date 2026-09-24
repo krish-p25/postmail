@@ -90,8 +90,8 @@ export const auth = {
     return signIn(await postJson<AuthResponse>('/auth/password-reset/apply', { ticket, newPassword }, 'Password reset failed'));
   },
 
-  async googleLogin(code: string): Promise<AuthResponse | { requiresPassword: true; email: string; idToken: string }> {
-    const data = await postJson<AuthResponse | { requiresPassword: true; email: string; idToken: string }>(
+  async googleLogin(code: string): Promise<AuthResponse | { requiresPassword: true; email: string; linkId: string }> {
+    const data = await postJson<AuthResponse | { requiresPassword: true; email: string; linkId: string }>(
       '/auth/google',
       { code },
       'Google sign-in failed',
@@ -99,8 +99,13 @@ export const auth = {
     return 'requiresPassword' in data ? data : signIn(data);
   },
 
-  async googleLink(idToken: string, password: string): Promise<CodeChallenge> {
-    const data = await postJson<CodeChallenge>('/auth/google/link', { idToken, password }, 'Failed to link Google account');
+  /**
+   * linkId references the idToken from googleLogin()'s response on the server
+   * (see api/src/services/account-links.ts) — the token itself never reaches
+   * this client.
+   */
+  async googleLink(linkId: string, password: string): Promise<CodeChallenge> {
+    const data = await postJson<CodeChallenge>('/auth/google/link', { linkId, password }, 'Failed to link Google account');
     return { challengeId: data.challengeId, email: data.email };
   },
 
@@ -119,8 +124,8 @@ export const auth = {
   },
 
   /** Exchange Microsoft authorization code for user info via API. */
-  async microsoftLogin(code: string): Promise<AuthResponse | { requiresPassword: true; email: string; accessToken: string; refreshToken: string | null; tokenExpiry: string | null }> {
-    const data = await postJson<AuthResponse | { requiresPassword: true; email: string; accessToken: string; refreshToken: string | null; tokenExpiry: string | null }>(
+  async microsoftLogin(code: string): Promise<AuthResponse | { requiresPassword: true; email: string; linkId: string }> {
+    const data = await postJson<AuthResponse | { requiresPassword: true; email: string; linkId: string }>(
       '/auth/microsoft',
       { code },
       'Microsoft sign-in failed',
@@ -128,12 +133,13 @@ export const auth = {
     return 'requiresPassword' in data ? data : signIn(data);
   },
 
-  async microsoftLink(accessToken: string, password: string, refreshToken?: string | null, tokenExpiry?: string | null): Promise<CodeChallenge> {
-    const data = await postJson<CodeChallenge>(
-      '/auth/microsoft/link',
-      { accessToken, password, refreshToken, tokenExpiry },
-      'Failed to link Microsoft account',
-    );
+  /**
+   * linkId references the Microsoft tokens from microsoftLogin()'s response
+   * on the server (see api/src/services/account-links.ts) — they never reach
+   * this client.
+   */
+  async microsoftLink(linkId: string, password: string): Promise<CodeChallenge> {
+    const data = await postJson<CodeChallenge>('/auth/microsoft/link', { linkId, password }, 'Failed to link Microsoft account');
     return { challengeId: data.challengeId, email: data.email };
   },
 

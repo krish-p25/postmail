@@ -10,7 +10,7 @@ export default function OAuthCallback() {
   const navigate = useNavigate();
   const { setUser } = useAuth();
   const [error, setError] = useState<string | null>(null);
-  const [linkState, setLinkState] = useState<{ email: string; idToken: string } | null>(null);
+  const [linkState, setLinkState] = useState<{ email: string; linkId: string } | null>(null);
   const [password, setPassword] = useState('');
   const [linking, setLinking] = useState(false);
   const [pendingVerify, setPendingVerify] = useState<{ challengeId: string; email: string } | null>(null);
@@ -37,7 +37,7 @@ export default function OAuthCallback() {
         .googleLogin(code)
         .then((data) => {
           if ('requiresPassword' in data) {
-            setLinkState({ email: data.email, idToken: data.idToken });
+            setLinkState({ email: data.email, linkId: data.linkId });
           } else {
             setUser(data.user);
             navigate(next, { replace: true });
@@ -57,7 +57,7 @@ export default function OAuthCallback() {
     setError(null);
     setLinking(true);
     try {
-      setPendingVerify(await auth.googleLink(linkState.idToken, password));
+      setPendingVerify(await auth.googleLink(linkState.linkId, password));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to link account');
     } finally {

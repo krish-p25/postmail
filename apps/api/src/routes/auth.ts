@@ -24,6 +24,7 @@ import { applyPasswordHash, hashPassword, validateNewPassword } from '../service
 import { handleRouteError } from './respond';
 import { issuePasswordTicket, readPasswordTicket } from '../services/password-tickets';
 import { DEVICE_COOKIE, deviceCookieOptions, isTrustedDevice, trustDevice } from '../services/devices';
+import { createPendingLink, consumePendingLink } from '../services/account-links';
 
 const router = Router();
 
@@ -327,8 +328,10 @@ router.post('/google', oauthLimiter, async (req: Request, res: Response) => {
 
       if (user) {
         if (user.passwordHash) {
-          // Existing password account — require password confirmation to link
-          res.json({ requiresPassword: true, email, idToken });
+          // Existing password account — require password confirmation to link.
+          // idToken stays server-side; the browser only gets a reference to it.
+          const linkId = await createPendingLink({ provider: 'google', userId: user.id, payload: { idToken } });
+          res.json({ requiresPassword: true, email, linkId });
           return;
         }
         // No password set — safe to auto-link
@@ -352,34 +355,43 @@ router.post('/google', oauthLimiter, async (req: Request, res: Response) => {
 
 /**
  * POST /auth/google/link
- * Body: { idToken, password }
+ * Body: { linkId, password }
  *
+ * linkId references the idToken from the earlier POST /auth/google response
+ * (see services/account-links.ts) — the browser never holds the token itself.
  * Validates the password, then sends a verification code.
  * Returns { requiresVerification: true, email }.
  */
 router.post('/google/link', linkLimiter, async (req: Request, res: Response) => {
   try {
-    const { idToken: rawIdToken, password } = req.body;
+    const { linkId, password } = req.body;
 
-    if (!rawIdToken || !password) {
-      res.status(400).json({ error: 'ID token and password are required' });
+    if (!linkId || !password) {
+      res.status(400).json({ error: 'linkId and password are required' });
       return;
     }
 
+    const pending = await consumePendingLink(linkId, 'google');
+    if (!pending) {
+      res.status(400).json({ error: 'This link request has expired. Please try again.' });
+      return;
+    }
+
+    const { idToken } = pending.payload as { idToken: string };
     const ticket = await googleClient.verifyIdToken({
-      idToken: rawIdToken,
+      idToken,
       audience: config.googleClientId,
     });
 
     const payload = ticket.getPayload();
     const googleEmail = verifiedGoogleEmail(payload);
     if (!payload || !googleEmail) {
-      res.status(400).json({ error: 'Invalid Google token or unverified email' });
+      res.status(400).json({ error: 'Google token expired or email not verified. Please try again.' });
       return;
     }
 
-    const user = await User.findOne({ where: { email: googleEmail } });
-    if (!user || !user.passwordHash) {
+    const user = await User.findByPk(pending.userId);
+    if (!user || !user.passwordHash || user.email !== googleEmail) {
       res.status(401).json({ error: 'Account not found' });
       return;
     }
@@ -394,7 +406,7 @@ router.post('/google/link', linkLimiter, async (req: Request, res: Response) => 
       purpose: 'google-link',
       email: googleEmail,
       userId: user.id,
-      payload: { idToken: rawIdToken },
+      payload: { idToken },
     });
     sendCodeInBackground(challenge, code);
 
@@ -484,8 +496,14 @@ router.post('/microsoft', oauthLimiter, async (req: Request, res: Response) => {
 
       if (user) {
         if (user.passwordHash) {
-          // Existing password account — require password confirmation to link
-          res.json({ requiresPassword: true, email, accessToken, refreshToken, tokenExpiry: tokenExpiry?.toISOString() || null });
+          // Existing password account — require password confirmation to link.
+          // Tokens stay server-side; the browser only gets a reference to them.
+          const linkId = await createPendingLink({
+            provider: 'microsoft',
+            userId: user.id,
+            payload: { microsoftId, displayName, accessToken, refreshToken, tokenExpiry: tokenExpiry?.toISOString() || null, mailboxEmail },
+          });
+          res.json({ requiresPassword: true, email, linkId });
           return;
         }
         // No password set — safe to auto-link
@@ -527,38 +545,28 @@ router.post('/microsoft', oauthLimiter, async (req: Request, res: Response) => {
 
 /**
  * POST /auth/microsoft/link
- * Body: { accessToken, password }
+ * Body: { linkId, password }
  *
- * Validates the password using a previously obtained access token,
- * then sends a verification code.
+ * linkId references the tokens from the earlier POST /auth/microsoft response
+ * (see services/account-links.ts) — the browser never holds them itself.
+ * Validates the password, then sends a verification code.
  */
 router.post('/microsoft/link', linkLimiter, async (req: Request, res: Response) => {
   try {
-    const { accessToken, password, refreshToken, tokenExpiry } = req.body;
+    const { linkId, password } = req.body;
 
-    if (!accessToken || !password) {
-      res.status(400).json({ error: 'Access token and password are required' });
+    if (!linkId || !password) {
+      res.status(400).json({ error: 'linkId and password are required' });
       return;
     }
 
-    const profileRes = await fetch('https://graph.microsoft.com/v1.0/me', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (!profileRes.ok) {
-      res.status(400).json({ error: 'Microsoft token expired. Please try again.' });
+    const pending = await consumePendingLink(linkId, 'microsoft');
+    if (!pending) {
+      res.status(400).json({ error: 'This link request has expired. Please try again.' });
       return;
     }
 
-    const profile = await profileRes.json();
-    const email = verifiedMicrosoftEmail(profile);
-
-    if (!email) {
-      res.status(400).json({ error: 'Could not verify the email on this Microsoft account' });
-      return;
-    }
-
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findByPk(pending.userId);
     if (!user || !user.passwordHash) {
       res.status(401).json({ error: 'Account not found' });
       return;
@@ -572,20 +580,13 @@ router.post('/microsoft/link', linkLimiter, async (req: Request, res: Response) 
 
     const { challenge, code } = await createChallenge({
       purpose: 'microsoft-link',
-      email,
+      email: user.email,
       userId: user.id,
-      payload: {
-        microsoftId: profile.id,
-        displayName: profile.displayName || null,
-        accessToken,
-        refreshToken: refreshToken || null,
-        tokenExpiry: tokenExpiry || null,
-        mailboxEmail: microsoftMailboxEmail(profile),
-      },
+      payload: pending.payload,
     });
     sendCodeInBackground(challenge, code);
 
-    res.json({ requiresVerification: true, email, challengeId: challenge.id });
+    res.json({ requiresVerification: true, email: user.email, challengeId: challenge.id });
   } catch (error) {
     handleRouteError(res, error, 'Microsoft link error', 'Failed to link Microsoft account');
   }
