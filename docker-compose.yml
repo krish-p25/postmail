@@ -2,12 +2,14 @@ services:
   app:
     image: postmail:latest
     container_name: postmail-app
-    ports:
-      - "${API_PORT:-3005}:3005"
+    # No published port: nginx-proxy-manager reaches this container over the
+    # nginxpm_default network instead (see docs/security-review.md #5). Publishing
+    # 3005 to the host made the app reachable directly at http://<server-ip>:3005,
+    # bypassing Cloudflare and every rate limiter that trusts its IP headers.
     environment:
       NODE_ENV: production
       PORT: 3005
-      DATABASE_URL: postgres://postgres:postgres@shared-postgres:5432/postgres
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@shared-postgres:5432/${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
@@ -27,7 +29,13 @@ services:
       SMTP_FROM: ${SMTP_FROM}
     networks:
       - shared-db
+      - nginxpm_default
 
 networks:
   shared-db:
+    external: true
+  # nginx-proxy-manager's network — lets it reach the app as http://postmail-app:3005
+  # over Docker's internal network, instead of via the published host port (see
+  # docs/security-review.md #5). Defined in ~/OneDrive/Desktop/nginx pm.
+  nginxpm_default:
     external: true
