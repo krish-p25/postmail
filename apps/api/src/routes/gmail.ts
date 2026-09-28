@@ -6,6 +6,7 @@ import type { LinkedMailbox } from '../db/models';
 import { forUser } from '../db/scoped';
 import { lookupTrackingByMessageIds } from '../services/tracking-lookup';
 import { resolvePendingEmails } from '../services/resolve-pending';
+import { issueConnectState, verifyConnectState } from '../services/oauth-state';
 
 const router = Router();
 
@@ -122,14 +123,19 @@ function createAuthenticatedClient(mailbox: LinkedMailbox): OAuth2Client {
 /**
  * GET /api/gmail/connect
  * Returns the Google OAuth consent URL for Gmail access.
+ *
+ * `state` binds the resulting authorization code to this user (see
+ * services/oauth-state.ts) — otherwise an attacker's own code, handed to a
+ * logged-in victim, would get the attacker's Gmail linked to the victim's account.
  */
-router.get('/connect', async (_req: Request, res: Response) => {
+router.get('/connect', async (req: Request, res: Response) => {
   try {
     const client = createOAuth2Client();
     const url = client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
       scope: ['https://www.googleapis.com/auth/gmail.readonly'],
+      state: issueConnectState(req.user!.id, 'gmail'),
     });
     res.json({ url });
   } catch (error) {
@@ -140,15 +146,20 @@ router.get('/connect', async (_req: Request, res: Response) => {
 
 /**
  * POST /api/gmail/callback
- * Body: { code }
+ * Body: { code, state }
  * Exchanges the authorization code for tokens and creates/updates a LinkedMailbox.
  */
 router.post('/callback', async (req: Request, res: Response) => {
   try {
-    const { code } = req.body;
+    const { code, state } = req.body;
 
     if (!code) {
       res.status(400).json({ error: 'Authorization code is required' });
+      return;
+    }
+
+    if (!verifyConnectState(state, 'gmail', req.user!.id)) {
+      res.status(400).json({ error: 'This connection request has expired. Please try again.' });
       return;
     }
 

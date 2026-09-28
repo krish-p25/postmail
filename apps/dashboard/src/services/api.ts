@@ -169,10 +169,10 @@ export const api = {
     return res.json() as Promise<{ url: string }>;
   },
 
-  async gmailCallback(code: string) {
+  async gmailCallback(code: string, state: string) {
     const res = await authFetch('/gmail/callback', {
       method: 'POST',
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, state }),
     });
     if (!res.ok) throw new Error('Failed to connect Gmail');
     return res.json();
@@ -211,10 +211,10 @@ export const api = {
     return res.json() as Promise<{ url: string }>;
   },
 
-  async outlookCallback(code: string) {
+  async outlookCallback(code: string, state: string) {
     const res = await authFetch('/outlook/callback', {
       method: 'POST',
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, state }),
     });
     if (!res.ok) throw new Error('Failed to connect Outlook');
     return res.json();

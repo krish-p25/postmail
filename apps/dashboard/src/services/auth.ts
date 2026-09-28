@@ -1,6 +1,42 @@
 const API_URL = import.meta.env.VITE_API_URL || 'https://postmail.krishrp.xyz/api';
 const TOKEN_KEY = 'postmail_token';
 
+/**
+ * CSRF protection for the two sign-in flows (Google/Microsoft), where no
+ * session exists yet to bind a server-issued state to (contrast with the
+ * mailbox-connect flows' services/oauth-state.ts on the API). Without this,
+ * an attacker can start their own sign-in, capture the resulting `code`, and
+ * hand the callback URL to a victim — whose browser would complete it as if
+ * it were their own login. See docs/security-review.md #6.
+ *
+ * sessionStorage survives the redirect to the provider and back, since it's
+ * scoped to the tab + origin, not to any single page load.
+ */
+const OAUTH_NONCE_KEY = 'postmail_oauth_nonce';
+const OAUTH_NEXT_KEY = 'postmail_oauth_next';
+
+function startOAuthNonce(next?: string | null): string {
+  const nonce = crypto.randomUUID();
+  sessionStorage.setItem(OAUTH_NONCE_KEY, nonce);
+  if (next) sessionStorage.setItem(OAUTH_NEXT_KEY, next);
+  else sessionStorage.removeItem(OAUTH_NEXT_KEY);
+  return nonce;
+}
+
+/**
+ * Single-use: always clears the stored nonce/next, whether or not `returnedState`
+ * matches, so a callback URL can never be replayed. `valid: false` means the code
+ * must never be exchanged — this browser never issued that nonce.
+ */
+function consumeOAuthNonce(returnedState: string | null): { valid: boolean; next: string | null } {
+  const expected = sessionStorage.getItem(OAUTH_NONCE_KEY);
+  const next = sessionStorage.getItem(OAUTH_NEXT_KEY);
+  sessionStorage.removeItem(OAUTH_NONCE_KEY);
+  sessionStorage.removeItem(OAUTH_NEXT_KEY);
+  const valid = !!expected && !!returnedState && returnedState === expected;
+  return { valid, next: valid ? next : null };
+}
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -146,13 +182,14 @@ export const auth = {
   /**
    * Build Google OAuth consent URL and redirect the browser to it.
    *
-   * `next` travels in `state`, never in redirect_uri: the API re-sends a fixed
-   * redirect_uri when exchanging the code, and the two must match exactly.
+   * `state` carries a per-attempt nonce, never `next` directly — see
+   * startOAuthNonce/consumeOAuthNonce above.
    */
   redirectToGoogle(next?: string | null): void {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     const redirectUri = encodeURIComponent(window.location.origin + '/oauth/callback');
     const scope = encodeURIComponent('openid email profile');
+    const state = startOAuthNonce(next);
     const url =
       `https://accounts.google.com/o/oauth2/v2/auth` +
       `?client_id=${clientId}` +
@@ -161,20 +198,23 @@ export const auth = {
       `&scope=${scope}` +
       `&access_type=offline` +
       `&prompt=consent` +
-      (next ? `&state=${encodeURIComponent(next)}` : '');
+      `&state=${encodeURIComponent(state)}`;
     window.location.href = url;
   },
 
   /**
    * Build Microsoft OAuth consent URL and redirect the browser to it.
    *
-   * `state` is shared with the mailbox-connect flow, which sends the literal
-   * 'connect-mailbox'. Handover values always start with '/', so they cannot collide.
+   * `state` carries a per-attempt nonce, same as Google above. The
+   * mailbox-connect flow uses this same callback page but sends its own
+   * server-signed 'connect-mailbox:...' state instead — MicrosoftAuthCallback
+   * checks for that prefix before ever treating a state as a sign-in nonce.
    */
   redirectToMicrosoft(next?: string | null): void {
     const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID;
     const redirectUri = encodeURIComponent(window.location.origin + '/microsoft/callback');
     const scope = encodeURIComponent('openid email profile User.Read Mail.Read offline_access');
+    const state = startOAuthNonce(next);
     const url =
       `https://login.microsoftonline.com/common/oauth2/v2.0/authorize` +
       `?client_id=${clientId}` +
@@ -182,7 +222,10 @@ export const auth = {
       `&response_type=code` +
       `&scope=${scope}` +
       `&response_mode=query` +
-      (next ? `&state=${encodeURIComponent(next)}` : '');
+      `&state=${encodeURIComponent(state)}`;
     window.location.href = url;
   },
+
+  /** Exposed for the callback pages — see consumeOAuthNonce above. */
+  consumeOAuthNonce,
 };

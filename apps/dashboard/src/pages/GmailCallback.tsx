@@ -10,6 +10,7 @@ export default function GmailCallback() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
+    const state = params.get('state');
     const errorParam = params.get('error');
 
     if (errorParam) {
@@ -17,9 +18,9 @@ export default function GmailCallback() {
       return;
     }
 
-    if (code) {
+    if (code && state) {
       api
-        .gmailCallback(code)
+        .gmailCallback(code, state)
         .then(() => {
           navigate('/dashboard/emails', { replace: true });
         })
@@ -27,7 +28,7 @@ export default function GmailCallback() {
           setError(err instanceof Error ? err.message : 'Failed to connect Gmail');
         });
     } else {
-      setError('No authorization code received from Google');
+      setError(code ? 'This connection request has expired. Please try again.' : 'No authorization code received from Google');
     }
   }, [navigate]);
 

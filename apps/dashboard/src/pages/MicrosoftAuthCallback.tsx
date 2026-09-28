@@ -17,8 +17,8 @@ export default function MicrosoftAuthCallback() {
   const [pendingVerify, setPendingVerify] = useState<{ challengeId: string; email: string } | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const exchanged = useRef(false);
-  // Handed over by AuthGuard before sign-in, round-tripped through the OAuth `state`.
-  const next = safeNextPath(new URLSearchParams(window.location.search).get('state')) ?? '/dashboard';
+  // Set once the state nonce is checked, below — read again from onVerify's closure later.
+  const nextRef = useRef('/dashboard');
 
   useEffect(() => {
     if (exchanged.current) return;
@@ -51,11 +51,14 @@ export default function MicrosoftAuthCallback() {
 
     const state = params.get('state');
 
-    // If state=connect-mailbox, this is a mailbox linking flow (from Settings "Connect Outlook")
-    if (state === 'connect-mailbox') {
+    // 'connect-mailbox:' is a fixed dispatch prefix, not a secret — the actual
+    // per-request signed token after it is what /outlook/callback verifies
+    // server-side against this user's session (see services/oauth-state.ts).
+    if (state?.startsWith('connect-mailbox:')) {
       console.log('[Microsoft OAuth] Mailbox connect flow — calling outlookCallback');
+      const connectState = state.slice('connect-mailbox:'.length);
       api
-        .outlookCallback(code)
+        .outlookCallback(code, connectState)
         .then(() => {
           navigate('/dashboard/emails', { replace: true });
         })
@@ -65,7 +68,17 @@ export default function MicrosoftAuthCallback() {
       return;
     }
 
-    // Otherwise, this is a sign-in flow
+    // Sign-in flow: reject before ever exchanging the code if this browser
+    // didn't generate this state nonce — otherwise the code could belong to
+    // an attacker's own sign-in, handed to us via a crafted link (see
+    // docs/security-review.md #6).
+    const { valid, next: storedNext } = auth.consumeOAuthNonce(state);
+    if (!valid) {
+      setError('This sign-in link is invalid or has expired. Please try signing in again.');
+      return;
+    }
+    nextRef.current = safeNextPath(storedNext) ?? '/dashboard';
+
     console.log('[Microsoft OAuth] Exchanging code with API...');
     auth
       .microsoftLogin(code)
@@ -76,7 +89,7 @@ export default function MicrosoftAuthCallback() {
         } else {
           console.log('[Microsoft OAuth] Login successful, redirecting to dashboard');
           setUser(data.user);
-          navigate(next, { replace: true });
+          navigate(nextRef.current, { replace: true });
         }
       })
       .catch((err) => {
@@ -110,7 +123,7 @@ export default function MicrosoftAuthCallback() {
           try {
             const data = await auth.verifyEmail(pendingVerify.challengeId, code);
             setUser(data.user);
-            navigate(next, { replace: true });
+            navigate(nextRef.current, { replace: true });
           } catch (err) {
             setVerifyError(err instanceof Error ? err.message : 'Verification failed');
           }

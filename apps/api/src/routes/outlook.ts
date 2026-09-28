@@ -4,6 +4,7 @@ import type { LinkedMailbox } from '../db/models';
 import { forUser } from '../db/scoped';
 import { lookupTrackingByMessageIds } from '../services/tracking-lookup';
 import { resolvePendingEmails } from '../services/resolve-pending';
+import { issueConnectState, verifyConnectState } from '../services/oauth-state';
 
 const router = Router();
 
@@ -73,10 +74,16 @@ async function getAccessToken(mailbox: LinkedMailbox): Promise<string | null> {
 /**
  * GET /api/outlook/connect
  * Returns the Microsoft OAuth consent URL.
+ *
+ * `state` carries a fixed 'connect-mailbox:' prefix so the dashboard's shared
+ * /microsoft/callback page can tell this apart from a sign-in redirect, followed
+ * by a signed token binding the resulting code to this user (see
+ * services/oauth-state.ts) — otherwise an attacker's own code, handed to a
+ * logged-in victim, would get the attacker's Outlook linked to the victim's account.
  */
-router.get('/connect', async (_req: Request, res: Response) => {
+router.get('/connect', async (req: Request, res: Response) => {
   try {
-    // Use the same redirect URI as sign-in (/microsoft/callback) with state=connect-mailbox
+    // Use the same redirect URI as sign-in (/microsoft/callback) with state=connect-mailbox:...
     // so only one redirect URI needs to be registered in Azure.
     const redirectUri = config.dashboardUrl + '/microsoft/callback';
     const params = new URLSearchParams({
@@ -86,7 +93,7 @@ router.get('/connect', async (_req: Request, res: Response) => {
       scope: SCOPES,
       response_mode: 'query',
       prompt: 'consent',
-      state: 'connect-mailbox',
+      state: 'connect-mailbox:' + issueConnectState(req.user!.id, 'microsoft'),
     });
     res.json({ url: `${MS_AUTH_URL}?${params.toString()}` });
   } catch (error) {
@@ -97,15 +104,21 @@ router.get('/connect', async (_req: Request, res: Response) => {
 
 /**
  * POST /api/outlook/callback
- * Body: { code }
+ * Body: { code, state } — state is the signed token, with the dashboard's
+ * 'connect-mailbox:' dispatch prefix already stripped.
  * Exchanges the authorization code for tokens and creates/updates a LinkedMailbox.
  */
 router.post('/callback', async (req: Request, res: Response) => {
   try {
-    const { code } = req.body;
+    const { code, state } = req.body;
 
     if (!code) {
       res.status(400).json({ error: 'Authorization code is required' });
+      return;
+    }
+
+    if (!verifyConnectState(state, 'microsoft', req.user!.id)) {
+      res.status(400).json({ error: 'This connection request has expired. Please try again.' });
       return;
     }
 
