@@ -86,7 +86,11 @@ it('resets the password, signs the user in and revokes old sessions', async () =
 
   const applied = await request(app).post('/api/auth/password-reset/apply').send({ ticket, newPassword: NEW_PASSWORD });
   expect(applied.status).toBe(200);
-  expect(applied.body).toEqual({ token: expect.any(String), user: { id: user.id, email: user.email, displayName: null } });
+  expect(applied.body).toEqual({
+    token: expect.any(String),
+    extensionToken: expect.any(String),
+    user: { id: user.id, email: user.email, displayName: null },
+  });
 
   const reloaded = await User.findByPk(user.id);
   expect(await bcrypt.compare(NEW_PASSWORD, reloaded!.passwordHash!)).toBe(true);

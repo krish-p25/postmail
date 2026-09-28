@@ -275,8 +275,11 @@ export default function Settings() {
                                   setAccountMessage(null);
                                   setPasswordSaving(true);
                                   try {
-                                    const { token } = await api.applyPasswordChange(passwordTicket, newPassword);
+                                    const { token, extensionToken } = await api.applyPasswordChange(passwordTicket, newPassword);
                                     auth.storeToken(token);
+                                    // The old extension token is invalidated by this password
+                                    // change (it bumps tokenVersion) — hand over a fresh one.
+                                    auth.syncExtensionToken(extensionToken);
                                     const created = !hasPassword;
                                     resetPasswordFlow();
                                     setHasPassword(true);

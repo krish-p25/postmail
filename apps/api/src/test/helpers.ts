@@ -1,6 +1,6 @@
 import { sequelize } from '../db/sequelize';
 import { User } from '../db/models';
-import { signToken } from '../services/tokens';
+import { signAccessToken } from '../services/tokens';
 
 let counter = 0;
 
@@ -18,7 +18,7 @@ export async function createUser(overrides: { email?: string; passwordHash?: str
 }
 
 export function bearer(user: User): string {
-  return `Bearer ${signToken(user)}`;
+  return `Bearer ${signAccessToken(user)}`;
 }
 
 export async function closeDatabase(): Promise<void> {

@@ -45,3 +45,7 @@ export const resetRequestIpLimiter = limiter(5, FIFTEEN_MINUTES);
 // Applying a password reset is ticket-gated, so this only caps brute-forcing the ticket itself.
 export const passwordApplyLimiter = limiter(10, FIFTEEN_MINUTES);
 export const resetRequestEmailLimiter = limiter(3, ONE_HOUR, { keyGenerator: byEmail });
+
+// The dashboard calls this automatically to renew its short-lived access token —
+// generous enough for that (every ~15m, possibly from a few tabs at once).
+export const refreshLimiter = limiter(30, FIFTEEN_MINUTES);

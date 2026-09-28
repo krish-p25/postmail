@@ -5,7 +5,7 @@ import { confirmChallenge, createChallenge, sendCodeInBackground } from '../serv
 import { applyPasswordHash, hashPassword, validateNewPassword } from '../services/passwords';
 import { issuePasswordTicket, readPasswordTicket } from '../services/password-tickets';
 import { codeConfirmLimiter, passwordLimiter } from '../middleware/rate-limit';
-import { handleRouteError } from './respond';
+import { handleRouteError, sendSession } from './respond';
 
 const router = Router();
 
@@ -129,8 +129,8 @@ router.post('/password/apply', passwordLimiter, async (req: Request, res: Respon
       return;
     }
 
-    const token = await applyPasswordHash(user, await hashPassword(newPassword));
-    res.json({ success: true, token });
+    await applyPasswordHash(user, await hashPassword(newPassword));
+    sendSession(res, user, { success: true });
   } catch (error) {
     handleRouteError(res, error, 'Error in POST /me/password/apply', 'Failed to update password');
   }
