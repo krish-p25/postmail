@@ -62,9 +62,12 @@ export interface EmailMessage {
 
 /**
  * Authenticated API client.
- * Attaches the stored JWT as a Bearer token.
+ * Attaches the stored JWT as a Bearer token. On a 401 (the access token's
+ * normal 15-minute expiry, not necessarily a real auth failure), silently
+ * refreshes via the httpOnly cookie and retries the request once before
+ * giving up — see auth.refreshAccessToken.
  */
-async function authFetch(path: string, options: RequestInit = {}): Promise<Response> {
+async function authFetch(path: string, options: RequestInit = {}, isRetry = false): Promise<Response> {
   const token = auth.getToken();
 
   const headers: HeadersInit = {
@@ -76,10 +79,17 @@ async function authFetch(path: string, options: RequestInit = {}): Promise<Respo
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
 
-  return fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers,
   });
+
+  if (res.status === 401 && !isRetry) {
+    const refreshed = await auth.refreshAccessToken();
+    if (refreshed) return authFetch(path, options, true);
+  }
+
+  return res;
 }
 
 export const api = {
@@ -126,7 +136,7 @@ export const api = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to update password');
-    return data as { success: boolean; token: string };
+    return data as { success: boolean; token: string; extensionToken: string };
   },
 
   async getEmails() {

@@ -45,6 +45,8 @@ export interface AuthUser {
 
 export interface AuthResponse {
   token: string;
+  /** Long-lived, for the extension only — see syncExtensionToken below. */
+  extensionToken: string;
   user: AuthUser;
 }
 
@@ -80,6 +82,7 @@ async function postJson<T>(path: string, body: unknown, fallbackError: string): 
 
 function signIn(data: AuthResponse): AuthResponse {
   auth.storeToken(data.token);
+  auth.syncExtensionToken(data.extensionToken);
   return data;
 }
 
@@ -153,10 +156,43 @@ export const auth = {
     localStorage.removeItem(TOKEN_KEY);
   },
 
-  /** Replace the stored JWT (e.g. after a password change) and hand it to the extension. */
+  /**
+   * Replace the dashboard's own access token. Only ever localStorage now — see
+   * syncExtensionToken for what the extension gets, and why it's different.
+   */
   storeToken(token: string): void {
     localStorage.setItem(TOKEN_KEY, token);
+  },
+
+  /**
+   * Hand the extension its own, separate long-lived token over a DOM event —
+   * never through localStorage, which page JavaScript (including an XSS) can
+   * read. chrome.storage.local, where the content script persists this, is not
+   * readable from the page at all. Call only at actual login/logout; the
+   * extension's own storage already persists across dashboard page reloads,
+   * so there's nothing to re-send on mere mount. See docs/security-review.md #8e.
+   */
+  syncExtensionToken(token: string | null): void {
     document.dispatchEvent(new CustomEvent('postmail-token-sync', { detail: token }));
+  },
+
+  /**
+   * Silently renew the access token using the httpOnly refresh cookie — no
+   * JavaScript, including this function, ever sees that cookie's value.
+   * Returns the new token, or null if the refresh session itself is gone
+   * (expired, or the user's password changed elsewhere), meaning the user
+   * needs to sign in again.
+   */
+  async refreshAccessToken(): Promise<string | null> {
+    try {
+      const res = await fetch(`${API_URL}/auth/refresh`, { method: 'POST', credentials: 'same-origin' });
+      if (!res.ok) return null;
+      const data = (await res.json()) as { token: string };
+      auth.storeToken(data.token);
+      return data.token;
+    } catch {
+      return null;
+    }
   },
 
   /** Exchange Microsoft authorization code for user info via API. */

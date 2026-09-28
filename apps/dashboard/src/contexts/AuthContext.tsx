@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import { auth, AuthUser } from '../services/auth';
+import { api } from '../services/api';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -19,21 +20,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (fetched.current) return;
     fetched.current = true;
 
-    // Check for existing token and load user
-    const token = auth.getToken();
-    if (token) {
-      // Push token to extension via custom DOM event
-      document.dispatchEvent(new CustomEvent('postmail-token-sync', { detail: token }));
-
-      // Validate token by calling /api/me
-      const API_URL = import.meta.env.VITE_API_URL || 'https://postmail.krishrp.xyz/api';
-      fetch(`${API_URL}/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error('Invalid token');
-          return res.json();
-        })
+    // Check for an existing token and load the user. Goes through api.getMe(),
+    // not a raw fetch — its authFetch already knows how to silently refresh an
+    // expired access token via the httpOnly cookie and retry once before this
+    // throws, so a merely-expired (not actually invalid) token doesn't sign
+    // the user out here.
+    //
+    // Nothing extension-related happens on mount: the extension's own token is
+    // handed over once, at actual login (see auth.syncExtensionToken), and
+    // persists on its own in chrome.storage.local — there's nothing new to
+    // tell it on a mere page reload.
+    if (auth.getToken()) {
+      api
+        .getMe()
         .then((data) => setUser({ id: data.id, email: data.email, displayName: data.displayName ?? null }))
         .catch(() => auth.clearToken())
         .finally(() => setLoading(false));
@@ -42,17 +41,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Whenever user state changes, sync token to extension
-  useEffect(() => {
-    const token = auth.getToken();
-    if (user && token) {
-      document.dispatchEvent(new CustomEvent('postmail-token-sync', { detail: token }));
-    }
-  }, [user]);
-
   const signOut = useCallback(() => {
     auth.clearToken();
-    document.dispatchEvent(new CustomEvent('postmail-token-sync', { detail: null }));
+    auth.syncExtensionToken(null);
     setUser(null);
   }, []);
 
