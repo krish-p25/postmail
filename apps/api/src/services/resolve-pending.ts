@@ -137,7 +137,7 @@ export async function backfillConversationIds(userId: string): Promise<void> {
       for (const email of emailGroup) {
         try {
           const res = await fetch(
-            `${MS_GRAPH_URL}/me/messages/${email.messageId}?$select=conversationId`,
+            `${MS_GRAPH_URL}/me/messages/${encodeURIComponent(email.messageId!)}?$select=conversationId`,
             { headers: { Authorization: `Bearer ${accessToken}` } },
           );
           if (res.ok) {

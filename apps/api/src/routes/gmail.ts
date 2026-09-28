@@ -7,6 +7,7 @@ import { forUser } from '../db/scoped';
 import { lookupTrackingByMessageIds } from '../services/tracking-lookup';
 import { resolvePendingEmails } from '../services/resolve-pending';
 import { issueConnectState, verifyConnectState } from '../services/oauth-state';
+import { attachmentContentDisposition } from '../utils/attachment-headers';
 
 const router = Router();
 
@@ -430,8 +431,9 @@ router.get('/emails/:messageId/attachments/:attachmentId', async (req: Request, 
     const meta = attachments.find((a) => a.attachmentId === req.params.attachmentId);
 
     const buffer = Buffer.from(attachment.data.data, 'base64url');
-    res.setHeader('Content-Type', meta?.mimeType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${meta?.filename || 'download'}"`);
+    const mimeType = meta?.mimeType || 'application/octet-stream';
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', attachmentContentDisposition(meta?.filename || 'download', mimeType));
     res.setHeader('Content-Length', buffer.length.toString());
     res.send(buffer);
   } catch (error) {
