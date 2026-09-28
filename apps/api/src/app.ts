@@ -7,6 +7,7 @@ import { config } from './config/env';
 import './db/models'; // Register all models and associations
 import { errorHandler } from './middleware/errors';
 import { authMiddleware } from './middleware/auth';
+import { dashboardCsp } from './middleware/csp';
 import authRoutes from './routes/auth';
 import meRoutes from './routes/me';
 import emailRoutes from './routes/emails';
@@ -77,6 +78,7 @@ app.use('/api', api);
 // Resolved path: /app/apps/api/dist/../../dashboard/dist → /app/apps/dashboard/dist
 const dashboardDist = path.resolve(__dirname, '../../dashboard/dist');
 app.use('/.well-known', express.static(path.join(dashboardDist, '.well-known')));
+app.use(dashboardCsp);
 app.use(express.static(dashboardDist));
 
 // SPA fallback — React Router handles 404s client-side
