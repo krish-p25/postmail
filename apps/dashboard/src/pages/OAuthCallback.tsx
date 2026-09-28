@@ -16,8 +16,8 @@ export default function OAuthCallback() {
   const [pendingVerify, setPendingVerify] = useState<{ challengeId: string; email: string } | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const exchanged = useRef(false);
-  // Handed over by AuthGuard before sign-in, round-tripped through the OAuth `state`.
-  const next = safeNextPath(new URLSearchParams(window.location.search).get('state')) ?? '/dashboard';
+  // Set once the state nonce is checked, below — read again from onVerify's closure later.
+  const nextRef = useRef('/dashboard');
 
   useEffect(() => {
     if (exchanged.current) return;
@@ -32,6 +32,16 @@ export default function OAuthCallback() {
       return;
     }
 
+    // Reject before ever exchanging the code: this state nonce must be one this
+    // browser generated, or the code could belong to an attacker's own sign-in
+    // handed to us via a crafted link (see docs/security-review.md #6).
+    const { valid, next: storedNext } = auth.consumeOAuthNonce(params.get('state'));
+    if (!valid) {
+      setError('This sign-in link is invalid or has expired. Please try signing in again.');
+      return;
+    }
+    nextRef.current = safeNextPath(storedNext) ?? '/dashboard';
+
     if (code) {
       auth
         .googleLogin(code)
@@ -40,7 +50,7 @@ export default function OAuthCallback() {
             setLinkState({ email: data.email, linkId: data.linkId });
           } else {
             setUser(data.user);
-            navigate(next, { replace: true });
+            navigate(nextRef.current, { replace: true });
           }
         })
         .catch((err) => {
@@ -77,7 +87,7 @@ export default function OAuthCallback() {
           try {
             const data = await auth.verifyEmail(pendingVerify.challengeId, code);
             setUser(data.user);
-            navigate(next, { replace: true });
+            navigate(nextRef.current, { replace: true });
           } catch (err) {
             setVerifyError(err instanceof Error ? err.message : 'Verification failed');
           }
