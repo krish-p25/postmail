@@ -13,7 +13,6 @@ import Home from './pages/Home';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import GmailCallback from './pages/GmailCallback';
-import OutlookCallback from './pages/OutlookCallback';
 import EmailDetail from './pages/EmailDetail';
 import AttachmentPreview from './pages/AttachmentPreview';
 import Setup from './pages/Setup';
@@ -27,7 +26,6 @@ function App() {
         <Route path="/oauth/callback" element={<OAuthCallback />} />
         <Route path="/microsoft/callback" element={<MicrosoftAuthCallback />} />
         <Route path="/gmail/callback" element={<AuthGuard><GmailCallback /></AuthGuard>} />
-        <Route path="/outlook/callback" element={<AuthGuard><OutlookCallback /></AuthGuard>} />
         <Route path="/preview" element={<AuthGuard><AttachmentPreview /></AuthGuard>} />
         <Route
           path="/dashboard"
