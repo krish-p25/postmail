@@ -13,6 +13,7 @@ const ONE_HOUR = 60 * 60 * 1000;
 const byClientIp = (req: Request) => `ip:${getClientIp(req) ?? 'unknown'}`;
 const byEmail = (req: Request) => `email:${String(req.body?.email ?? '').trim().toLowerCase()}`;
 const byUser = (req: Request) => `user:${req.user?.id ?? 'anonymous'}`;
+const byTrackingToken = (req: Request) => `token:${req.params.token ?? 'unknown'}`;
 
 function limiter(limit: number, windowMs: number, extra: Partial<Options> = {}) {
   return rateLimit({
@@ -49,3 +50,9 @@ export const resetRequestEmailLimiter = limiter(3, ONE_HOUR, { keyGenerator: byE
 // The dashboard calls this automatically to renew its short-lived access token —
 // generous enough for that (every ~15m, possibly from a few tabs at once).
 export const refreshLimiter = limiter(30, FIFTEEN_MINUTES);
+
+// The pixel is unauthenticated by design (email clients fetch it) — anyone who has
+// or guesses a tracking token can otherwise hammer it to inflate opens and spam
+// Discord notifications. 120/5min per token covers a real recipient's client,
+// image proxies, and retries with room to spare. See docs/security-review.md #8f.
+export const pixelLimiter = limiter(120, 5 * 60 * 1000, { keyGenerator: byTrackingToken });

@@ -29,13 +29,6 @@ export default function MicrosoftAuthCallback() {
     const errorParam = params.get('error');
     const errorDesc = params.get('error_description');
 
-    console.log('[Microsoft OAuth] Callback received', {
-      hasCode: !!code,
-      error: errorParam,
-      errorDesc,
-      fullUrl: window.location.href,
-    });
-
     if (errorParam) {
       const msg = errorDesc || errorParam;
       console.error('[Microsoft OAuth] Error from Microsoft:', msg);

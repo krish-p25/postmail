@@ -5,6 +5,7 @@ import { forUser } from '../db/scoped';
 import { lookupTrackingByMessageIds } from '../services/tracking-lookup';
 import { resolvePendingEmails } from '../services/resolve-pending';
 import { issueConnectState, verifyConnectState } from '../services/oauth-state';
+import { attachmentContentDisposition } from '../utils/attachment-headers';
 
 const router = Router();
 
@@ -329,10 +330,8 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
     }
 
     // First get the message to find its conversationId
-    const msgRes = await fetch(
-      `${MS_GRAPH_URL}/me/messages/${req.params.id}?$select=id,conversationId,subject,from,toRecipients,ccRecipients,sentDateTime,body`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
+    const messageUrl = `${MS_GRAPH_URL}/me/messages/${encodeURIComponent(req.params.id)}?$select=id,conversationId,subject,from,toRecipients,ccRecipients,sentDateTime,body`;
+    const msgRes = await fetch(messageUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
 
     let msgData = msgRes;
     if (!msgData.ok) {
@@ -342,10 +341,7 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
           res.status(401).json({ error: 'Outlook session expired. Please reconnect.' });
           return;
         }
-        msgData = await fetch(
-          `${MS_GRAPH_URL}/me/messages/${req.params.id}?$select=id,conversationId,subject,from,toRecipients,ccRecipients,sentDateTime,body`,
-          { headers: { Authorization: `Bearer ${accessToken}` } },
-        );
+        msgData = await fetch(messageUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
         if (!msgData.ok) {
           res.status(500).json({ error: 'Failed to fetch email details after token refresh' });
           return;
@@ -418,7 +414,7 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
       if (msg.hasAttachments) {
         try {
           const attRes = await fetch(
-            `${MS_GRAPH_URL}/me/messages/${msg.id}/attachments?$select=id,name,contentType,size`,
+            `${MS_GRAPH_URL}/me/messages/${encodeURIComponent(msg.id)}/attachments?$select=id,name,contentType,size`,
             { headers: { Authorization: `Bearer ${accessToken}` } },
           );
           if (attRes.ok) {
@@ -494,7 +490,7 @@ router.get('/emails/:messageId/attachments/:attachmentId', async (req: Request, 
     }
 
     const attRes = await fetch(
-      `${MS_GRAPH_URL}/me/messages/${req.params.messageId}/attachments/${req.params.attachmentId}`,
+      `${MS_GRAPH_URL}/me/messages/${encodeURIComponent(req.params.messageId)}/attachments/${encodeURIComponent(req.params.attachmentId)}`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
 
@@ -505,8 +501,9 @@ router.get('/emails/:messageId/attachments/:attachmentId', async (req: Request, 
 
     const attData = await attRes.json();
     const buffer = Buffer.from(attData.contentBytes, 'base64');
-    res.setHeader('Content-Type', attData.contentType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${attData.name || 'download'}"`);
+    const mimeType = attData.contentType || 'application/octet-stream';
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', attachmentContentDisposition(attData.name || 'download', mimeType));
     res.setHeader('Content-Length', buffer.length.toString());
     res.send(buffer);
   } catch (error) {
