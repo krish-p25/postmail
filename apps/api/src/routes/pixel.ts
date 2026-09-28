@@ -4,6 +4,7 @@ import TrackedEmail from '../db/models/TrackedEmail';
 import EmailOpen from '../db/models/EmailOpen';
 import { notifyEmailOpened } from '../services/notifications';
 import { getClientIp } from '../utils/client-ip';
+import { pixelLimiter } from '../middleware/rate-limit';
 
 const router = Router();
 
@@ -30,7 +31,7 @@ function sendPixel(res: Response): void {
  * Records an open event and returns a 1x1 transparent GIF.
  * Deduplicates opens from the same IP + user agent within 60 seconds.
  */
-router.get('/:token', async (req: Request, res: Response) => {
+router.get('/:token', pixelLimiter, async (req: Request, res: Response) => {
   try {
     const trackedEmail = await TrackedEmail.findOne({
       where: { trackingToken: req.params.token },
@@ -43,15 +44,15 @@ router.get('/:token', async (req: Request, res: Response) => {
 
     const userAgent = req.headers['user-agent'] || null;
     const ipAddress = getClientIp(req);
-    const oneMinuteAgo = new Date(Date.now() - 60_000);
+    const dedupeWindowStart = new Date(Date.now() - 60_000);
 
-    // Skip duplicate: same tracked email + IP + user agent within the last minute
+    // Skip duplicate: same tracked email + IP + user agent within the dedupe window
     const duplicate = await EmailOpen.findOne({
       where: {
         trackedEmailId: trackedEmail.id,
         ipAddress: ipAddress ?? '',
         userAgent: userAgent ?? '',
-        openedAt: { [Op.gte]: oneMinuteAgo },
+        openedAt: { [Op.gte]: dedupeWindowStart },
       },
     });
 
