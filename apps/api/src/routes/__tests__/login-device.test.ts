@@ -75,7 +75,8 @@ it("does not set a cookie without rememberDevice, and ignores another user's coo
   await makeUser('no-remember@example.com');
   const confirm = await signInWithCode('no-remember@example.com', false);
   expect(confirm.status).toBe(200);
-  expect(confirm.headers['set-cookie']).toBeUndefined();
+  const cookies = (confirm.headers['set-cookie'] as unknown as string[] | undefined) ?? [];
+  expect(cookies.some((c) => c.startsWith('pm_device='))).toBe(false);
 
   await makeUser('cookie-owner@example.com');
   const ownerCookie = deviceCookie(await signInWithCode('cookie-owner@example.com', true)).split(';')[0];

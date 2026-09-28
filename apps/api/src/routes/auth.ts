@@ -3,7 +3,6 @@ import bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
 import { config } from '../config/env';
 import { User } from '../db/models';
-import { signToken } from '../services/tokens';
 import { forUser } from '../db/scoped';
 import {
   loginIpLimiter,
@@ -16,15 +15,17 @@ import {
   resetRequestIpLimiter,
   resetRequestEmailLimiter,
   passwordApplyLimiter,
+  refreshLimiter,
 } from '../middleware/rate-limit';
 import { verifiedGoogleEmail, verifiedMicrosoftEmail, microsoftMailboxEmail } from '../services/identity';
 import type { ChallengePurpose } from '../services/challenge-purposes';
 import { createChallenge, confirmChallenge, resendChallenge, sendCodeInBackground, ChallengeError } from '../services/challenges';
 import { applyPasswordHash, hashPassword, validateNewPassword } from '../services/passwords';
-import { handleRouteError } from './respond';
+import { handleRouteError, sendSession } from './respond';
 import { issuePasswordTicket, readPasswordTicket } from '../services/password-tickets';
 import { DEVICE_COOKIE, deviceCookieOptions, isTrustedDevice, trustDevice } from '../services/devices';
 import { createPendingLink, consumePendingLink } from '../services/account-links';
+import { signAccessToken, verifyRefreshToken, REFRESH_COOKIE } from '../services/tokens';
 
 const router = Router();
 
@@ -151,8 +152,8 @@ router.post('/verify', codeConfirmLimiter, async (req: Request, res: Response) =
       const user = await User.create({ email, passwordHash, displayName });
       await forUser(user.id).userSettings.create({});
 
-      const token = signToken(user);
-      res.status(201).json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+      res.status(201);
+      sendSession(res, user);
       return;
     }
 
@@ -190,8 +191,7 @@ router.post('/verify', codeConfirmLimiter, async (req: Request, res: Response) =
       );
     }
 
-    const token = signToken(user);
-    res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+    sendSession(res, user);
   } catch (error) {
     handleRouteError(res, error, 'Verify error', 'Verification failed');
   }
@@ -240,8 +240,7 @@ router.post('/login', loginIpLimiter, loginEmailLimiter, async (req: Request, re
     }
 
     if (await isTrustedDevice(user.id, req.cookies?.[DEVICE_COOKIE])) {
-      const token = signToken(user);
-      res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+      sendSession(res, user);
       return;
     }
 
@@ -272,8 +271,7 @@ router.post('/login/confirm', codeConfirmLimiter, async (req: Request, res: Resp
       res.cookie(DEVICE_COOKIE, deviceToken, deviceCookieOptions());
     }
 
-    const token = signToken(user);
-    res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+    sendSession(res, user);
   } catch (error) {
     handleRouteError(res, error, 'Login confirm error', 'Sign in failed');
   }
@@ -345,8 +343,7 @@ router.post('/google', oauthLimiter, async (req: Request, res: Response) => {
       await user.update({ displayName });
     }
 
-    const token = signToken(user);
-    res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+    sendSession(res, user);
   } catch (error) {
     console.error('[PostMail API] Google auth error:', error);
     res.status(500).json({ error: 'Google authentication failed' });
@@ -535,8 +532,7 @@ router.post('/microsoft', oauthLimiter, async (req: Request, res: Response) => {
       await storeOutlookTokensAndConnect(user, { accessToken, refreshToken, tokenExpiry }, mailboxEmail);
     }
 
-    const token = signToken(user);
-    res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+    sendSession(res, user);
   } catch (error) {
     console.error('[PostMail API] Microsoft auth error:', error);
     res.status(500).json({ error: 'Microsoft authentication failed' });
@@ -668,10 +664,33 @@ router.post('/password-reset/apply', passwordApplyLimiter, async (req: Request, 
       return;
     }
 
-    const token = await applyPasswordHash(user, await hashPassword(newPassword));
-    res.json({ token, user: { id: user.id, email: user.email, displayName: user.displayName } });
+    await applyPasswordHash(user, await hashPassword(newPassword));
+    sendSession(res, user);
   } catch (error) {
     handleRouteError(res, error, 'Password reset apply error', 'Password reset failed');
+  }
+});
+
+/**
+ * POST /auth/refresh
+ * Cookie: pm_refresh (httpOnly, set by sendSession — see routes/respond.ts)
+ *
+ * Silently renews the dashboard's short-lived access token without the user
+ * noticing. No JavaScript anywhere can read the refresh cookie, so this is
+ * safe even if the access token itself was stolen via an XSS on the dashboard —
+ * the stolen token just stops working after 15 minutes. See docs/security-review.md #8e.
+ */
+router.post('/refresh', refreshLimiter, async (req: Request, res: Response) => {
+  try {
+    const claims = verifyRefreshToken(req.cookies?.[REFRESH_COOKIE]);
+    const user = claims ? await User.findByPk(claims.sub) : null;
+    if (!user || !claims || claims.ver !== user.tokenVersion) {
+      res.status(401).json({ error: 'Your session has expired. Please sign in again.' });
+      return;
+    }
+    res.json({ token: signAccessToken(user) });
+  } catch (error) {
+    handleRouteError(res, error, 'Token refresh error', 'Failed to refresh session');
   }
 });
 
