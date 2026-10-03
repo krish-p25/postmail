@@ -109,12 +109,18 @@ function createAuthenticatedClient(mailbox: LinkedMailbox): OAuth2Client {
     expiry_date: mailbox.tokenExpiry ? mailbox.tokenExpiry.getTime() : undefined,
   });
 
+  // EventEmitter ignores the returned promise, so a throw here would be an
+  // unhandled rejection — which terminates the process on Node 15+.
   client.on('tokens', async (tokens) => {
-    const updates: Partial<{ accessToken: string; tokenExpiry: Date }> = {};
-    if (tokens.access_token) updates.accessToken = tokens.access_token;
-    if (tokens.expiry_date) updates.tokenExpiry = new Date(tokens.expiry_date);
-    if (Object.keys(updates).length > 0) {
-      await mailbox.update(updates);
+    try {
+      const updates: Partial<{ accessToken: string; tokenExpiry: Date }> = {};
+      if (tokens.access_token) updates.accessToken = tokens.access_token;
+      if (tokens.expiry_date) updates.tokenExpiry = new Date(tokens.expiry_date);
+      if (Object.keys(updates).length > 0) {
+        await mailbox.update(updates);
+      }
+    } catch (error) {
+      console.error('[PostMail API] Failed to persist refreshed Gmail token:', error);
     }
   });
 

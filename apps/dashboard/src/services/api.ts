@@ -1,4 +1,4 @@
-import { auth } from './auth';
+import { auth, ApiError } from './auth';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://postmail.krishrp.xyz/api';
 
@@ -95,7 +95,7 @@ async function authFetch(path: string, options: RequestInit = {}, isRetry = fals
 export const api = {
   async getMe() {
     const res = await authFetch('/me');
-    if (!res.ok) throw new Error('Failed to fetch profile');
+    if (!res.ok) throw new ApiError('Failed to fetch profile', res.status);
     return res.json() as Promise<{
       id: string;
       email: string;
@@ -137,6 +137,23 @@ export const api = {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to update password');
     return data as { success: boolean; token: string; extensionToken: string };
+  },
+
+  /** Raw attachment response — read it with .text() / .arrayBuffer() depending on the file type. */
+  async getAttachment(
+    provider: 'gmail' | 'outlook',
+    messageId: string,
+    attachmentId: string,
+    mailboxId?: string,
+    signal?: AbortSignal,
+  ) {
+    const query = mailboxId ? `?mailboxId=${encodeURIComponent(mailboxId)}` : '';
+    const res = await authFetch(
+      `/${provider}/emails/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}${query}`,
+      { signal },
+    );
+    if (!res.ok) throw new Error('Failed to load file');
+    return res;
   },
 
   async getEmails() {
@@ -270,6 +287,8 @@ export const api = {
         status: 'pending' | 'sent' | 'discarded' | 'failed';
         sentAt: string | null;
         messageId: string | null;
+        threadId: string | null;
+        conversationId: string | null;
         createdAt: string;
         opens: Array<{
           id: string;
