@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import DOMPurify from 'dompurify';
-import { auth } from '../services/auth';
+import { api } from '../services/api';
 
 /**
  * A .docx attachment can come from any external sender. mammoth converts its
@@ -96,7 +96,8 @@ function triggerDownload(blob: Blob, filename: string) {
 
 export default function AttachmentPreview() {
   const [params] = useSearchParams();
-  const provider = params.get('provider') || 'gmail';
+  const provider = params.get('provider') === 'outlook' ? 'outlook' : 'gmail';
+  const mailboxId = params.get('mailboxId') || undefined;
   const messageId = params.get('messageId') || '';
   const attachmentId = params.get('attachmentId') || '';
   const filename = params.get('filename') || 'download';
@@ -133,15 +134,7 @@ export default function AttachmentPreview() {
         return;
       }
       try {
-        const apiBase = import.meta.env.VITE_API_URL || 'https://postmail.krishrp.xyz/api';
-        const route = provider === 'outlook' ? 'outlook' : 'gmail';
-        const url = `${apiBase}/${route}/emails/${messageId}/attachments/${attachmentId}`;
-        const token = auth.getToken();
-        const res = await fetch(url, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          signal: controller.signal,
-        });
-        if (!res.ok) throw new Error('Failed to load file');
+        const res = await api.getAttachment(provider, messageId, attachmentId, mailboxId, controller.signal);
 
         if (category === 'text') {
           setTextContent(await res.text());
@@ -178,7 +171,7 @@ export default function AttachmentPreview() {
       controller.abort();
       if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
     };
-  }, [messageId, attachmentId, provider, category, mime]);
+  }, [messageId, attachmentId, provider, mailboxId, category, mime]);
 
   async function handleDownload() {
     setDownloading(true);
@@ -188,14 +181,7 @@ export default function AttachmentPreview() {
       } else if (textContent !== null) {
         triggerDownload(new Blob([textContent], { type: mime }), filename);
       } else {
-        const apiBase = import.meta.env.VITE_API_URL || 'https://postmail.krishrp.xyz/api';
-        const route = provider === 'outlook' ? 'outlook' : 'gmail';
-        const url = `${apiBase}/${route}/emails/${messageId}/attachments/${attachmentId}`;
-        const token = auth.getToken();
-        const res = await fetch(url, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (!res.ok) throw new Error('Download failed');
+        const res = await api.getAttachment(provider, messageId, attachmentId, mailboxId);
         const data = await res.arrayBuffer();
         triggerDownload(
           new Blob([data], { type: res.headers.get('Content-Type') || mime }),

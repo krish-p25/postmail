@@ -97,7 +97,15 @@ function parseEmailAddress(raw: string): { name: string; email: string } {
   return { name: raw.trim(), email: raw.trim() };
 }
 
-function AttachmentButton({ attachment, provider }: { attachment: EmailAttachment; provider: string | null }) {
+function AttachmentButton({
+  attachment,
+  provider,
+  mailboxId,
+}: {
+  attachment: EmailAttachment;
+  provider: string | null;
+  mailboxId?: string;
+}) {
   function handleClick() {
     const params = new URLSearchParams({
       provider: provider || 'gmail',
@@ -107,6 +115,8 @@ function AttachmentButton({ attachment, provider }: { attachment: EmailAttachmen
       mime: attachment.mimeType || 'application/octet-stream',
       size: String(attachment.size),
     });
+    // Without this, the API falls back to the user's first mailbox for the provider.
+    if (mailboxId) params.set('mailboxId', mailboxId);
     window.open(`/preview?${params.toString()}`, '_blank');
   }
 
@@ -152,6 +162,10 @@ interface TrackedEmailEntry {
   status: string;
   sentAt: string | null;
   messageId: string | null;
+  /** Gmail thread ID — set on Gmail rows only. */
+  threadId: string | null;
+  /** Outlook conversation ID — set on Outlook rows only. */
+  conversationId: string | null;
   opens: TrackingOpen[];
 }
 
@@ -166,11 +180,6 @@ function parseUserAgent(ua: string | null): string {
   if (ua.includes('Safari')) return 'Safari';
   if (ua.includes('Googlebot')) return 'Gmail (image proxy)';
   return 'Email client';
-}
-
-/** Strip Re:/Fwd:/Fw: prefixes for subject comparison. */
-function normalizeSubject(s: string): string {
-  return s.replace(/^(?:re|fwd?)\s*:\s*/i, '').toLowerCase();
 }
 
 /**
@@ -436,13 +445,15 @@ export default function EmailDetail() {
       .then(([msgs, tracked]) => {
         if (tracked.length > 0 && msgs.length > 0) {
           const map = matchTrackingToMessages(msgs, tracked);
-          // Fallback: if no body-match found but subject matches, attach to
-          // the first message in the thread (the original tracked send)
+          // Fallback: no message matched by ID or pixel, but a tracked email
+          // belongs to this same thread — attach it to the first message (the
+          // original tracked send). Matching by thread, not subject, so a common
+          // subject like "Follow up" can't pull in another thread's opens.
           if (map.size === 0) {
-            const emailSubject = normalizeSubject(msgs[0].subject);
-            const match = tracked.find(
-              (te) => te.id === id || (te.subject && normalizeSubject(te.subject) === emailSubject),
-            );
+            const threadId = msgs[0].threadId;
+            const match = threadId
+              ? tracked.find((te) => te.threadId === threadId || te.conversationId === threadId)
+              : undefined;
             if (match) {
               const firstMsg = msgs[0];
               const sentTime = match.sentAt ? new Date(match.sentAt).getTime() : null;
@@ -685,7 +696,7 @@ export default function EmailDetail() {
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {msg.attachments.map((att) => (
-                              <AttachmentButton key={att.attachmentId} attachment={att} provider={provider} />
+                              <AttachmentButton key={att.attachmentId} attachment={att} provider={provider} mailboxId={mailboxId} />
                             ))}
                           </div>
                         </div>
