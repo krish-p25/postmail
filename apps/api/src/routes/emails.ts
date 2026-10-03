@@ -2,10 +2,9 @@ import { Router, Request, Response } from 'express';
 import { EmailOpen } from '../db/models';
 import { forUser } from '../db/scoped';
 import { resolvePendingEmails, backfillConversationIds } from '../services/resolve-pending';
+import { OPEN_ATTRIBUTES } from '../services/tracking-lookup';
 
 const router = Router();
-
-const OPEN_ATTRIBUTES = ['id', 'opened_at', 'user_agent', 'ip_address', 'dismissed', 'likely_self'] as const;
 
 /**
  * GET /api/emails

@@ -53,15 +53,15 @@ TrackedEmail.init(
     trackingToken: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true,
       field: 'tracking_token',
     },
+    // TEXT, not varchar(255): long subjects and large To/CC lists must not fail registration.
     recipient: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     subject: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     status: {
@@ -113,6 +113,12 @@ TrackedEmail.init(
     sequelize,
     tableName: 'tracked_emails',
     underscored: true,
+    // Named unique index instead of `unique: true`, which sync({ alter }) duplicates on every boot.
+    indexes: [
+      { unique: true, name: 'tracked_emails_tracking_token_key', fields: ['tracking_token'] },
+      { name: 'tracked_emails_user_id', fields: ['user_id'] },
+      { name: 'tracked_emails_message_id', fields: ['message_id'] },
+    ],
   },
 );
 

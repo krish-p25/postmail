@@ -1,13 +1,12 @@
 import { Router, Request, Response } from 'express';
-import { OAuth2Client } from 'google-auth-library';
 import { google } from 'googleapis';
-import { config } from '../config/env';
 import type { LinkedMailbox } from '../db/models';
 import { forUser } from '../db/scoped';
 import { lookupTrackingByMessageIds } from '../services/tracking-lookup';
 import { resolvePendingEmails } from '../services/resolve-pending';
 import { issueConnectState, verifyConnectState } from '../services/oauth-state';
 import { attachmentContentDisposition } from '../utils/attachment-headers';
+import { createGmailOAuthClient, createAuthenticatedGmailClient } from '../services/gmail-client';
 
 const router = Router();
 
@@ -76,14 +75,6 @@ function extractAttachments(payload: any, messageId: string): AttachmentInfo[] {
   return attachments;
 }
 
-function createOAuth2Client(): OAuth2Client {
-  return new OAuth2Client(
-    config.gmailClientId,
-    config.gmailClientSecret,
-    config.gmailRedirectUri,
-  );
-}
-
 /**
  * Find the Gmail LinkedMailbox — by mailboxId if provided, otherwise first Gmail mailbox for the user.
  */
@@ -99,35 +90,6 @@ async function findGmailMailbox(userId: string, mailboxId?: string): Promise<Lin
 }
 
 /**
- * Create an OAuth2Client with credentials from a LinkedMailbox and auto-persist refreshed tokens.
- */
-function createAuthenticatedClient(mailbox: LinkedMailbox): OAuth2Client {
-  const client = createOAuth2Client();
-  client.setCredentials({
-    access_token: mailbox.accessToken,
-    refresh_token: mailbox.refreshToken,
-    expiry_date: mailbox.tokenExpiry ? mailbox.tokenExpiry.getTime() : undefined,
-  });
-
-  // EventEmitter ignores the returned promise, so a throw here would be an
-  // unhandled rejection — which terminates the process on Node 15+.
-  client.on('tokens', async (tokens) => {
-    try {
-      const updates: Partial<{ accessToken: string; tokenExpiry: Date }> = {};
-      if (tokens.access_token) updates.accessToken = tokens.access_token;
-      if (tokens.expiry_date) updates.tokenExpiry = new Date(tokens.expiry_date);
-      if (Object.keys(updates).length > 0) {
-        await mailbox.update(updates);
-      }
-    } catch (error) {
-      console.error('[PostMail API] Failed to persist refreshed Gmail token:', error);
-    }
-  });
-
-  return client;
-}
-
-/**
  * GET /api/gmail/connect
  * Returns the Google OAuth consent URL for Gmail access.
  *
@@ -137,7 +99,7 @@ function createAuthenticatedClient(mailbox: LinkedMailbox): OAuth2Client {
  */
 router.get('/connect', async (req: Request, res: Response) => {
   try {
-    const client = createOAuth2Client();
+    const client = createGmailOAuthClient();
     const url = client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
@@ -170,7 +132,7 @@ router.post('/callback', async (req: Request, res: Response) => {
       return;
     }
 
-    const client = createOAuth2Client();
+    const client = createGmailOAuthClient();
     const { tokens } = await client.getToken(code);
 
     if (!tokens.access_token || !tokens.refresh_token) {
@@ -238,7 +200,7 @@ router.get('/emails', async (req: Request, res: Response) => {
       return;
     }
 
-    const client = createAuthenticatedClient(mailbox);
+    const client = createAuthenticatedGmailClient(mailbox);
     const gmail = google.gmail({ version: 'v1', auth: client as any });
 
     const pageSize = 25;
@@ -322,7 +284,7 @@ router.get('/emails/:id', async (req: Request, res: Response) => {
       return;
     }
 
-    const client = createAuthenticatedClient(mailbox);
+    const client = createAuthenticatedGmailClient(mailbox);
     const gmail = google.gmail({ version: 'v1', auth: client as any });
 
     const msgRes = await gmail.users.messages.get({
@@ -414,7 +376,7 @@ router.get('/emails/:messageId/attachments/:attachmentId', async (req: Request, 
       return;
     }
 
-    const client = createAuthenticatedClient(mailbox);
+    const client = createAuthenticatedGmailClient(mailbox);
     const gmail = google.gmail({ version: 'v1', auth: client as any });
 
     const attachment = await gmail.users.messages.attachments.get({
@@ -460,7 +422,7 @@ router.post('/disconnect', async (req: Request, res: Response) => {
     for (const mailbox of mailboxes) {
       if (mailbox.refreshToken) {
         try {
-          const client = createOAuth2Client();
+          const client = createGmailOAuthClient();
           await client.revokeToken(mailbox.refreshToken);
         } catch {
           // Revocation failure is non-critical

@@ -1,7 +1,7 @@
-import { OAuth2Client } from 'google-auth-library';
 import { google } from 'googleapis';
 import { config } from '../config/env';
 import type { LinkedMailbox } from '../db/models';
+import { createAuthenticatedGmailClient } from './gmail-client';
 
 const MS_TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
 const MS_GRAPH_URL = 'https://graph.microsoft.com/v1.0';
@@ -52,37 +52,6 @@ export async function getOutlookAccessToken(mailbox: LinkedMailbox): Promise<str
     accessToken = await refreshOutlookToken(mailbox);
   }
   return accessToken || null;
-}
-
-/** Create an authenticated Gmail OAuth2 client for a mailbox. */
-function createGmailClient(mailbox: LinkedMailbox) {
-  const oauth2Client = new OAuth2Client(
-    config.gmailClientId,
-    config.gmailClientSecret,
-    config.gmailRedirectUri,
-  );
-  oauth2Client.setCredentials({
-    access_token: mailbox.accessToken,
-    refresh_token: mailbox.refreshToken,
-    expiry_date: mailbox.tokenExpiry?.getTime(),
-  });
-
-  // EventEmitter ignores the returned promise, so a throw here would be an
-  // unhandled rejection — which terminates the process on Node 15+.
-  oauth2Client.on('tokens', async (tokens) => {
-    try {
-      const updates: Record<string, unknown> = {};
-      if (tokens.access_token) updates.accessToken = tokens.access_token;
-      if (tokens.expiry_date) updates.tokenExpiry = new Date(tokens.expiry_date);
-      if (Object.keys(updates).length) {
-        await mailbox.update(updates);
-      }
-    } catch (error) {
-      console.error('[PostMail API] Failed to persist refreshed Gmail token:', error);
-    }
-  });
-
-  return oauth2Client;
 }
 
 /**
@@ -162,7 +131,7 @@ export async function searchGmailSentFolder(
   trackingToken: string,
   options?: { subject?: string; newerThan?: string },
 ): Promise<SentEmailMatch> {
-  const oauth2Client = createGmailClient(mailbox);
+  const oauth2Client = createAuthenticatedGmailClient(mailbox);
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client as any });
 
   const newerThan = options?.newerThan || '1d';
@@ -288,7 +257,7 @@ async function batchSearchGmailSentFolder(
   const results = new Map<string, SentEmailMatch>();
   if (tokens.length === 0) return results;
 
-  const oauth2Client = createGmailClient(mailbox);
+  const oauth2Client = createAuthenticatedGmailClient(mailbox);
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client as any });
   const remaining = new Set(tokens);
 

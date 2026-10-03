@@ -37,7 +37,6 @@ User.init(
     email: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true,
     },
     passwordHash: {
       type: DataTypes.STRING,
@@ -47,13 +46,11 @@ User.init(
     googleId: {
       type: DataTypes.STRING,
       allowNull: true,
-      unique: true,
       field: 'google_id',
     },
     microsoftId: {
       type: DataTypes.STRING,
       allowNull: true,
-      unique: true,
       field: 'microsoft_id',
     },
     displayName: {
@@ -80,6 +77,13 @@ User.init(
     sequelize,
     tableName: 'users',
     underscored: true,
+    // Named unique indexes instead of `unique: true`, which sync({ alter }) duplicates on every boot.
+    // Names match the original constraints so existing databases keep them.
+    indexes: [
+      { unique: true, name: 'users_email_key', fields: ['email'] },
+      { unique: true, name: 'users_google_id_key', fields: ['google_id'] },
+      { unique: true, name: 'users_microsoft_id_key', fields: ['microsoft_id'] },
+    ],
   },
 );
 
