@@ -258,22 +258,49 @@ function LiveDemoBanner() {
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
+   COMING SOON — anything advertised here that isn't built yet must carry this
+   ════════════════════════════════════════════════════════════════════════════ */
+function SoonBadge() {
+  return (
+    <span className="ml-2 inline-block whitespace-nowrap rounded-full px-2 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wider" style={{ color: C.gray500, background: C.gray100 }}>
+      Coming soon
+    </span>
+  );
+}
+
+type ListItem = string | { label: string; soon: true };
+const soon = (label: string): ListItem => ({ label, soon: true });
+const itemKey = (item: ListItem) => (typeof item === 'string' ? item : item.label);
+function ItemLabel({ item }: { item: ListItem }) {
+  if (typeof item === 'string') return <>{item}</>;
+  return <span>{item.label}<SoonBadge /></span>;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
    FEATURES
    ════════════════════════════════════════════════════════════════════════════ */
-const FEATURE_SECTIONS = [
+const FEATURE_SECTIONS: Array<{
+  tag: string;
+  title: string;
+  description: string;
+  bullets: ListItem[];
+  comingSoon?: boolean;
+  visual: string;
+  reverse: boolean;
+}> = [
   {
     tag: 'Real-Time Tracking',
     title: 'Know the second your email is opened',
     description: 'PostMail injects an invisible tracking pixel into every email you send. The moment a recipient opens your email, we capture the open event with sub-second precision and surface it on your dashboard instantly.',
-    bullets: ['Sub-second open detection', 'Device & location fingerprinting', 'Duplicate-filtered accuracy'],
+    bullets: ['Sub-second open detection', 'Device & IP capture', 'Duplicate-filtered accuracy'],
     visual: 'flow',
     reverse: false,
   },
   {
     tag: 'Smart Notifications',
     title: 'Never miss a critical open',
-    description: 'Configure Discord webhooks, browser push notifications, or email digests. Get alerted the instant a high-priority prospect opens your proposal — so you can follow up while you\'re top of mind.',
-    bullets: ['Discord & Slack webhooks', 'Priority-based alert routing', 'Quiet hours & batching'],
+    description: 'Get a Discord notification the instant a high-priority prospect opens your proposal — so you can follow up while you\'re top of mind. Slack, browser push and email digests are on the way.',
+    bullets: ['Discord webhooks', soon('Slack webhooks & browser push'), soon('Priority alert routing'), soon('Quiet hours & batching')],
     visual: 'connectivity',
     reverse: true,
   },
@@ -282,14 +309,16 @@ const FEATURE_SECTIONS = [
     title: 'Track every click, not just opens',
     description: 'Wrap any link in your email with PostMail\'s click tracker. See which links get clicked, when, and from what device — giving you a full picture of recipient engagement beyond simple opens.',
     bullets: ['Per-link click analytics', 'Real IP & device capture', 'Heatmap-style engagement scoring'],
+    comingSoon: true,
     visual: 'interface',
     reverse: false,
   },
   {
     tag: 'Predictive Analytics',
     title: 'AI-powered follow-up timing',
-    description: 'PostMail analyses open patterns across thousands of emails to predict the optimal time to follow up. Our AI engine learns each recipient\'s reading habits and recommends the perfect send window.',
+    description: 'PostMail will analyse open patterns to predict the optimal time to follow up, learning each recipient\'s reading habits and recommending the best send window.',
     bullets: ['Recipient behaviour modelling', 'Optimal send-time predictions', 'Engagement scoring & ranking'],
+    comingSoon: true,
     visual: 'predictive',
     reverse: true,
   },
@@ -306,7 +335,7 @@ function Features() {
             Everything you need to track engagement
           </h2>
           <p className="mt-4 text-lg" style={{ color: C.gray500 }}>
-            From pixel-precise open detection to AI-powered follow-up recommendations.
+            Pixel-precise open detection today, with click tracking and AI follow-up timing on the way.
           </p>
         </div>
 
@@ -325,6 +354,7 @@ function Features() {
                     <span className="inline-block rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider" style={{ color: C.orange, background: C.orangePastel }}>
                       {feature.tag}
                     </span>
+                    {feature.comingSoon && <SoonBadge />}
                     <h3 className="text-2xl font-extrabold leading-tight sm:text-3xl" style={{ color: C.gray900 }}>
                       {feature.title}
                     </h3>
@@ -333,13 +363,13 @@ function Features() {
                     </p>
                     <ul className="space-y-3">
                       {feature.bullets.map((b) => (
-                        <li key={b} className="flex items-center gap-3 text-sm font-medium" style={{ color: C.gray700 }}>
+                        <li key={itemKey(b)} className="flex items-center gap-3 text-sm font-medium" style={{ color: C.gray700 }}>
                           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full" style={{ background: C.orangePastel }}>
                             <svg className="h-3.5 w-3.5" style={{ color: C.orange }} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                             </svg>
                           </span>
-                          {b}
+                          <ItemLabel item={b} />
                         </li>
                       ))}
                     </ul>
@@ -486,7 +516,7 @@ function AnalyticsShowcase() {
               </div>
             </div>
             <div className="border-t p-5" style={{ borderColor: C.gray100 }}>
-              <h4 className="font-bold" style={{ color: C.gray900 }}>Engagement Heatmap</h4>
+              <h4 className="font-bold" style={{ color: C.gray900 }}>Engagement Heatmap<SoonBadge /></h4>
               <p className="mt-1 text-sm" style={{ color: C.gray500 }}>Visualise open patterns across time zones and days.</p>
             </div>
           </div>
@@ -505,9 +535,9 @@ function Integrations() {
     { name: 'Gmail', desc: 'Native Chrome extension for Gmail compose' },
     { name: 'Outlook', desc: 'Full Outlook OAuth integration' },
     { name: 'Discord', desc: 'Instant open notifications via webhooks' },
-    { name: 'Slack', desc: 'Team-wide open alerts in any channel' },
-    { name: 'Zapier', desc: 'Connect to 5,000+ apps automatically' },
-    { name: 'API', desc: 'Full REST API for custom integrations' },
+    { name: 'Slack', desc: 'Team-wide open alerts in any channel', soon: true },
+    { name: 'Zapier', desc: 'Connect to 5,000+ apps automatically', soon: true },
+    { name: 'API', desc: 'Full REST API for custom integrations', soon: true },
   ];
 
   return (
@@ -535,7 +565,7 @@ function Integrations() {
                 <span className="text-lg font-bold" style={{ color: C.orange }}>{item.name.charAt(0)}</span>
               </div>
               <div>
-                <h4 className="font-bold" style={{ color: C.gray900 }}>{item.name}</h4>
+                <h4 className="font-bold" style={{ color: C.gray900 }}>{item.name}{item.soon && <SoonBadge />}</h4>
                 <p className="mt-0.5 text-sm" style={{ color: C.gray500 }}>{item.desc}</p>
               </div>
             </div>
@@ -639,7 +669,7 @@ function WorkflowShowcase() {
               </div>
             </div>
             <div className="p-6" style={{ background: C.gray50 }}>
-              <h4 className="text-lg font-bold" style={{ color: C.gray900 }}>Recipient Engagement Graph</h4>
+              <h4 className="text-lg font-bold" style={{ color: C.gray900 }}>Recipient Engagement Graph<SoonBadge /></h4>
               <p className="mt-2 text-sm" style={{ color: C.gray500 }}>Map relationships between email threads, opens, and follow-up actions.</p>
             </div>
           </div>
@@ -770,7 +800,17 @@ function Testimonials() {
 /* ════════════════════════════════════════════════════════════════════════════
    PRICING
    ════════════════════════════════════════════════════════════════════════════ */
-const TIERS = [
+const TIERS: Array<{
+  name: string;
+  price: string;
+  originalPrice?: string;
+  period: string;
+  badge?: string;
+  description: string;
+  features: ListItem[];
+  cta: string;
+  highlighted: boolean;
+}> = [
   {
     name: 'Starter',
     price: '$0',
@@ -787,7 +827,7 @@ const TIERS = [
     period: '/mo',
     badge: 'Beta',
     description: 'For professionals who need full visibility.',
-    features: ['Unlimited tracking', 'Track 5 accounts', 'Discord & Slack notifications', 'Link click tracking', 'Priority support', '30-day analytics'],
+    features: ['Unlimited tracking', 'Track 5 accounts', 'Discord notifications', soon('Slack notifications'), soon('Link click tracking'), 'Priority support', '30-day analytics'],
     cta: 'Get Started Free',
     highlighted: true,
   },
@@ -796,7 +836,7 @@ const TIERS = [
     price: 'Custom',
     period: '',
     description: 'For teams that need everything.',
-    features: ['Unlimited everything', 'SSO & SAML', 'Dedicated account manager', 'Custom API integrations', 'SLA guarantee', 'On-premise option'],
+    features: ['Unlimited everything', soon('SSO & SAML'), 'Dedicated account manager', 'Custom API integrations', 'SLA guarantee', 'On-premise option'],
     cta: 'Contact Sales',
     highlighted: false,
   },
@@ -853,11 +893,11 @@ function Pricing() {
               </div>
               <ul className="mt-8 space-y-3">
                 {tier.features.map((f) => (
-                  <li key={f} className="flex items-center gap-2.5 text-sm" style={{ color: C.gray700 }}>
+                  <li key={itemKey(f)} className="flex items-center gap-2.5 text-sm" style={{ color: C.gray700 }}>
                     <svg className="h-4 w-4 shrink-0" style={{ color: C.orange }} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                     </svg>
-                    {f}
+                    <ItemLabel item={f} />
                   </li>
                 ))}
               </ul>
