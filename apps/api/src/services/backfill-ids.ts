@@ -6,12 +6,18 @@ function ts(): string {
   return new Date().toISOString();
 }
 
+// batchSearchSentFolder only looks at roughly the last day of sent mail
+// (Gmail: newer_than:1d; Outlook: the 25 most recent sent items), so anything
+// older can never be matched — selecting it just repeats a useless search on
+// every boot.
+const BACKFILL_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 /**
- * Backfill missing IDs for all sent tracked emails on API startup.
+ * Backfill missing IDs for recently sent tracked emails on API startup.
  *
  * Handles two cases:
- *  1. Emails with no messageId/threadId/conversationId — searches sent folder
- *     by tracking token to find the message and extract all IDs.
+ *  1. Emails missing their provider IDs — searches sent folder by tracking
+ *     token to find the message and extract all IDs.
  *  2. Emails with no mailboxId — looks up the user's linked mailbox by userId.
  */
 export async function backfillAllIds(): Promise<void> {
@@ -19,10 +25,12 @@ export async function backfillAllIds(): Promise<void> {
     const emails = await TrackedEmail.findAll({
       where: {
         status: 'sent',
+        createdAt: { [Op.gte]: new Date(Date.now() - BACKFILL_WINDOW_MS) },
+        // Gmail rows only ever get a threadId and Outlook rows only a
+        // conversationId, so "missing" means the messageId or *both* of those.
         [Op.or]: [
           { messageId: { [Op.is]: null as any } },
-          { threadId: { [Op.is]: null as any } },
-          { conversationId: { [Op.is]: null as any } },
+          { threadId: { [Op.is]: null as any }, conversationId: { [Op.is]: null as any } },
         ],
       },
     });
