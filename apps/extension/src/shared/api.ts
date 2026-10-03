@@ -111,11 +111,22 @@ export async function discardTrackedEmail(
 
 export interface TrackedEmailInfo {
   id: string;
+  trackingToken: string;
   subject: string | null;
   recipient: string | null;
   status: string;
   sentAt: string | null;
-  opens: { id: string; opened_at: string; dismissed: boolean; likely_self?: boolean }[];
+  messageId: string | null;
+  threadId: string | null;
+  conversationId: string | null;
+  opens: {
+    id: string;
+    opened_at: string;
+    ip_address: string | null;
+    user_agent: string | null;
+    dismissed: boolean;
+    likely_self: boolean;
+  }[];
 }
 
 export async function getTrackedEmails(): Promise<TrackedEmailInfo[]> {

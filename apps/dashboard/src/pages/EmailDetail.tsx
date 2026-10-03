@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, EmailMessage, EmailAttachment } from '../services/api';
 
@@ -20,70 +20,59 @@ function stripTrackingPixel(html: string): string {
   return html.replace(/<img[^>]*\ssrc=["'][^"']*\/o\/[a-f0-9-]+["'][^>]*\/?>/gi, '');
 }
 
+/** Full documents render as-is; fragments get a minimal styled wrapper. */
+function buildSrcDoc(html: string): string {
+  if (/<html[\s>]/i.test(html)) return html;
+  return `<!DOCTYPE html><html><head><style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.6; color: #374151; margin: 0; padding: 0; word-wrap: break-word; }
+    a { color: #2563eb; text-decoration: underline; }
+    img { max-width: 100%; height: auto; }
+    blockquote { margin: 0 0 0 0.5em; padding-left: 0.75em; border-left: 2px solid #d1d5db; }
+  </style></head><body>${html}</body></html>`;
+}
+
 function EmailBody({ html }: { html: string }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const sanitizedHtml = stripTrackingPixel(html);
-
-  const resizeIframe = useCallback(() => {
-    const iframe = iframeRef.current;
-    if (!iframe?.contentDocument?.body) return;
-    iframe.style.height = iframe.contentDocument.body.scrollHeight + 'px';
-  }, []);
+  const srcDoc = useMemo(() => buildSrcDoc(stripTrackingPixel(html)), [html]);
 
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
+    let observer: MutationObserver | null = null;
 
     const handleLoad = () => {
       const doc = iframe.contentDocument;
-      if (!doc) return;
+      if (!doc?.body) return;
+      const resize = () => {
+        iframe.style.height = doc.body.scrollHeight + 'px';
+      };
 
-      // Check if the HTML is a full document or a fragment
-      const isFullDoc = /<html[\s>]/i.test(sanitizedHtml);
-      if (isFullDoc) {
-        doc.open();
-        doc.write(sanitizedHtml);
-        doc.close();
-      } else {
-        doc.open();
-        doc.write(`<!DOCTYPE html><html><head><style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.6; color: #374151; margin: 0; padding: 0; word-wrap: break-word; }
-          a { color: #2563eb; text-decoration: underline; }
-          img { max-width: 100%; height: auto; }
-          blockquote { margin: 0 0 0 0.5em; padding-left: 0.75em; border-left: 2px solid #d1d5db; }
-        </style></head><body>${sanitizedHtml}</body></html>`);
-        doc.close();
-      }
-
-      // Make links open in new tab
       doc.querySelectorAll('a').forEach((a) => {
         a.setAttribute('target', '_blank');
         a.setAttribute('rel', 'noopener noreferrer');
       });
 
-      resizeIframe();
+      resize();
 
-      // Observe for lazy-loaded images
-      const observer = new MutationObserver(resizeIframe);
+      observer?.disconnect();
+      observer = new MutationObserver(resize);
       observer.observe(doc.body, { childList: true, subtree: true, attributes: true });
-      doc.querySelectorAll('img').forEach((img) => {
-        img.addEventListener('load', resizeIframe);
-      });
-
-      return () => observer.disconnect();
+      doc.querySelectorAll('img').forEach((img) => img.addEventListener('load', resize));
     };
 
     iframe.addEventListener('load', handleLoad);
-    // Trigger immediately in case already loaded
-    handleLoad();
-
-    return () => iframe.removeEventListener('load', handleLoad);
-  }, [sanitizedHtml, resizeIframe]);
+    return () => {
+      iframe.removeEventListener('load', handleLoad);
+      observer?.disconnect();
+    };
+  }, [srcDoc]);
 
   return (
     <iframe
       ref={iframeRef}
-      sandbox="allow-same-origin"
+      srcDoc={srcDoc}
+      // No allow-scripts: email HTML must never execute. Popups are needed for target="_blank" links.
+      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
       title="Email content"
       className="w-full border-0"
       style={{ minHeight: '60px' }}

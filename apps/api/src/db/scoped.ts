@@ -1,6 +1,7 @@
 import {
   Attributes,
   CountOptions,
+  CreateOptions,
   CreationAttributes,
   DestroyOptions,
   FindOptions,
@@ -41,7 +42,8 @@ function scopeModel<M extends Owned>(model: ModelStatic<M>, userId: string) {
     count: (options: Omit<CountOptions<Attributes<M>>, 'group'> = {}) =>
       model.count({ ...options, where: withUser<M>(options.where, userId) }),
 
-    create: (values: Values<M>) => model.create({ ...values, userId } as unknown as CreationAttributes<M>),
+    create: (values: Values<M>, options: CreateOptions<Attributes<M>> = {}) =>
+      model.create({ ...values, userId } as unknown as CreationAttributes<M>, options),
 
     findOrCreate: (
       options: Omit<FindOrCreateOptions<Attributes<M>, CreationAttributes<M>>, 'defaults'> & { defaults: Values<M> },

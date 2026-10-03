@@ -1,4 +1,4 @@
-export type ToastState = 'tracking' | 'verifying' | 'success' | 'draft' | 'error' | 'cancelled' | 'setup';
+export type ToastState = 'tracking' | 'verifying' | 'success' | 'draft' | 'error' | 'unregistered' | 'cancelled' | 'setup';
 
 export interface ToastData {
   subject: string;
@@ -66,6 +66,7 @@ function getIcon(state: ToastState): string {
         <path d="M12 8v5M12 15.5v.5" stroke="#ca8a04" stroke-width="2" stroke-linecap="round"/>
       </svg>`;
     case 'error':
+    case 'unregistered':
       return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none">
         <circle cx="12" cy="12" r="10" fill="#fee2e2"/>
         <path d="M12 8v5M12 15.5v.5" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>
@@ -90,6 +91,7 @@ function getTitle(state: ToastState): string {
     case 'success': return 'Tracking active';
     case 'draft': return 'Saved as draft';
     case 'error': return 'Could not verify tracking';
+    case 'unregistered': return 'This email is not tracked';
     case 'cancelled': return 'Tracking removed';
     case 'setup': return 'Setup required';
   }
@@ -106,6 +108,7 @@ function getSubtitle(state: ToastState, data: ToastData): string {
     case 'success': return `${data.recipient || 'Recipient'}${data.subject ? ' — ' + truncated : ''}`;
     case 'draft': return 'Tracking will activate when this email is sent';
     case 'error': return 'Check your connection and try again';
+    case 'unregistered': return "PostMail couldn't register it, so opens won't be recorded";
     case 'cancelled': return 'This email will not be tracked';
     case 'setup': {
       // data.recipient carries the preflight reason when shown from auth check
@@ -218,7 +221,7 @@ export class TrackingToast {
   }
 
   private buildInnerContent(state: ToastState, data: ToastData): string {
-    const showLink = state === 'success' || state === 'draft' || state === 'error';
+    const showLink = state === 'success' || state === 'draft' || state === 'error' || state === 'unregistered';
     const showDontTrack = state === 'tracking';
     const showSetupLink = state === 'setup';
     return `

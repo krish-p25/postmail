@@ -19,6 +19,7 @@ export class ComposeTracker {
   private trackingEnabled: boolean;
   private composeElement: HTMLElement;
   private registered = false;
+  private registrationFailed = false;
   private cancelled = false;
   private findSubject: SubjectFinder;
   private findBody: BodyFinder;
@@ -141,6 +142,11 @@ export class ComposeTracker {
     return this.cancelled;
   }
 
+  /** The last registration attempt failed and none has succeeded since — opens won't be recorded. */
+  hasRegistrationFailed(): boolean {
+    return this.registrationFailed && !this.registered;
+  }
+
   /** Cancel tracking — remove pixel, mark as cancelled */
   cancelTracking(): void {
     console.log(`[PostMail][Tracker:${this.composeId}] Tracking CANCELLED`);
@@ -196,11 +202,14 @@ export class ComposeTracker {
           provider: this.provider,
         },
         (response) => {
-          if (chrome.runtime.lastError) {
-            console.error(`[PostMail][Tracker:${this.composeId}] Registration failed:`, chrome.runtime.lastError.message);
+          if (chrome.runtime.lastError || !response?.id) {
+            console.error(`[PostMail][Tracker:${this.composeId}] Registration failed:`, chrome.runtime.lastError?.message ?? response);
+            // Left unregistered so the next recipient change retries.
+            this.registrationFailed = true;
             return;
           }
           console.log(`[PostMail][Tracker:${this.composeId}] Registration response:`, response);
+          this.registrationFailed = false;
           this.registered = true;
         },
       );

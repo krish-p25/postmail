@@ -2,12 +2,9 @@ import { Op } from 'sequelize';
 import type { TrackedEmail } from '../db/models';
 import { forUser } from '../db/scoped';
 import { batchSearchSentFolder, getOutlookAccessToken } from './sent-folder-search';
+import { ts } from '../utils/log';
 
 const MAX_PENDING_AGE_MS = 60 * 60 * 1000; // 1 hour
-
-function ts(): string {
-  return new Date().toISOString();
-}
 
 /**
  * Resolve pending tracked emails by searching the user's sent folders.
@@ -76,12 +73,7 @@ export async function resolvePendingEmails(userId: string): Promise<number> {
           if (!email.mailboxId) updates.mailboxId = mailboxId;
           await email.update(updates);
 
-          await scope.emailOpens.destroy({
-            where: {
-              trackedEmailId: email.id,
-              openedAt: { [Op.lt]: sentAt },
-            },
-          });
+          await purgePreSendOpens(email, sentAt);
 
           resolved++;
         } else {
@@ -155,4 +147,17 @@ export async function backfillConversationIds(userId: string): Promise<void> {
   } catch (error) {
     console.error(`[${ts()}] [PostMail API] backfillConversationIds failed:`, error);
   }
+}
+
+/**
+ * Delete opens logged before the email was actually sent: mail-client previews
+ * or image-proxy pre-fetches while the email sat in drafts.
+ */
+export async function purgePreSendOpens(trackedEmail: TrackedEmail, sentAt: Date): Promise<number> {
+  return forUser(trackedEmail.userId).emailOpens.destroy({
+    where: {
+      trackedEmailId: trackedEmail.id,
+      openedAt: { [Op.lt]: sentAt },
+    },
+  });
 }

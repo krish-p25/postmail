@@ -157,6 +157,14 @@ export class ComposeManager {
       return;
     }
 
+    if (instance.tracker.hasRegistrationFailed()) {
+      instance.toast.update('unregistered', { subject, recipient });
+      instance.tracker.cleanup();
+      instance.recipientReader.stop();
+      this.composes.delete(element);
+      return;
+    }
+
     // Dismiss the "Tracking" toast and show verification flow
     const trackingToken = info.trackingToken;
     const finalRecipients = allRecipients.length > 0 ? allRecipients : (recipient ? [recipient] : []);

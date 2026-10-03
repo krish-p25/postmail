@@ -26,6 +26,7 @@ import { issuePasswordTicket, readPasswordTicket } from '../services/password-ti
 import { DEVICE_COOKIE, deviceCookieOptions, isTrustedDevice, trustDevice } from '../services/devices';
 import { createPendingLink, consumePendingLink } from '../services/account-links';
 import { signAccessToken, verifyRefreshToken, REFRESH_COOKIE } from '../services/tokens';
+import { createUserWithSettings } from '../services/users';
 
 const router = Router();
 
@@ -149,8 +150,7 @@ router.post('/verify', codeConfirmLimiter, async (req: Request, res: Response) =
         return;
       }
 
-      const user = await User.create({ email, passwordHash, displayName });
-      await forUser(user.id).userSettings.create({});
+      const user = await createUserWithSettings({ email, passwordHash, displayName });
 
       res.status(201);
       sendSession(res, user);
@@ -336,8 +336,7 @@ router.post('/google', oauthLimiter, async (req: Request, res: Response) => {
         await user.update({ googleId });
       } else {
         // Create new user
-        user = await User.create({ email, googleId, displayName });
-        await forUser(user.id).userSettings.create({});
+        user = await createUserWithSettings({ email, googleId, displayName });
       }
     } else if (displayName && user.displayName !== displayName) {
       await user.update({ displayName });
@@ -508,21 +507,15 @@ router.post('/microsoft', oauthLimiter, async (req: Request, res: Response) => {
         await storeOutlookTokensAndConnect(user, { accessToken, refreshToken, tokenExpiry }, mailboxEmail);
       } else {
         // Create new user and store tokens in LinkedMailbox
-        user = await User.create({ email, microsoftId, displayName });
-        const scope = forUser(user.id);
-        await scope.linkedMailboxes.create({
-          provider: 'outlook',
-          email: mailboxEmail,
-          accessToken,
-          refreshToken,
-          tokenExpiry,
-        });
-        await scope.userSettings.create({
-          mailboxConnected: true,
-          mailboxProvider: 'outlook',
-          mailboxEmail,
-          mailboxConnectedAt: new Date(),
-        });
+        user = await createUserWithSettings(
+          { email, microsoftId, displayName },
+          { mailboxConnected: true, mailboxProvider: 'outlook', mailboxEmail, mailboxConnectedAt: new Date() },
+          (created, transaction) =>
+            forUser(created.id).linkedMailboxes.create(
+              { provider: 'outlook', email: mailboxEmail, accessToken, refreshToken, tokenExpiry },
+              { transaction },
+            ),
+        );
       }
     } else {
       // Returning user — refresh tokens and display name

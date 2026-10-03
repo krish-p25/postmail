@@ -1,9 +1,19 @@
 const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
 
 module.exports = (env, argv) => ({
   mode: argv.mode || 'development',
   devtool: argv.mode === 'production' ? false : 'cheap-module-source-map',
+  optimization: {
+    minimizer: [
+      // Debug logging (some of it includes subjects and recipients) stays out of release builds.
+      new TerserPlugin({
+        extractComments: false,
+        terserOptions: { compress: { pure_funcs: ['console.log', 'console.debug', 'console.info'] } },
+      }),
+    ],
+  },
   entry: {
     background: './src/background/service-worker.ts',
     content: './src/content/index.ts',

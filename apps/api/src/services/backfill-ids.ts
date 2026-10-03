@@ -1,10 +1,7 @@
 import { Op } from 'sequelize';
 import { TrackedEmail, LinkedMailbox } from '../db/models';
 import { batchSearchSentFolder } from './sent-folder-search';
-
-function ts(): string {
-  return new Date().toISOString();
-}
+import { ts } from '../utils/log';
 
 // batchSearchSentFolder only looks at roughly the last day of sent mail
 // (Gmail: newer_than:1d; Outlook: the 25 most recent sent items), so anything

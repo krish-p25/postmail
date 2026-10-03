@@ -4,6 +4,7 @@
  */
 
 import { ExtensionMessage } from '../../shared/messaging';
+import type { TrackedEmailInfo } from '../../shared/api';
 
 export interface TrackedEmailSummary {
   id: string;
@@ -56,14 +57,14 @@ export function fetchTrackedEmails(): Promise<TrackedEmailSummary[]> {
     try {
       chrome.runtime.sendMessage(
         { type: 'GET_TRACKED_EMAILS' } as ExtensionMessage,
-        (response) => {
+        (response: { emails?: TrackedEmailInfo[] } | undefined) => {
           if (chrome.runtime.lastError || !response?.emails) {
             resolve([]);
             return;
           }
-          const nonDismissed = (opens: any[]) => (opens || []).filter((o: any) => !o.dismissed);
+          const nonDismissed = (opens: TrackedEmailInfo['opens']) => (opens || []).filter((o) => !o.dismissed);
           resolve(
-            response.emails.map((e: any) => ({
+            response.emails.map((e) => ({
               id: e.id,
               subject: e.subject || '',
               recipient: e.recipient,
@@ -74,7 +75,7 @@ export function fetchTrackedEmails(): Promise<TrackedEmailSummary[]> {
               messageId: e.messageId || null,
               threadId: e.threadId || null,
               conversationId: e.conversationId || null,
-              opens: nonDismissed(e.opens).map((o: any) => ({
+              opens: nonDismissed(e.opens).map((o) => ({
                 opened_at: o.opened_at,
                 ip_address: o.ip_address || null,
                 user_agent: o.user_agent || null,

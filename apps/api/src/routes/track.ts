@@ -4,6 +4,7 @@ import type { LinkedMailbox, TrackedEmail } from '../db/models';
 import { forUser, UserScope } from '../db/scoped';
 import { selfViewLimiter } from '../middleware/rate-limit';
 import { searchSentFolder } from '../services/sent-folder-search';
+import { purgePreSendOpens } from '../services/resolve-pending';
 
 const router = Router();
 
@@ -220,20 +221,6 @@ router.post('/verify-sent', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to verify sent email' });
   }
 });
-
-/**
- * Delete any EmailOpen records that were logged before the email was
- * actually sent.  These are false opens caused by mail-client previews
- * or image-proxy pre-fetches while the email sat in drafts.
- */
-async function purgePreSendOpens(trackedEmail: TrackedEmail, sentAt: Date): Promise<number> {
-  return forUser(trackedEmail.userId).emailOpens.destroy({
-    where: {
-      trackedEmailId: trackedEmail.id,
-      openedAt: { [Op.lt]: sentAt },
-    },
-  });
-}
 
 /**
  * Verify a tracked email was sent by searching the mailbox sent folder.

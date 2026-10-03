@@ -82,6 +82,11 @@ EmailOpen.init(
     tableName: 'email_opens',
     underscored: true,
     updatedAt: false,
+    indexes: [
+      // Serves the open includes and the pixel's per-open dedupe lookup.
+      { name: 'email_opens_tracked_email_id_opened_at', fields: ['tracked_email_id', 'opened_at'] },
+      { name: 'email_opens_user_id', fields: ['user_id'] },
+    ],
   },
 );
 

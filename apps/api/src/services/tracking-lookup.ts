@@ -2,7 +2,7 @@ import { Op } from 'sequelize';
 import { EmailOpen } from '../db/models';
 import { forUser } from '../db/scoped';
 
-const OPEN_ATTRIBUTES = ['id', 'opened_at', 'user_agent', 'ip_address', 'dismissed', 'likely_self'] as const;
+export const OPEN_ATTRIBUTES = ['id', 'opened_at', 'user_agent', 'ip_address', 'dismissed', 'likely_self'] as const;
 
 interface TrackingData {
   id: string;
